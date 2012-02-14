@@ -257,7 +257,7 @@ public class DFAState {
 		// TODO (sam): what to do when configs==null?
 		Set<Integer> alts = new HashSet<Integer>();
 		for (ATNConfig c : configset) {
-			alts.add(c.alt);
+			alts.addAll(c.alts.toList());
 		}
 		if ( alts.isEmpty() ) return null;
 		return alts;

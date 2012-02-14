@@ -385,7 +385,7 @@ public class LexerATNSimulator extends ATNSimulator {
 
 				int index = input.index();
 				if ( index > atnPrevAccept.index ) {
-					traceAcceptState(c.alt);
+					traceAcceptState(c.alts.getMinElement());
 					// will favor prev accept at same index so "int" is keyword not ID
 					markAcceptState(atnPrevAccept, input);
 					atnPrevAccept.config = c;
@@ -397,7 +397,7 @@ public class LexerATNSimulator extends ATNSimulator {
 				// if we reach lexer accept state, toss out any configs in rest
 				// of configs work list associated with this rule (config.alt);
 				// that rule is done. this is how we cut off nongreedy .+ loops.
-				deleteWildcardConfigsForAlt(reach, ci, c.alt); // CAUSES INF LOOP if reach not closure
+				deleteWildcardConfigsForAlt(reach, ci, c.alts.getMinElement()); // CAUSES INF LOOP if reach not closure
 
 				 // move to next char, looking for longer match
 				// (we continue processing if there are states in reach)
@@ -469,7 +469,8 @@ public class LexerATNSimulator extends ATNSimulator {
 			ATNConfig c = closure.get(j);
 			boolean isWildcard = c.state.getClass() == ATNState.class &&
 				c.state.transition(0).getClass() == WildcardTransition.class;
-			if ( c.alt == alt && isWildcard ) {
+			assert c.alts.size() == 1;
+			if ( c.alts.getMinElement() == alt && isWildcard ) {
 				if ( debug ) {
 					System.out.format("deleteWildcardConfigsForAlt %s\n", c);
 				}
@@ -521,7 +522,7 @@ public class LexerATNSimulator extends ATNSimulator {
 				ATNState invokingState = atn.states.get(config.context.getInvokingState(i));
 				RuleTransition rt = (RuleTransition)invokingState.transition(0);
 				ATNState retState = rt.followState;
-				ATNConfig c = new ATNConfig(retState, config.alt, newContext);
+				ATNConfig c = new ATNConfig(retState, config.alts, newContext);
 				closure(c, configs);
 			}
 

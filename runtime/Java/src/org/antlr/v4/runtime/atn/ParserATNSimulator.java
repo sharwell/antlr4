@@ -1093,8 +1093,8 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 		SemanticContext[] altToPred = new SemanticContext[nalts +1];
 		int n = altToPred.length;
 		for (ATNConfig c : configs) {
-			if ( ambigAlts.contains(c.alt) ) {
-				altToPred[c.alt] = SemanticContext.or(altToPred[c.alt], c.semanticContext);
+			if ( ambigAlts.contains(c.alts.getMinElement()) ) {
+				altToPred[c.alts.getMinElement()] = SemanticContext.or(altToPred[c.alts.getMinElement()], c.semanticContext);
 			}
 		}
 
@@ -1278,7 +1278,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 					ATNState invokingState = atn.states.get(config.context.getInvokingState(i));
 					RuleTransition rt = (RuleTransition)invokingState.transition(0);
 					ATNState retState = rt.followState;
-					ATNConfig c = new ATNConfig(retState, config.alt, newContext, config.semanticContext);
+					ATNConfig c = new ATNConfig(retState, config.alts, newContext, config.semanticContext);
 					// While we have context to pop back from, we may have
 					// gotten that context AFTER having fallen off a rule.
 					// Make sure we track that we are now out of context.
@@ -1540,13 +1540,17 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 		Map<Integer, IntervalSet> stateToAltListMap = new HashMap<Integer, IntervalSet>();
 
 		for (ATNConfig c : configs) {
+			assert c.alts.size() == 1;
+		}
+
+		for (ATNConfig c : configs) {
 			stateToConfigListMap.map(c.state.stateNumber, c);
 			IntervalSet alts = stateToAltListMap.get(c.state.stateNumber);
 			if ( alts==null ) {
 				alts = new IntervalSet();
 				stateToAltListMap.put(c.state.stateNumber, alts);
 			}
-			alts.add(c.alt);
+			alts.addAll(c.alts);
 		}
 		// potential conflicts are states, s, with > 1 configurations and diff alts
 		// find all alts with potential conflicts
@@ -1558,7 +1562,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 				if ( !atn.states.get(state).onlyHasEpsilonTransitions() ) {
 					List<ATNConfig> configsPerState = stateToConfigListMap.get(state);
 					ATNConfig anyConfig = configsPerState.get(0);
-					altsToIgnore.add(anyConfig.alt);
+					altsToIgnore.addAll(anyConfig.alts);
 					if ( debug ) System.out.println("### one alt and all non-ep: "+configsPerState);
 				}
 				// remove state's configurations from further checking; no issues with them.
@@ -1596,7 +1600,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 				ATNConfig c = configsPerState.get(i);
 				for (int j = i+1; j < size; j++) {
 					ATNConfig d = configsPerState.get(j);
-					if ( c.alt != d.alt ) {
+					if ( !c.alts.equals(d.alts) ) {
 						boolean conflicting =
 							c.context.equals(d.context);
 						if ( conflicting ) {
@@ -1604,11 +1608,11 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 								System.out.println("we reach state "+c.state.stateNumber+
 												   " in rule "+
 												   (parser !=null ? getRuleName(c.state.ruleIndex) :"n/a")+
-												   " alts "+c.alt+","+d.alt+" from ctx "+Utils.join(c.context.toStrings(parser, c.state.stateNumber), "")
+												   " alts "+c.alts+","+d.alts+" from ctx "+Utils.join(c.context.toStrings(parser, c.state.stateNumber), "")
 												   +" and "+ Utils.join(d.context.toStrings(parser, d.state.stateNumber), ""));
 							}
-							ambigAlts.add(c.alt);
-							ambigAlts.add(d.alt);
+							ambigAlts.addAll(c.alts);
+							ambigAlts.addAll(d.alts);
 						}
 					}
 				}
@@ -1696,10 +1700,13 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 	public int getUniqueAlt(@NotNull Collection<ATNConfig> configs) {
 		int alt = ATN.INVALID_ALT_NUMBER;
 		for (ATNConfig c : configs) {
-			if ( alt == ATN.INVALID_ALT_NUMBER ) {
-				alt = c.alt; // found first alt
+			if ( c.alts.size() > 1 ) {
+				return ATN.INVALID_ALT_NUMBER;
 			}
-			else if ( c.alt!=alt ) {
+			if ( alt == ATN.INVALID_ALT_NUMBER ) {
+				alt = c.alts.getMinElement(); // found first alt
+			}
+			else if ( c.alts.getMinElement()!=alt ) {
 				return ATN.INVALID_ALT_NUMBER;
 			}
 		}
@@ -1708,7 +1715,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 	public boolean configWithAltAtStopState(@NotNull Collection<ATNConfig> configs, int alt) {
 		for (ATNConfig c : configs) {
-			if ( c.alt == alt ) {
+			if ( c.alts.contains(alt) ) {
 				if ( c.state.getClass() == RuleStopState.class ) {
 					return true;
 				}

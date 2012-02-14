@@ -395,7 +395,7 @@ public class TestPerformance extends BaseTest {
                             }
 
                             configOutputSize = configOutput.length();
-                            writeFile(tmpdir, "d" + dfa.decision + ".s" + state.stateNumber + ".a" + config.alt + ".config.dot", configOutput);
+                            writeFile(tmpdir, "d" + dfa.decision + ".s" + state.stateNumber + ".a" + config.alts + ".config.dot", configOutput);
                         }
                     }
                 }

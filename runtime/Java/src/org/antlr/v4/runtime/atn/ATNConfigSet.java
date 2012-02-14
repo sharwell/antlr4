@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import org.antlr.v4.runtime.misc.IntervalSet;
+import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
 /**
@@ -49,7 +50,7 @@ import org.antlr.v4.runtime.misc.Nullable;
 public class ATNConfigSet implements Set<ATNConfig> {
 
 	private final boolean localContext;
-	private final Map<Long, ATNConfig> mergedConfigs;
+	private final Map<MergeKey, ATNConfig> mergedConfigs;
 	private final List<ATNConfig> unmerged;
 	private final List<ATNConfig> configs;
 
@@ -62,7 +63,7 @@ public class ATNConfigSet implements Set<ATNConfig> {
 
 	public ATNConfigSet(boolean localContext) {
 		this.localContext = localContext;
-		this.mergedConfigs = new HashMap<Long, ATNConfig>();
+		this.mergedConfigs = new HashMap<MergeKey, ATNConfig>();
 		this.unmerged = new ArrayList<ATNConfig>();
 		this.configs = new ArrayList<ATNConfig>();
 
@@ -75,7 +76,7 @@ public class ATNConfigSet implements Set<ATNConfig> {
 			this.mergedConfigs = null;
 			this.unmerged = null;
 		} else {
-			this.mergedConfigs = new HashMap<Long, ATNConfig>(set.mergedConfigs);
+			this.mergedConfigs = new HashMap<MergeKey, ATNConfig>(set.mergedConfigs);
 			this.unmerged = new ArrayList<ATNConfig>(set.unmerged);
 		}
 
@@ -175,7 +176,7 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		ensureWritable();
 		boolean added;
 		boolean addKey;
-		long key = getKey(e);
+		MergeKey key = getKey(e);
 		ATNConfig mergedConfig = mergedConfigs.get(key);
 		addKey = (mergedConfig == null);
 		if (mergedConfig != null && canMerge(e, key, mergedConfig)) {
@@ -244,8 +245,8 @@ public class ATNConfigSet implements Set<ATNConfig> {
 
 	private void updatePropertiesForAddedConfig(ATNConfig config) {
 		if (configs.size() == 1) {
-			uniqueAlt = config.alt;
-		} else if (uniqueAlt != config.alt) {
+			uniqueAlt = config.alts.getSingleElement();
+		} else if (uniqueAlt != config.alts.getSingleElement()) {
 			uniqueAlt = ATN.INVALID_ALT_NUMBER;
 		}
 
@@ -261,24 +262,20 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		return left.semanticContext.equals(right.semanticContext);
 	}
 
-	private static boolean canMerge(ATNConfig left, long leftKey, ATNConfig right) {
+	private static boolean canMerge(ATNConfig left, MergeKey leftKey, ATNConfig right) {
 		if (left.state.stateNumber != right.state.stateNumber) {
 			return false;
 		}
 
-		if (leftKey != getKey(right)) {
+		if (!leftKey.equals(getKey(right))) {
 			return false;
 		}
 
 		return left.semanticContext.equals(right.semanticContext);
 	}
 
-	private static long getKey(ATNConfig e) {
-		long key = ((long)e.state.stateNumber << 32) + (e.alt << 3);
-		//key |= e.reachesIntoOuterContext != 0 ? 1 : 0;
-		//key |= e.resolveWithPredicate ? 1 << 1 : 0;
-		//key |= e.traversedPredicate ? 1 << 2 : 0;
-		return key;
+	private static MergeKey getKey(ATNConfig e) {
+		return new MergeKey(e.state.stateNumber, e.alts);
 	}
 
 	@Override
@@ -381,8 +378,9 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		Collections.sort(sortedConfigs, new Comparator<ATNConfig>() {
 			@Override
 			public int compare(ATNConfig o1, ATNConfig o2) {
-				if (o1.alt != o2.alt) {
-					return o1.alt - o2.alt;
+				if (!o1.alts.equals(o2.alts)) {
+					assert o1.alts.size() == 1 && o2.alts.size() == 1;
+					return o1.alts.getMinElement() - o2.alts.getMinElement();
 				}
 				else if (o1.state.stateNumber != o2.state.stateNumber) {
 					return o1.state.stateNumber - o2.state.stateNumber;
@@ -438,7 +436,7 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		ensureWritable();
 		ATNConfig config = configs.get(index);
 		configs.remove(config);
-		long key = getKey(config);
+		MergeKey key = getKey(config);
 		if (mergedConfigs.get(key) == config) {
 			mergedConfigs.remove(key);
 		} else {
@@ -454,6 +452,41 @@ public class ATNConfigSet implements Set<ATNConfig> {
 	protected final void ensureWritable() {
 		if (isReadOnly()) {
 			throw new IllegalStateException("This ATNConfigSet is read only.");
+		}
+	}
+
+	private static final class MergeKey {
+		private final int state;
+		@NotNull
+		private final IntervalSet alts;
+
+		public MergeKey(int state, @NotNull IntervalSet alts) {
+			assert alts != null && !alts.isNil();
+			this.state = state;
+			this.alts = alts;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (!(obj instanceof MergeKey)) {
+				return false;
+			}
+
+			if (obj == this) {
+				return true;
+			}
+
+			MergeKey other = (MergeKey)obj;
+			return this.state == other.state
+				&& this.alts.equals(other.alts);
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = 3;
+			hash = 71 * hash + this.state;
+			hash = 71 * hash + this.alts.hashCode();
+			return hash;
 		}
 	}
 

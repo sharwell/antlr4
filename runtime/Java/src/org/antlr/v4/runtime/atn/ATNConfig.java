@@ -34,6 +34,8 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import org.antlr.v4.runtime.Recognizer;
+import org.antlr.v4.runtime.misc.IntervalSet;
+import org.antlr.v4.runtime.misc.IntSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
@@ -50,8 +52,8 @@ public class ATNConfig {
 	@NotNull
 	public final ATNState state;
 
-	/** What alt (or lexer rule) is predicted by this configuration */
-	public final int alt;
+	/** What alts (or lexer rules) are predicted by this configuration */
+	public final IntervalSet alts;
 
 	/** The stack of invoking states leading to the rule/states associated
 	 *  with this config.  We track only those contexts pushed during
@@ -83,7 +85,7 @@ public class ATNConfig {
 					 int alt,
 					 @Nullable PredictionContext context)
 	{
-		this(state, alt, context, SemanticContext.NONE);
+		this(state, IntervalSet.of(alt, alt), context, SemanticContext.NONE);
 	}
 
 	public ATNConfig(@NotNull ATNState state,
@@ -91,8 +93,32 @@ public class ATNConfig {
 					 @Nullable PredictionContext context,
 					 @NotNull SemanticContext semanticContext)
 	{
+		this(state, IntervalSet.of(alt, alt), context, semanticContext);
+	}
+
+	public ATNConfig(@NotNull ATNState state,
+					 @NotNull IntervalSet alts,
+					 @Nullable PredictionContext context)
+	{
+		this(state, alts, context, SemanticContext.NONE);
+	}
+
+	public ATNConfig(@NotNull ATNState state,
+					 @NotNull IntervalSet alts,
+					 @Nullable PredictionContext context,
+					 @NotNull SemanticContext semanticContext)
+	{
+		assert state != null;
+		assert alts != null && !alts.isNil();
+		assert semanticContext != null;
+
 		this.state = state;
-		this.alt = alt;
+		if (alts.isReadonly()) {
+			this.alts = alts;
+		} else {
+			this.alts = new IntervalSet(alts);
+			this.alts.setReadonly(true);
+		}
 		this.context = context;
 		this.semanticContext = semanticContext;
 	}
@@ -112,8 +138,12 @@ public class ATNConfig {
 	public ATNConfig(@NotNull ATNConfig c, @NotNull ATNState state, @Nullable PredictionContext context,
                      @NotNull SemanticContext semanticContext)
     {
+		assert c != null;
+		assert state != null;
+		assert semanticContext != null;
+
 		this.state = state;
-		this.alt = c.alt;
+		this.alts = c.alts;
 		this.context = context;
 		this.reachesIntoOuterContext = c.reachesIntoOuterContext;
         this.semanticContext = semanticContext;
@@ -134,7 +164,7 @@ public class ATNConfig {
 
 	public boolean contains(ATNConfig subconfig) {
 		if (this.state.stateNumber != subconfig.state.stateNumber
-			|| this.alt != subconfig.alt
+			|| !this.alts.equals(subconfig.alts)
 			|| !this.semanticContext.equals(subconfig.semanticContext)) {
 			return false;
 		}
@@ -195,7 +225,7 @@ public class ATNConfig {
 		}
 
 		return this.state.stateNumber==other.state.stateNumber
-			&& this.alt==other.alt
+			&& this.alts.equals(other.alts)
 			&& (this.context==other.context || (this.context != null && this.context.equals(other.context)))
 			&& this.semanticContext.equals(other.semanticContext);
 	}
@@ -204,7 +234,7 @@ public class ATNConfig {
 	public int hashCode() {
 		int hashCode = 7;
 		hashCode = 5 * hashCode + state.stateNumber;
-		hashCode = 5 * hashCode + alt;
+		hashCode = 5 * hashCode + alts.hashCode();
 		hashCode = 5 * hashCode + (context != null ? context.hashCode() : 0);
 		hashCode = 5 * hashCode + semanticContext.hashCode();
         return hashCode;
@@ -260,31 +290,33 @@ public class ATNConfig {
 		}
 		boolean first = true;
 		for (String contextDesc : contexts) {
-			if ( first ) {
-				first = false;
-			}
-			else {
-				buf.append(", ");
-			}
+			for (int alt : this.alts.toList()) {
+				if ( first ) {
+					first = false;
+				}
+				else {
+					buf.append(", ");
+				}
 
-			buf.append('(');
-			buf.append(state);
-			if ( showAlt ) {
-				buf.append(",");
-				buf.append(alt);
+				buf.append('(');
+				buf.append(state);
+				if ( showAlt ) {
+					buf.append(",");
+					buf.append(alt);
+				}
+				if ( context!=null ) {
+					buf.append(",");
+					buf.append(contextDesc);
+				}
+				if ( semanticContext!=null && semanticContext != SemanticContext.NONE ) {
+					buf.append(",");
+					buf.append(semanticContext);
+				}
+				if ( reachesIntoOuterContext>0 ) {
+					buf.append(",up=").append(reachesIntoOuterContext);
+				}
+				buf.append(')');
 			}
-			if ( context!=null ) {
-				buf.append(",");
-				buf.append(contextDesc);
-			}
-			if ( semanticContext!=null && semanticContext != SemanticContext.NONE ) {
-				buf.append(",");
-				buf.append(semanticContext);
-			}
-			if ( reachesIntoOuterContext>0 ) {
-				buf.append(",up=").append(reachesIntoOuterContext);
-			}
-			buf.append(')');
 		}
 		return buf.toString();
     }
