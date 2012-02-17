@@ -34,6 +34,8 @@ import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Utils;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -48,6 +50,8 @@ public abstract class SemanticContext {
     public static final SemanticContext NONE = new Predicate();
 
 	public SemanticContext parent;
+
+	public abstract Collection<? extends Predicate> getTerms();
 
     /**
      For context independent predicates, we evaluate them without a local
@@ -82,6 +86,11 @@ public abstract class SemanticContext {
             this.predIndex = predIndex;
             this.isCtxDependent = isCtxDependent;
         }
+
+		@Override
+		public Collection<Predicate> getTerms() {
+			return Collections.singletonList(this);
+		}
 
         @Override
         public boolean eval(Recognizer<?,?> parser, RuleContext outerContext) {
@@ -125,6 +134,16 @@ public abstract class SemanticContext {
         }
 
 		@Override
+		public Collection<Predicate> getTerms() {
+			Set<Predicate> result = new HashSet<Predicate>();
+			for (SemanticContext context : opnds) {
+				result.addAll(context.getTerms());
+			}
+
+			return result;
+		}
+
+		@Override
 		public boolean equals(@NotNull Object obj) {
 			if ( this==obj ) return true;
 			if ( !(obj instanceof AND) ) return false;
@@ -160,6 +179,16 @@ public abstract class SemanticContext {
 			if ( b instanceof OR ) opnds.addAll(((OR)b).opnds);
 			else opnds.add(b);
         }
+
+		@Override
+		public Collection<Predicate> getTerms() {
+			Set<Predicate> result = new HashSet<Predicate>();
+			for (SemanticContext context : opnds) {
+				result.addAll(context.getTerms());
+			}
+
+			return result;
+		}
 
 		@Override
 		public boolean equals(@NotNull Object obj) {

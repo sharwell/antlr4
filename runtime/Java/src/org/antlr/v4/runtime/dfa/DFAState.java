@@ -34,6 +34,8 @@ import org.antlr.v4.runtime.atn.ATNConfig;
 import org.antlr.v4.runtime.atn.ATNConfigSet;
 import org.antlr.v4.runtime.atn.PredictionContext;
 import org.antlr.v4.runtime.atn.SemanticContext;
+import org.antlr.v4.runtime.atn.SemanticContext.Predicate;
+import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
 import java.util.Collections;
@@ -79,6 +81,9 @@ public class DFAState {
 	private EdgeMap<DFAState> edges;
 	private final int minSymbol;
 	private final int maxSymbol;
+
+	public boolean isPredicateEvaluationState;
+	public List<Predicate> predicateTerms;
 
 	public boolean isAcceptState = false;
 
@@ -151,6 +156,15 @@ public class DFAState {
 		this.configset = configs;
 		this.minSymbol = minSymbol;
 		this.maxSymbol = maxSymbol;
+	}
+
+	@NotNull
+	public List<PredPrediction> getPredicates() {
+		if (predicates == null) {
+			return Collections.emptyList();
+		}
+
+		return predicates;
 	}
 
 	public void setContextSensitive(ATN atn) {
@@ -262,11 +276,10 @@ public class DFAState {
 	/** A decent hash for a DFA state is the sum of the ATN state/alt pairs. */
 	@Override
 	public int hashCode() {
-		if (configset == null) {
-			return 1;
-		}
-
-		return configset.hashCode();
+		int hashCode = 1;
+		hashCode = 31 * hashCode ^ (configset != null ? configset.hashCode() : 0);
+		hashCode = 31 * hashCode ^ (isPredicateEvaluationState ? 1 : 0);
+		return hashCode;
 	}
 
 	/** Two DFAStates are equal if their ATN configuration sets are the
@@ -283,12 +296,19 @@ public class DFAState {
 	@Override
 	public boolean equals(Object o) {
 		// compare set of ATN configurations in this set with other
-		if ( this==o ) return true;
+		if ( this==o ) {
+			return true;
+		}
+		else if (!(o instanceof DFAState)) {
+			return false;
+		}
+
 		DFAState other = (DFAState)o;
-		// TODO (sam): what to do when configs==null?
-		boolean sameSet = this.configset.equals(other.configset);
-//		System.out.println("DFAState.equals: "+configs+(sameSet?"==":"!=")+other.configs);
-		return sameSet;
+		if (this.configset != other.configset && (this.configset == null || !this.configset.equals(other.configset))) {
+			return false;
+		}
+
+		return this.isPredicateEvaluationState == other.isPredicateEvaluationState;
 	}
 
 	@Override

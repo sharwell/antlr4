@@ -39,6 +39,8 @@ import org.antlr.v4.runtime.misc.Utils;
 import org.stringtemplate.v4.misc.MultiMap;
 
 import java.util.*;
+import org.antlr.v4.runtime.atn.SemanticContext.Predicate;
+import org.antlr.v4.runtime.dfa.DFAState.PredPrediction;
 
 /**
  The embodiment of the adaptive LL(*) parsing strategy.
@@ -451,7 +453,32 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			assert !s.isAcceptState;
 
 			// if no edge, pop over to ATN interpreter, update DFA and return
-			DFAState target = s.getTarget(t);
+			DFAState target = null;
+			if (s.isPredicateEvaluationState) {
+				List<Predicate> sortedTerms = s.predicateTerms;
+				int savedIndex = input.index();
+				try {
+					input.seek(startIndex);
+					int edge = 0;
+					for (int i = 0; i < sortedTerms.size(); i++) {
+						Predicate predicate = sortedTerms.get(i);
+						if (predicate.eval(parser, outerContext)) {
+							edge |= 1 << i;
+						}
+					}
+
+					target = s.getTarget(edge);
+				}
+				finally {
+					if (target == null || !target.configset.isEmpty()) {
+						input.seek(savedIndex);
+					}
+				}
+			}
+			else {
+				target = s.getTarget(t);
+			}
+
 			if ( target == null ) {
 				if ( dfa_debug && t>=0 ) System.out.println("no edge for "+parser.getTokenNames()[t]);
 				int alt;
@@ -485,11 +512,13 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			else if ( target == ERROR ) {
 				throw noViableAlt(input, outerContext, s.configset, startIndex);
 			}
-			s = target;
-			if (!s.isAcceptState) {
+
+			if (!target.isAcceptState && !s.isPredicateEvaluationState) {
 				input.consume();
 				t = input.LA(1);
 			}
+
+			s = target;
 		}
 //		if ( acceptState==null ) {
 //			if ( debug ) System.out.println("!!! no viable alt in dfa");
@@ -608,7 +637,84 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 		PredictionContextCache contextCache = new PredictionContextCache(dfa.isContextSensitive());
 		while (true) { // while more work
-			SimulatorState nextState = computeReachSet(dfa, previous, t, greedy, contextCache);
+			boolean createPredicateEvaluationState = previous.s0.configset.hasSemanticContext() && input.index() > startIndex;
+			SimulatorState nextState = null;
+			if (createPredicateEvaluationState) {
+				// should have been created as a predicate evaluation state in the previous call to computeReachSet
+				assert previous.s0.isPredicateEvaluationState == true;
+
+				Set<Predicate> terms = new HashSet<Predicate>();
+				for (ATNConfig config : previous.s0.configset) {
+					if (config.semanticContext != SemanticContext.NONE) {
+						terms.addAll(config.semanticContext.getTerms());
+					}
+				}
+
+				if (terms.size() > 32) {
+					throw new UnsupportedOperationException("Too many predicate terms.");
+				}
+
+				List<Predicate> sortedTerms = new ArrayList<Predicate>(terms);
+				Collections.sort(sortedTerms, new Comparator<Predicate>() {
+
+					@Override
+					public int compare(Predicate o1, Predicate o2) {
+						if (o1.ruleIndex != o2.ruleIndex) {
+							return o1.ruleIndex - o2.ruleIndex;
+						}
+						else if (o1.predIndex != o2.predIndex) {
+							return o1.predIndex - o2.predIndex;
+						}
+						else {
+							return (o1.isCtxDependent ? 1 : 0) - (o2.isCtxDependent ? 1 : 0);
+						}
+					}
+				});
+
+				previous.s0.predicateTerms = sortedTerms;
+				int savedIndex = input.index();
+				try {
+					input.seek(startIndex);
+					BitSet results = new BitSet(sortedTerms.size());
+					Map<Predicate, Boolean> evaluatedPredicates = new HashMap<Predicate, Boolean>();
+					for (int i = 0; i < sortedTerms.size(); i++) {
+						Predicate predicate = sortedTerms.get(i);
+						results.set(i, predicate.eval(parser, outerContext));
+						evaluatedPredicates.put(predicate, results.get(i));
+					}
+
+					long[] resultData = results.toLongArray();
+					assert resultData.length <= 1 && (resultData[0] & ~0xFFFFFFFFL) == 0;
+					int edge = resultData.length == 1 ? (int)resultData[0] : 0;
+
+					// filter results
+					ATNConfigSet filtered = new ATNConfigSet(previous.s0.configset.isLocalContext());
+					for (ATNConfig config : previous.s0.configset) {
+						if (config.semanticContext != SemanticContext.NONE) {
+							if (!config.semanticContext.eval(parser, outerContext)) {
+								continue;
+							}
+
+							config = new ATNConfig(config, config.state, SemanticContext.NONE);
+						}
+
+						filtered.add(config, contextCache);
+					}
+
+					DFAState dfaState = addDFAState(dfa, filtered, false);
+					addDFAEdge(previous.s0, edge, dfaState);
+					nextState = new SimulatorState(outerContext, dfaState, useContext, previous.remainingOuterContext);
+				}
+				finally {
+					if (nextState != null && !nextState.s0.configset.isEmpty()) {
+						input.seek(savedIndex);
+					}
+				}
+			}
+			else {
+				nextState = computeReachSet(dfa, previous, t, greedy, contextCache);
+			}
+
 			if (nextState == null) throw noViableAlt(input, outerContext, previous.s0.configset, startIndex);
 			DFAState D = nextState.s0;
 			ATNConfigSet reach = nextState.s0.configset;
@@ -744,9 +850,12 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 			if ( D.isAcceptState ) return predictedAlt;
 
+			if (!previous.s0.isPredicateEvaluationState) {
+				input.consume();
+				t = input.LA(1);
+			}
+
 			previous = nextState;
-			input.consume();
-			t = input.LA(1);
 		}
 	}
 
@@ -807,7 +916,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 		DFAState dfaState = null;
 		if (previous.s0 != null) {
-			dfaState = addDFAEdge(dfa, previous.s0.configset, t, contextElements, reach, contextCache);
+			dfaState = addDFAEdge(dfa, previous.s0, t, contextElements, reach, contextCache);
 		}
 
 		return new SimulatorState(previous.outerContext, dfaState, useContext, (ParserRuleContext<?>)remainingGlobalContext);
@@ -883,7 +992,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			final boolean collectPredicates = true;
 			boolean stepIntoGlobal = closure(reachIntermediate, configs, collectPredicates, dfa.isContextSensitive(), greedy, contextCache.isContextSensitive(), hasMoreContext, contextCache);
 
-			DFAState next = addDFAState(dfa, configs);
+			DFAState next = addDFAState(dfa, configs, false);
 			if (s0 == null) {
 				dfa.s0 = next;
 			}
@@ -1610,7 +1719,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 	@NotNull
 	protected DFAState addDFAEdge(@NotNull DFA dfa,
-								  @NotNull ATNConfigSet p,
+								  @NotNull DFAState from,
 								  int t,
 								  List<Integer> contextTransitions,
 								  @NotNull ATNConfigSet q,
@@ -1618,8 +1727,8 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 	{
 		assert dfa.isContextSensitive() || contextTransitions == null || contextTransitions.isEmpty();
 
-		DFAState from = addDFAState(dfa, p);
-		DFAState to = addDFAState(dfa, q);
+		//DFAState from = addDFAState(dfa, p, false);
+		DFAState to = addDFAState(dfa, q, q.hasSemanticContext());
 
 		if (contextTransitions != null) {
 			for (int context : contextTransitions) {
@@ -1634,7 +1743,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 					continue;
 				}
 
-				next = addDFAContextState(dfa, from.configset, context, contextCache);
+				next = addDFAContextState(dfa, from.configset, false, context, contextCache);
 				from.setContextTarget(context, next);
 				from = next;
 			}
@@ -1654,24 +1763,25 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 	/** See comment on LexerInterpreter.addDFAState. */
 	@NotNull
-	protected DFAState addDFAContextState(@NotNull DFA dfa, @NotNull ATNConfigSet configs, int invokingContext, PredictionContextCache contextCache) {
+	protected DFAState addDFAContextState(@NotNull DFA dfa, @NotNull ATNConfigSet configs, boolean predicateEvaluationState, int invokingContext, PredictionContextCache contextCache) {
 		if (invokingContext != PredictionContext.EMPTY_STATE_KEY) {
 			ATNConfigSet contextConfigs = new ATNConfigSet(false);
 			for (ATNConfig config : configs) {
 				contextConfigs.add(config.appendContext(invokingContext, contextCache));
 			}
 
-			return addDFAState(dfa, contextConfigs);
+			return addDFAState(dfa, contextConfigs, predicateEvaluationState);
 		}
 		else {
-			return addDFAState(dfa, configs);
+			return addDFAState(dfa, configs, predicateEvaluationState);
 		}
 	}
 
 	/** See comment on LexerInterpreter.addDFAState. */
 	@NotNull
-	protected DFAState addDFAState(@NotNull DFA dfa, @NotNull ATNConfigSet configs) {
+	protected DFAState addDFAState(@NotNull DFA dfa, @NotNull ATNConfigSet configs, boolean predicateEvaluationState) {
 		DFAState proposed = new DFAState(configs, -1, atn.maxTokenType);
+		proposed.isPredicateEvaluationState = predicateEvaluationState;
 		DFAState existing = dfa.states.get(proposed);
 		if ( existing!=null ) return existing;
 
