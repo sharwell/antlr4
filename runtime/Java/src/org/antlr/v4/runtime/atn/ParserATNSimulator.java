@@ -675,19 +675,19 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 				int savedIndex = input.index();
 				try {
 					input.seek(startIndex);
-					BitSet results = new BitSet(sortedTerms.size());
+					int edge = 0;
 					Map<Predicate, Boolean> evaluatedPredicates = new HashMap<Predicate, Boolean>();
 					for (int i = 0; i < sortedTerms.size(); i++) {
 						Predicate predicate = sortedTerms.get(i);
-						results.set(i, predicate.eval(parser, outerContext));
-						evaluatedPredicates.put(predicate, results.get(i));
+						boolean evalResult = predicate.eval(parser, outerContext);
+						if (evalResult) {
+							edge |= 1 << i;
+						}
+						evaluatedPredicates.put(predicate, evalResult);
 					}
 
-					long[] resultData = results.toLongArray();
-					assert resultData.length <= 1 && (resultData[0] & ~0xFFFFFFFFL) == 0;
-					int edge = resultData.length == 1 ? (int)resultData[0] : 0;
-
 					// filter results
+					// TODO: use previously evaluated terms instead of recalculating everything
 					ATNConfigSet filtered = new ATNConfigSet(previous.s0.configset.isLocalContext());
 					for (ATNConfig config : previous.s0.configset) {
 						if (config.semanticContext != SemanticContext.NONE) {
