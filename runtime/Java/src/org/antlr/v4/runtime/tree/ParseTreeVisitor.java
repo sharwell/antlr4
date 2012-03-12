@@ -28,7 +28,6 @@
  */
 package org.antlr.v4.runtime.tree;
 
-import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 
 /**
@@ -37,10 +36,12 @@ import org.antlr.v4.runtime.Token;
  */
 public interface ParseTreeVisitor<Symbol extends Token, Result> {
 
-	Result visit(ParserRuleContext<? extends Symbol> ctx);
+	Result visit(ParseTree<? extends Symbol> ctx);
 
-	Result visitChildren(ParserRuleContext<? extends Symbol> ctx);
+	Result visitChildren(ParseTree.RuleNode<? extends Symbol> ctx);
 
 	Result visitTerminal(ParseTree.TerminalNode<? extends Symbol> node);
+
+	Result visitErrorNode(ParseTree.ErrorNode<? extends Symbol> node);
 
 }

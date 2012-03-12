@@ -28,8 +28,11 @@
  */
 package org.antlr.v4.runtime;
 
-import org.antlr.v4.runtime.misc.*;
-import org.antlr.v4.runtime.tree.*;
+import org.antlr.v4.runtime.misc.Interval;
+import org.antlr.v4.runtime.misc.Nullable;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.ParseTreeVisitor;
+import org.antlr.v4.runtime.tree.Trees;
 import org.antlr.v4.runtime.tree.gui.TreeViewer;
 
 import javax.print.PrintException;
@@ -240,6 +243,9 @@ public class RuleContext<Symbol> implements ParseTree.RuleNode<Symbol> {
 		return new Interval(start, stop);
 	}
 
+	@Override
+	public <Result> Result accept(ParseTreeVisitor<? super Symbol, ? extends Result> visitor) { return visitor.visitChildren(this); }
+
 	public void inspect(Parser<?> parser) {
 		TreeViewer viewer = new TreeViewer(parser, this);
 		viewer.open();
@@ -262,6 +268,7 @@ public class RuleContext<Symbol> implements ParseTree.RuleNode<Symbol> {
 	 *  (root child1 .. childN). Print just a node if this is a leaf.
 	 *  We have to know the recognizer so we can get rule names.
 	 */
+	@Override
 	public String toStringTree(Parser<?> recog) {
 		return Trees.toStringTree(this, recog);
 	}
