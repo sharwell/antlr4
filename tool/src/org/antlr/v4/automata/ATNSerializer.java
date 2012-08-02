@@ -95,7 +95,7 @@ public class ATNSerializer {
 				Transition t = s.transition(i);
 				int edgeType = Transition.serializationTypes.get(t.getClass());
 				if ( edgeType == Transition.SET || edgeType == Transition.NOT_SET ) {
-					SetTransition st = (SetTransition)t;
+					AbstractSetTransition st = (AbstractSetTransition)t;
 					sets.add(st.set);
 				}
 			}

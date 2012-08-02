@@ -1,6 +1,7 @@
 /*
  [The "BSD license"]
- Copyright (c) 2011 Terence Parr
+ Copyright (c) 2012 Terence Parr
+ Copyright (c) 2012 Sam Harwell
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -27,24 +28,35 @@
  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.antlr.v4.codegen.model;
+package org.antlr.v4.runtime.atn;
 
-import org.antlr.v4.codegen.OutputModelFactory;
-import org.antlr.v4.codegen.model.decl.Decl;
-import org.antlr.v4.codegen.model.decl.TokenTypeDecl;
-import org.antlr.v4.runtime.atn.AbstractSetTransition;
-import org.antlr.v4.tool.ast.GrammarAST;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.misc.IntervalSet;
+import org.antlr.v4.runtime.misc.NotNull;
+import org.antlr.v4.runtime.misc.Nullable;
 
-public class MatchSet extends MatchToken {
-	@ModelElement public TestSetInline expr;
-	@ModelElement public CaptureNextTokenType capture;
+/**
+ *
+ * @author Sam Harwell
+ */
+public abstract class AbstractSetTransition extends Transition {
 
-	public MatchSet(OutputModelFactory factory, GrammarAST ast) {
-		super(factory, ast);
-		AbstractSetTransition st = (AbstractSetTransition)ast.atnState.transition(0);
-		expr = new TestSetInline(factory, null, st.set);
-		Decl d = new TokenTypeDecl(factory, expr.varName);
-		factory.getCurrentRuleFunction().addLocalDecl(d);
-		capture = new CaptureNextTokenType(factory,expr.varName);
+	@NotNull
+	public final IntervalSet set;
+
+	// TODO (sam): should we really allow null here?
+	public AbstractSetTransition(@NotNull ATNState target, @Nullable IntervalSet set) {
+		super(target);
+		if ( set == null ) set = IntervalSet.of(Token.INVALID_TYPE);
+		this.set = set;
 	}
+
+	@Override
+	@NotNull
+	public IntervalSet label() { return set; }
+
+	@Override
+	@NotNull
+	public abstract String toString();
+
 }

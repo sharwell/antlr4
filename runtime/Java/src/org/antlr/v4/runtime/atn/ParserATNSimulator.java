@@ -1336,8 +1336,11 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 				}
 				else if ( t instanceof SetTransition ) {
 					SetTransition st = (SetTransition)t;
-					boolean not = st instanceof NotSetTransition;
-					trans = (not?"~":"")+"Set "+st.set.toString();
+					trans = "Set "+st.set.toString();
+				}
+				else if ( t instanceof NotSetTransition ) {
+					NotSetTransition st = (NotSetTransition)t;
+					trans = "~Set "+st.set.toString();
 				}
 			}
 			System.err.println(c.toString(parser, true)+":"+trans);

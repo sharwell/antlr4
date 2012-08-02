@@ -82,8 +82,8 @@ public class ATNPrinter {
 					ActionTransition a = (ActionTransition)t;
 					buf.append("-").append(a.toString()).append("->").append(getStateString(t.target)).append('\n');
 				}
-				else if ( t instanceof SetTransition ) {
-					SetTransition st = (SetTransition)t;
+				else if ( t instanceof AbstractSetTransition ) {
+					AbstractSetTransition st = (AbstractSetTransition)t;
 					boolean not = st instanceof NotSetTransition;
 					if ( g.isLexer() ) {
 						buf.append("-").append(not?"~":"").append(st.toString()).append("->").append(getStateString(t.target)).append('\n');

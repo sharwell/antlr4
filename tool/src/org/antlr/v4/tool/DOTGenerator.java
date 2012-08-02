@@ -254,9 +254,9 @@ public class DOTGenerator {
 					else if ( grammar!=null ) label = grammar.getTokenDisplayName(atom.label);
 					edgeST.add("label", getEdgeLabel(label));
 				}
-				else if ( edge instanceof SetTransition ) {
+				else if ( edge instanceof AbstractSetTransition ) {
 					edgeST = stlib.getInstanceOf("edge");
-					SetTransition set = (SetTransition)edge;
+					AbstractSetTransition set = (AbstractSetTransition)edge;
 					String label = set.label().toString();
 					if ( isLexer ) label = set.label().toString(true);
 					else if ( grammar!=null ) label = set.label().toString(grammar.getTokenNames());

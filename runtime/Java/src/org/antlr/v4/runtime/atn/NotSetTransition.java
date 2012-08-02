@@ -33,7 +33,7 @@ import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
-public final class NotSetTransition extends SetTransition {
+public final class NotSetTransition extends AbstractSetTransition {
 	public NotSetTransition(@NotNull ATNState target, @Nullable IntervalSet set) {
 		super(target, set);
 	}
@@ -45,6 +45,6 @@ public final class NotSetTransition extends SetTransition {
 
 	@Override
 	public String toString() {
-		return '~'+super.toString();
+		return '~'+set.toString();
 	}
 }
