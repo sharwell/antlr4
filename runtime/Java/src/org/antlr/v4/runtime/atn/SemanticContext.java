@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /** A tree structure used to record the semantic context in which
@@ -69,6 +70,8 @@ public abstract class SemanticContext {
     */
     public abstract <T> boolean eval(Recognizer<T, ?> parser, RuleContext<T> outerContext);
 
+	public abstract boolean eval(Map<Predicate, Boolean> evaluatedPredicates);
+
     public static class Predicate extends SemanticContext {
         public final int ruleIndex;
        	public final int predIndex;
@@ -96,6 +99,13 @@ public abstract class SemanticContext {
             RuleContext<T> localctx = isCtxDependent ? outerContext : null;
             return parser.sempred(localctx, ruleIndex, predIndex);
         }
+
+		@Override
+		public boolean eval(Map<Predicate, Boolean> evaluatedPredicates) {
+			Boolean result = evaluatedPredicates.get(this);
+			assert result != null;
+			return result != null ? result : true;
+		}
 
 		@Override
 		public int hashCode() {
@@ -167,6 +177,17 @@ public abstract class SemanticContext {
         }
 
 		@Override
+		public boolean eval(Map<Predicate, Boolean> evaluatedPredicates) {
+			for (SemanticContext operand : opnds) {
+				if (!operand.eval(evaluatedPredicates)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		@Override
 		public String toString() {
 			return Utils.join(opnds, "&&");
         }
@@ -215,6 +236,17 @@ public abstract class SemanticContext {
 			}
 			return false;
         }
+
+		@Override
+		public boolean eval(Map<Predicate, Boolean> evaluatedPredicates) {
+			for (SemanticContext operand : opnds) {
+				if (operand.eval(evaluatedPredicates)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
 
         @Override
         public String toString() {

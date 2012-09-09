@@ -712,11 +712,10 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 					}
 
 					// filter results
-					// TODO: use previously evaluated terms instead of recalculating everything
 					ATNConfigSet filtered = new ATNConfigSet();
 					for (ATNConfig config : previous.s0.configs) {
 						if (config.getSemanticContext() != SemanticContext.NONE) {
-							if (!config.getSemanticContext().eval(parser, outerContext)) {
+							if (!config.getSemanticContext().eval(evaluatedPredicates)) {
 								continue;
 							}
 
