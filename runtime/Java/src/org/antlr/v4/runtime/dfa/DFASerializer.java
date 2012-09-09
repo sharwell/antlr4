@@ -38,6 +38,7 @@ import org.antlr.v4.runtime.atn.PredictionContext;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
+import java.util.Arrays;
 import java.util.Map;
 
 /** A DFA walker that knows how to dump them to serialized strings. */
@@ -71,22 +72,21 @@ public class DFASerializer {
 
 	@Override
 	public String toString() {
-		if ( dfa.s0==null ) return null;
+		if ( dfa.s0.get()==null ) return null;
 		StringBuilder buf = new StringBuilder();
 		Map<DFAState,DFAState> states = dfa.states;
 		if ( states!=null ) {
 			for (DFAState s : states.values()) {
 				Map<Integer, DFAState> edges = s.getEdgeMap();
 				Map<Integer, DFAState> contextEdges = s.getContextEdgeMap();
-				int n = edges.size();
 				for (Map.Entry<Integer, DFAState> entry : edges.entrySet()) {
-					if ((entry.getValue() == null || entry.getValue() == ATNSimulator.ERROR) && (!s.isCtxSensitive || !s.contextSymbols.contains(entry.getKey()))) {
+					if ((entry.getValue() == null || entry.getValue() == ATNSimulator.ERROR) && !s.isContextSymbol(entry.getKey())) {
 						continue;
 					}
 
 					boolean contextSymbol = false;
 					buf.append(getStateString(s)).append("-").append(getEdgeLabel(entry.getKey())).append("->");
-					if (s.isCtxSensitive && s.contextSymbols.contains(entry.getKey())) { // indexing in the edges array starts with -1 (EOF)
+					if (s.isContextSymbol(entry.getKey())) {
 						buf.append("!");
 						contextSymbol = true;
 					}
@@ -100,7 +100,7 @@ public class DFASerializer {
 					}
 				}
 
-				if (s.isCtxSensitive) {
+				if (s.isContextSensitive()) {
 					for (Map.Entry<Integer, DFAState> entry : contextEdges.entrySet()) {
 						buf.append(getStateString(s))
 							.append("-")
@@ -118,8 +118,11 @@ public class DFASerializer {
 	}
 
 	protected String getContextLabel(int i) {
-		if (i == PredictionContext.EMPTY_STATE_KEY) {
-			return "ctx:EMPTY";
+		if (i == PredictionContext.EMPTY_FULL_STATE_KEY) {
+			return "ctx:EMPTY_FULL";
+		}
+		else if (i == PredictionContext.EMPTY_LOCAL_STATE_KEY) {
+			return "ctx:EMPTY_LOCAL";
 		}
 
 		if (atn != null && i > 0 && i <= atn.states.size()) {
@@ -150,17 +153,17 @@ public class DFASerializer {
 		String stateStr = "s"+n;
 		if ( s.isAcceptState ) {
             if ( s.predicates!=null ) {
-                stateStr = ":s"+n+"=>"+s.predicates;
+                stateStr = ":s"+n+"=>"+Arrays.toString(s.predicates);
             }
             else {
                 stateStr = ":s"+n+"=>"+s.prediction;
             }
 		}
 
-		if ( s.isCtxSensitive ) {
+		if ( s.isContextSensitive() ) {
 			stateStr += "*";
-			for (ATNConfig config : s.configset) {
-				if (config.reachesIntoOuterContext > 0) {
+			for (ATNConfig config : s.configs) {
+				if (config.getReachesIntoOuterContext()) {
 					stateStr += "*";
 					break;
 				}

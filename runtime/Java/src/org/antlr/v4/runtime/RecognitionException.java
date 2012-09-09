@@ -38,6 +38,8 @@ import org.antlr.v4.runtime.misc.Nullable;
  *  and what kind of problem occurred.
  */
 public class RecognitionException extends RuntimeException {
+	private static final long serialVersionUID = -3861826954750022374L;
+
 	/** Who threw the exception? */
 	protected Recognizer<?, ?> recognizer;
 
@@ -47,7 +49,7 @@ public class RecognitionException extends RuntimeException {
 
 	protected RuleContext<?> ctx;
 
-	protected IntStream<?> input;
+	protected IntStream input;
 
 	/** What is index of token/char were we looking at when the error occurred? */
 //	public int offendingTokenIndex;
@@ -68,13 +70,13 @@ public class RecognitionException extends RuntimeException {
 	}
 
 	public <Symbol extends Token> RecognitionException(@Nullable Recognizer<Symbol, ?> recognizer,
-													   IntStream<Symbol> input,
+													   IntStream input,
 													   @Nullable ParserRuleContext<Symbol> ctx)
 	{
 		this.recognizer = recognizer;
 		this.input = input;
 		this.ctx = ctx;
-		if ( ctx!=null ) this.offendingState = ctx.s;
+		if ( recognizer!=null ) this.offendingState = recognizer.getState();
 	}
 
 	/** Where was the parser in the ATN when the error occurred?
@@ -88,7 +90,7 @@ public class RecognitionException extends RuntimeException {
 	public IntervalSet getExpectedTokens() {
         // TODO: do we really need this type check?
 		if ( recognizer!=null && recognizer instanceof Parser) {
-			return ((Parser) recognizer).getExpectedTokens();
+			return ((Parser<?>) recognizer).getExpectedTokens();
 		}
 		return null;
 	}
@@ -97,7 +99,7 @@ public class RecognitionException extends RuntimeException {
 		return ctx;
 	}
 
-	public IntStream<?> getInputStream() {
+	public IntStream getInputStream() {
 		return input;
 	}
 
@@ -110,17 +112,12 @@ public class RecognitionException extends RuntimeException {
 	}
 
 	@SuppressWarnings("unchecked") // safe
-	public <T> IntStream<T> getInputStream(Recognizer<T, ?> recognizer) {
-		return this.recognizer == recognizer ? (IntStream<T>)input : null;
-	}
-
-	@SuppressWarnings("unchecked") // safe
 	public <T> RuleContext<T> getContext(Recognizer<T, ?> recognizer) {
 		return this.recognizer == recognizer ? (RuleContext<T>)ctx : null;
 	}
 
 	@SuppressWarnings("unchecked") // safe
-	public <T extends Token> T getOffendingToken(Recognizer<T, ?> recognizer) {
+	public <T> T getOffendingToken(Recognizer<T, ?> recognizer) {
 		return this.recognizer == recognizer ? (T)offendingToken : null;
 	}
 }

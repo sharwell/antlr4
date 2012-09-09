@@ -30,16 +30,21 @@
 package org.antlr.v4.runtime;
 
 /** Bail out of parser at first syntax error. Do this to use it:
- *      myparser.setErrorHandler(new BailErrorStrategy<Token>());
+ *  <p/>
+ *  {@code myparser.setErrorHandler(new BailErrorStrategy<Token>());}
  */
 public class BailErrorStrategy<Symbol extends Token> extends DefaultErrorStrategy<Symbol> {
-    /** Instead of recovering from exception e, Re-throw wrote it wrapped
-     *  in a generic RuntimeException so it is not caught by the
-     *  rule function catches.  Exception e is the "cause" of the
-     *  RuntimeException.
+    /** Instead of recovering from exception {@code e}, re-throw it wrapped
+     *  in a generic {@link RuntimeException} so it is not caught by the
+     *  rule function catches.  Use {@link RuntimeException#getCause()} to get the
+	 *  original {@link RecognitionException}.
      */
     @Override
-    public <T extends Symbol> void recover(Parser<T> recognizer, RecognitionException e) {
+    public void recover(Parser<? extends Symbol> recognizer, RecognitionException e) {
+		for (ParserRuleContext<?> context = recognizer.getContext(); context != null; context = context.getParent()) {
+			context.exception = e;
+		}
+
         throw new RuntimeException(e);
     }
 
@@ -50,10 +55,15 @@ public class BailErrorStrategy<Symbol extends Token> extends DefaultErrorStrateg
     public <T extends Symbol> T recoverInline(Parser<T> recognizer)
         throws RecognitionException
     {
-        throw new RuntimeException(new InputMismatchException(recognizer));
+		InputMismatchException e = new InputMismatchException(recognizer);
+		for (ParserRuleContext<?> context = recognizer.getContext(); context != null; context = context.getParent()) {
+			context.exception = e;
+		}
+
+        throw new RuntimeException(e);
     }
 
     /** Make sure we don't attempt to recover from problems in subrules. */
     @Override
-    public <T extends Symbol> void sync(Parser<T> recognizer) { }
+    public void sync(Parser<? extends Symbol> recognizer) { }
 }

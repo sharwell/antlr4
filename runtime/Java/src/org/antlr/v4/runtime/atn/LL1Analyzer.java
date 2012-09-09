@@ -29,9 +29,8 @@
 
 package org.antlr.v4.runtime.atn;
 
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.misc.Args;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
@@ -40,10 +39,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class LL1Analyzer {
-	/** Used during LOOK to detect computation cycles. E.g., ()* causes
-	 *  infinite loop without it.  If we get to same state would be infinite
-	 *  loop.
+	/** Special value added to the lookahead sets to indicate that we hit
+	 *  a predicate during analysis if seeThruPreds==false.
 	 */
+	public static final int HIT_PRED = Token.INVALID_TYPE;
 
 	@NotNull
 	public final ATN atn;
@@ -63,55 +62,60 @@ public class LL1Analyzer {
 			Set<ATNConfig> lookBusy = new HashSet<ATNConfig>();
 			boolean seeThruPreds = false; // fail to get lookahead upon pred
 			_LOOK(s.transition(alt - 1).target,
-				  PredictionContext.EMPTY,
-				  false,
+				  PredictionContext.EMPTY_FULL,
 				  look[alt], lookBusy, seeThruPreds);
-			if ( look[alt].size()==0 ) look[alt] = null;
+			// Wipe out lookahead for this alternative if we found nothing
+			// or we had a predicate when we !seeThruPreds
+			if ( look[alt].size()==0 || look[alt].contains(HIT_PRED) ) {
+				look[alt] = null;
+			}
 		}
 		return look;
 	}
 
-    /** Get lookahead, using ctx if we reach end of rule. If ctx is EMPTY, don't chase FOLLOW.
-     *  If ctx is null, EPSILON is in set if we can reach end of rule.
+    /** Get lookahead, using {@code ctx} if we reach end of rule. If {@code ctx}
+	 *  is {@link PredictionContext#EMPTY_FULL}, don't chase FOLLOW. If {@code ctx}
+	 *  is {@link PredictionContext#EMPTY_LOCAL}, EPSILON is in set if we can reach
+	 * end of rule.
      */
     @NotNull
-   	public IntervalSet LOOK(@NotNull ATNState s, @Nullable PredictionContext ctx) {
+   	public IntervalSet LOOK(@NotNull ATNState s, @NotNull PredictionContext ctx) {
+		Args.notNull("ctx", ctx);
    		IntervalSet r = new IntervalSet();
 		boolean seeThruPreds = true; // ignore preds; get all lookahead
-   		_LOOK(s, ctx != null ? ctx : PredictionContext.EMPTY, ctx == null, r, new HashSet<ATNConfig>(), seeThruPreds);
+   		_LOOK(s, ctx, r, new HashSet<ATNConfig>(), seeThruPreds);
    		return r;
    	}
 
-    /** Computer set of tokens that can come next. If the context is EMPTY,
+    /** Compute set of tokens that can come next. If the context is {@link PredictionContext#EMPTY_FULL},
      *  then we don't go anywhere when we hit the end of the rule. We have
-     *  the correct set.  If the context is null, that means that we did not want
-     *  any tokens following this rule--just the tokens that could be found within this
-     *  rule. Add EPSILON to the set indicating we reached the end of the ruled out having
-     *  to match a token.
+     *  the correct set.  If the context is {@link PredictionContext#EMPTY_LOCAL},
+	 *  that means that we did not want any tokens following this rule--just the
+	 *  tokens that could be found within this rule. Add EPSILON to the set
+	 *  indicating we reached the end of the ruled out having to match a token.
      */
     protected void _LOOK(@NotNull ATNState s, @NotNull PredictionContext ctx,
-						 boolean epsilonStopState,
 						 @NotNull IntervalSet look,
                          @NotNull Set<ATNConfig> lookBusy,
 						 boolean seeThruPreds)
 	{
 //		System.out.println("_LOOK("+s.stateNumber+", ctx="+ctx);
-        ATNConfig c = new ATNConfig(s, 0, ctx);
+        ATNConfig c = ATNConfig.create(s, 0, ctx);
         if ( !lookBusy.add(c) ) return;
 
         if ( s instanceof RuleStopState ) {
-            if ( ctx.isEmpty() && epsilonStopState ) {
+            if ( PredictionContext.isEmptyLocal(ctx) ) {
                 look.add(Token.EPSILON);
                 return;
             }
 			for (int i = 0; i < ctx.size(); i++) {
-				if ( ctx.getInvokingState(i)!=-1 ) {
+				if ( ctx.getInvokingState(i)!=PredictionContext.EMPTY_FULL_STATE_KEY ) {
 					ATNState invokingState = atn.states.get(ctx.getInvokingState(i));
 					RuleTransition rt = (RuleTransition)invokingState.transition(0);
 					ATNState retState = rt.followState;
 //			System.out.println("popping back to "+retState);
 					for (int j = 0; j < ctx.size(); j++) {
-						_LOOK(retState, ctx.getParent(j), epsilonStopState, look, lookBusy, seeThruPreds);
+						_LOOK(retState, ctx.getParent(j), look, lookBusy, seeThruPreds);
 					}
 					return;
 				}
@@ -120,28 +124,35 @@ public class LL1Analyzer {
 
         int n = s.getNumberOfTransitions();
         for (int i=0; i<n; i++) {
-            Transition t = s.transition(i);
-            if ( t.getClass() == RuleTransition.class ) {
-                PredictionContext newContext = ctx.getChild(s.stateNumber);
-                _LOOK(t.target, newContext, epsilonStopState, look, lookBusy, seeThruPreds);
-            }
-            else if ( t.isEpsilon() && seeThruPreds ) {
-                _LOOK(t.target, ctx, epsilonStopState, look, lookBusy, seeThruPreds);
-            }
-            else if ( t.getClass() == WildcardTransition.class ) {
-                look.addAll( IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, atn.maxTokenType) );
-            }
-            else {
+			Transition t = s.transition(i);
+			if ( t.getClass() == RuleTransition.class ) {
+				PredictionContext newContext = ctx.getChild(s.stateNumber);
+				_LOOK(t.target, newContext, look, lookBusy, seeThruPreds);
+			}
+			else if ( t instanceof PredicateTransition ) {
+				if ( seeThruPreds ) {
+					_LOOK(t.target, ctx, look, lookBusy, seeThruPreds);
+				}
+				else {
+					look.add(HIT_PRED);
+				}
+			}
+			else if ( t.isEpsilon() ) {
+				_LOOK(t.target, ctx, look, lookBusy, seeThruPreds);
+			}
+			else if ( t.getClass() == WildcardTransition.class ) {
+				look.addAll( IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, atn.maxTokenType) );
+			}
+			else {
 //				System.out.println("adding "+ t);
-                IntervalSet set = t.label();
-                if (set != null) {
-                    if (t instanceof NotSetTransition) {
-                        set = set.complement(IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, atn.maxTokenType));
-                    }
-                    look.addAll(set);
-                }
-            }
-        }
-    }
-
+				IntervalSet set = t.label();
+				if (set != null) {
+					if (t instanceof NotSetTransition) {
+						set = set.complement(IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, atn.maxTokenType));
+					}
+					look.addAll(set);
+				}
+			}
+		}
+	}
 }

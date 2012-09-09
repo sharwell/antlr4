@@ -46,25 +46,76 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.atn.ATN;
 import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.misc.IntSet;
+import org.antlr.v4.runtime.misc.IntegerList;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
-import org.antlr.v4.tool.ast.*;
+import org.antlr.v4.runtime.misc.Tuple;
+import org.antlr.v4.runtime.misc.Tuple2;
+import org.antlr.v4.tool.ast.ActionAST;
+import org.antlr.v4.tool.ast.GrammarAST;
+import org.antlr.v4.tool.ast.GrammarASTWithOptions;
+import org.antlr.v4.tool.ast.GrammarRootAST;
+import org.antlr.v4.tool.ast.PredAST;
+import org.antlr.v4.tool.ast.TerminalAST;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class Grammar implements AttributeResolver {
 	public static final String GRAMMAR_FROM_STRING_NAME = "<string>";
 
-	public static final Set doNotCopyOptionsToLexer =
-        new HashSet() {
-            {
-                add("TokenLabelType"); add("superClass");
-            }
-        };
+	@SuppressWarnings("serial")
+	public static final Set<String> parserOptions = new HashSet<String>() {{
+		add("superClass");
+		add("TokenLabelType");
+		add("abstract");
+		add("tokenVocab");
+		add("language");
+	}};
 
+	public static final Set<String> lexerOptions = parserOptions;
+
+	@SuppressWarnings("serial")
+	public static final Set<String> ruleOptions = new HashSet<String>() {{
+	}};
+
+	@SuppressWarnings("serial")
+	public static final Set<String> subruleOptions = new HashSet<String>() {{
+		add("greedy");
+	}};
+
+	/** Legal options for terminal refs like ID<assoc=right> */
+	@SuppressWarnings("serial")
+	public static final Set<String> tokenOptions = new HashSet<String>() {{
+		add("assoc");
+	}};
+
+	@SuppressWarnings("serial")
+	public static final Set<String> actionOptions = new HashSet<String>() {{
+	}};
+
+	@SuppressWarnings("serial")
+	public static final Set<String> semPredOptions = new HashSet<String>() {{
+		add("fail");
+	}};
+
+	@SuppressWarnings("serial")
+	public static final Set<String> doNotCopyOptionsToLexer =
+        new HashSet<String>() {{
+				add("superClass");
+                add("TokenLabelType");
+				add("abstract");
+				add("tokenVocab");
+        }};
+
+    @SuppressWarnings("serial")
     public static Map<String, AttributeDict> grammarAndLabelRefTypeToScope =
         new HashMap<String, AttributeDict>() {{
             put("lexer:RULE_LABEL", Rule.predefinedLexerRulePropertiesDict);
@@ -129,6 +180,7 @@ public class Grammar implements AttributeResolver {
 	 *  field will have entries both mapped to 35.
 	 */
 	public Map<String, Integer> stringLiteralToTypeMap = new LinkedHashMap<String, Integer>();
+
 	/** Reverse index for stringLiteralToTypeMap.  Indexed with raw token type.
 	 *  0 is invalid. */
 	public List<String> typeToStringLiteralList = new ArrayList<String>();
@@ -232,20 +284,17 @@ public class Grammar implements AttributeResolver {
                 importedGrammarName = t.getText();
                 tool.log("grammar", "import " + t.getText());
 			}
-			GrammarAST grammarAST = null;
+			Grammar g;
 			try {
-				grammarAST = tool.loadImportedGrammar(this, importedGrammarName + ".g");
+				g = tool.loadImportedGrammar(this, importedGrammarName);
 			}
 			catch (IOException ioe) {
-				tool.errMgr.toolError(ErrorType.CANNOT_FIND_IMPORTED_FILE, ioe, importedGrammarName+".g");
+				tool.errMgr.toolError(ErrorType.CANNOT_FIND_IMPORTED_GRAMMAR, ioe,
+									  importedGrammarName);
 				continue;
 			}
 			// did it come back as error node or missing?
-			if ( grammarAST==null || grammarAST instanceof GrammarASTErrorNode) return;
-			GrammarRootAST ast = (GrammarRootAST)grammarAST;
-			Grammar g = tool.createGrammar(ast);
-			File f = tool.getImportedGrammarFile(this, importedGrammarName+".g");
-			g.fileName = f.getAbsolutePath();
+			if ( g == null ) continue;
 			g.parent = this;
 			importedGrammars.add(g);
 			g.loadImportedGrammars(); // recursively pursue any imports in this import
@@ -362,6 +411,10 @@ public class Grammar implements AttributeResolver {
         return parent.getOutermostGrammar();
     }
 
+	public boolean isAbstract() {
+		return Boolean.parseBoolean(getOptionString("abstract"));
+	}
+
     /** Get the name of the generated recognizer; may or may not be same
      *  as grammar name.
      *  Recognizer is TParser and TLexer from T if combined, else
@@ -372,14 +425,21 @@ public class Grammar implements AttributeResolver {
         List<Grammar> grammarsFromRootToMe = getOutermostGrammar().getGrammarAncestors();
         String qualifiedName = name;
         if ( grammarsFromRootToMe!=null ) {
-            StringBuffer buf = new StringBuffer();
+            StringBuilder buf = new StringBuilder();
             for (Grammar g : grammarsFromRootToMe) {
                 buf.append(g.name);
                 buf.append('_');
             }
+			if (isAbstract()) {
+				buf.append("Abstract");
+			}
             buf.append(name);
             qualifiedName = buf.toString();
         }
+		else if (isAbstract()) {
+			qualifiedName = "Abstract" + name;
+		}
+
         if ( isCombined() || (isLexer() && implicitLexer!=null) )
         {
             suffix = Grammar.getGrammarTypeToFileNameSuffix(getType());
@@ -400,7 +460,7 @@ public class Grammar implements AttributeResolver {
     }
 
 	public int getTokenType(String token) {
-		Integer I = null;
+		Integer I;
 		if ( token.charAt(0)=='\'') {
 			I = stringLiteralToTypeMap.get(token);
 		}
@@ -417,7 +477,7 @@ public class Grammar implements AttributeResolver {
 	 *  char vocabulary, compute an ANTLR-valid (possibly escaped) char literal.
 	 */
 	public String getTokenDisplayName(int ttype) {
-		String tokenName = null;
+		String tokenName;
 		// inside any target's char range and is lexer grammar?
 		if ( isLexer() &&
 			 ttype >= Lexer.MIN_CHAR_VALUE && ttype <= Lexer.MAX_CHAR_VALUE )
@@ -428,7 +488,7 @@ public class Grammar implements AttributeResolver {
 			tokenName = "EOF";
 		}
 		else {
-			if ( ttype<typeToTokenList.size() ) {
+			if ( ttype>0 && ttype<typeToTokenList.size() ) {
 				tokenName = typeToTokenList.get(ttype);
 				if ( tokenName!=null &&
 					 tokenName.startsWith(AUTO_GENERATED_TOKEN_NAME_PREFIX) &&
@@ -446,9 +506,9 @@ public class Grammar implements AttributeResolver {
 		return tokenName;
 	}
 
-	public List<String> getTokenDisplayNames(Collection<Integer> types) {
+	public List<String> getTokenDisplayNames(IntegerList types) {
 		List<String> names = new ArrayList<String>();
-		for (int t : types) names.add(getTokenDisplayName(t));
+		for (int t : types.toArray()) names.add(getTokenDisplayName(t));
 		return names;
 	}
 
@@ -677,32 +737,6 @@ public class Grammar implements AttributeResolver {
 	}
 
 	public String getOptionString(String key) { return ast.getOptionString(key); }
-	public GrammarAST getOption(String key) { return ast.getOption(key); }
-
-	public String getOptionString(String key, String defaultValue) {
-		String v = ast.getOptionString(key);
-		if ( v!=null ) return v;
-		return defaultValue;
-	}
-
-	/** Manually get language option from tree */
-	// TODO: move to general tree visitor/parser class?
-	// TODO: don't need anymore as i set optins in parser?
-	public static String getLanguageOption(GrammarRootAST ast) {
-		GrammarAST options = (GrammarAST)ast.getFirstChildWithType(ANTLRParser.OPTIONS);
-		String language = "Java";
-		if ( options!=null ) {
-			for (Object o : options.getChildren()) {
-				GrammarAST c = (GrammarAST)o;
-				if ( c.getType() == ANTLRParser.ASSIGN &&
-				c.getChild(0).getText().equals("language") )
-				{
-					language = c.getChild(1).getText();
-				}
-			}
-		}
-		return language;
-	}
 
 	/** Given ^(TOKEN_REF ^(OPTIONS ^(ELEMENT_OPTIONS (= assoc right))))
 	 *  set option assoc=right in TOKEN_REF.
@@ -721,40 +755,58 @@ public class Grammar implements AttributeResolver {
 		}
 	}
 
-	public static Map<String,String> getStringLiteralAliasesFromLexerRules(GrammarRootAST ast) {
+	/** Return list of (TOKEN_NAME node, 'literal' node) pairs */
+	public static List<Tuple2<GrammarAST,GrammarAST>> getStringLiteralAliasesFromLexerRules(GrammarRootAST ast) {
+		String[] patterns = {
+			"(RULE %name:TOKEN_REF (BLOCK (ALT %lit:STRING_LITERAL)))",
+			"(RULE %name:TOKEN_REF (BLOCK (ALT %lit:STRING_LITERAL ACTION)))",
+			"(RULE %name:TOKEN_REF (BLOCK (ALT %lit:STRING_LITERAL SEMPRED)))",
+			"(RULE %name:TOKEN_REF (BLOCK (LEXER_ALT_ACTION (ALT %lit:STRING_LITERAL) .)))",
+			"(RULE %name:TOKEN_REF (BLOCK (LEXER_ALT_ACTION (ALT %lit:STRING_LITERAL) . .)))",
+			"(RULE %name:TOKEN_REF (BLOCK (LEXER_ALT_ACTION (ALT %lit:STRING_LITERAL) (LEXER_ACTION_CALL . .))))",
+			"(RULE %name:TOKEN_REF (BLOCK (LEXER_ALT_ACTION (ALT %lit:STRING_LITERAL) . (LEXER_ACTION_CALL . .))))",
+			"(RULE %name:TOKEN_REF (BLOCK (LEXER_ALT_ACTION (ALT %lit:STRING_LITERAL) (LEXER_ACTION_CALL . .) .)))",
+			// TODO: allow doc comment in there
+		};
 		GrammarASTAdaptor adaptor = new GrammarASTAdaptor(ast.token.getInputStream());
 		TreeWizard wiz = new TreeWizard(adaptor,ANTLRParser.tokenNames);
-		Map<String,String> lexerRuleToStringLiteral = new HashMap<String,String>();
+		List<Tuple2<GrammarAST,GrammarAST>> lexerRuleToStringLiteral =
+			new ArrayList<Tuple2<GrammarAST,GrammarAST>>();
 
 		List<GrammarAST> ruleNodes = ast.getNodesWithType(ANTLRParser.RULE);
-		if ( ruleNodes==null || ruleNodes.size()==0 ) return null;
+		if ( ruleNodes==null || ruleNodes.isEmpty() ) return null;
 
-        for (GrammarAST r : ruleNodes) {
+		for (GrammarAST r : ruleNodes) {
 			//tool.log("grammar", r.toStringTree());
+//			System.out.println("chk: "+r.toStringTree());
 			Tree name = r.getChild(0);
-            if ( name.getType()==ANTLRParser.TOKEN_REF ) {
-				Map nodes = new HashMap();
-				boolean isLitRule =
-					wiz.parse(r, "(RULE %name:TOKEN_REF (BLOCK (ALT %lit:STRING_LITERAL)))", nodes);
-				if ( isLitRule ) {
-					GrammarAST litNode = (GrammarAST)nodes.get("lit");
-					GrammarAST nameNode = (GrammarAST)nodes.get("name");
-					lexerRuleToStringLiteral.put(litNode.getText(), nameNode.getText());
-					continue;
+			if ( name.getType()==ANTLRParser.TOKEN_REF ) {
+				// check rule against patterns
+				boolean isLitRule;
+				for (String pattern : patterns) {
+					isLitRule =
+						defAlias(r, pattern, wiz, lexerRuleToStringLiteral);
+					if ( isLitRule ) break;
 				}
-				// TODO: allow doc comment in there
-				nodes = new HashMap();
-				// try with action in there
-				isLitRule =
-					wiz.parse(r, "(RULE %name:TOKEN_REF (BLOCK (ALT %lit:STRING_LITERAL ACTION)))", nodes);
-				if ( isLitRule ) {
-					GrammarAST litNode = (GrammarAST)nodes.get("lit");
-					GrammarAST nameNode = (GrammarAST)nodes.get("name");
-					lexerRuleToStringLiteral.put(litNode.getText(), nameNode.getText());
-				}
-            }
-        }
+//				if ( !isLitRule ) System.out.println("no pattern matched");
+			}
+		}
 		return lexerRuleToStringLiteral;
+	}
+
+	protected static boolean defAlias(GrammarAST r, String pattern,
+									  TreeWizard wiz,
+									  List<Tuple2<GrammarAST,GrammarAST>> lexerRuleToStringLiteral)
+	{
+		HashMap<String, Object> nodes = new HashMap<String, Object>();
+		if ( wiz.parse(r, pattern, nodes) ) {
+			GrammarAST litNode = (GrammarAST)nodes.get("lit");
+			GrammarAST nameNode = (GrammarAST)nodes.get("name");
+			Tuple2<GrammarAST, GrammarAST> pair = Tuple.create(nameNode, litNode);
+			lexerRuleToStringLiteral.add(pair);
+			return true;
+		}
+		return false;
 	}
 
 	public Set<String> getStringLiterals() {

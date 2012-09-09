@@ -38,7 +38,27 @@ import org.antlr.v4.misc.CharSupport;
 import org.antlr.v4.parse.ANTLRParser;
 import org.antlr.v4.parse.ATNBuilder;
 import org.antlr.v4.parse.GrammarASTAdaptor;
-import org.antlr.v4.runtime.atn.*;
+import org.antlr.v4.runtime.atn.ATN;
+import org.antlr.v4.runtime.atn.ATNState;
+import org.antlr.v4.runtime.atn.ActionTransition;
+import org.antlr.v4.runtime.atn.AtomTransition;
+import org.antlr.v4.runtime.atn.BlockEndState;
+import org.antlr.v4.runtime.atn.BlockStartState;
+import org.antlr.v4.runtime.atn.EpsilonTransition;
+import org.antlr.v4.runtime.atn.LoopEndState;
+import org.antlr.v4.runtime.atn.NotSetTransition;
+import org.antlr.v4.runtime.atn.PlusBlockStartState;
+import org.antlr.v4.runtime.atn.PlusLoopbackState;
+import org.antlr.v4.runtime.atn.PredicateTransition;
+import org.antlr.v4.runtime.atn.RuleStartState;
+import org.antlr.v4.runtime.atn.RuleStopState;
+import org.antlr.v4.runtime.atn.RuleTransition;
+import org.antlr.v4.runtime.atn.SetTransition;
+import org.antlr.v4.runtime.atn.StarBlockStartState;
+import org.antlr.v4.runtime.atn.StarLoopEntryState;
+import org.antlr.v4.runtime.atn.StarLoopbackState;
+import org.antlr.v4.runtime.atn.Transition;
+import org.antlr.v4.runtime.atn.WildcardTransition;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
@@ -47,7 +67,12 @@ import org.antlr.v4.tool.ErrorManager;
 import org.antlr.v4.tool.ErrorType;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.Rule;
-import org.antlr.v4.tool.ast.*;
+import org.antlr.v4.tool.ast.ActionAST;
+import org.antlr.v4.tool.ast.AltAST;
+import org.antlr.v4.tool.ast.BlockAST;
+import org.antlr.v4.tool.ast.GrammarAST;
+import org.antlr.v4.tool.ast.PredAST;
+import org.antlr.v4.tool.ast.TerminalAST;
 
 import java.lang.reflect.Constructor;
 import java.util.Collection;
@@ -58,41 +83,6 @@ import java.util.List;
  *  No side-effects. It builds an ATN object and returns it.
  */
 public class ParserATNFactory implements ATNFactory {
-    class TailEpsilonRemover extends ATNVisitor {
-        @Override
-        public void visitState(ATNState p) {
-            if ( p.getClass() == ATNState.class && p.getNumberOfTransitions()==1 ) {
-                ATNState q = p.transition(0).target;
-				if ( p.transition(0) instanceof RuleTransition ) {
-					q = ((RuleTransition)p.transition(0)).followState;
-				}
-				if ( q.getClass() == ATNState.class ) {
-					// we have p-x->q for x in {rule, action, pred, token, ...}
-					// if edge out of q is single epsilon to block end
-					// we can strip epsilon p-x->q-eps->r
-					Transition trans = q.transition(0);
-					if ( q.getNumberOfTransitions()==1 && trans.isEpsilon() &&
-					     !(trans instanceof ActionTransition) ) {
-						ATNState r = trans.target;
-						if ( r instanceof BlockEndState ||
-							r instanceof PlusLoopbackState ||
-							r instanceof StarLoopbackState )
-						{
-							// skip over q
-							if ( p.transition(0) instanceof RuleTransition ) {
-								((RuleTransition)p.transition(0)).followState = r;
-							}
-							else {
-								p.transition(0).target = r;
-							}
-							atn.removeState(q);
-						}
-					}
-				}
-			}
-		}
-	}
-
 	@NotNull
 	public final Grammar g;
 
@@ -103,7 +93,14 @@ public class ParserATNFactory implements ATNFactory {
 
 	public int currentOuterAlt;
 
-	public ParserATNFactory(@NotNull Grammar g) { this.g = g; atn = new ATN(); }
+	public ParserATNFactory(@NotNull Grammar g) {
+		if (g == null) {
+			throw new NullPointerException("g");
+		}
+
+		this.g = g;
+		this.atn = new ATN();
+	}
 
 	@Override
 	public ATN createATN() {
@@ -111,6 +108,7 @@ public class ParserATNFactory implements ATNFactory {
 		atn.maxTokenType = g.getMaxTokenType();
         addRuleFollowLinks();
 		addEOFTransitionToStartRules();
+		ATNOptimizer.optimize(g, atn);
 		return atn;
 	}
 
@@ -193,11 +191,6 @@ public class ParserATNFactory implements ATNFactory {
 		return new Handle(left, right);
 	}
 
-	@Override
-	public Handle tree(GrammarAST node, List<Handle> els) {
-		throw new UnsupportedOperationException("^(...) not allowed in non-tree grammar");
-	}
-
 	/** Not valid for non-lexers */
 	@Override
 	public Handle range(GrammarAST a, GrammarAST b) {
@@ -237,8 +230,6 @@ public class ParserATNFactory implements ATNFactory {
 	@Override
 	public Handle ruleRef(GrammarAST node) {
 		Handle h = _ruleRef(node);
-//		Rule r = g.getRule(node.getText());
-//		addFollowLink(r, h.right);
 		return h;
 	}
 
@@ -293,7 +284,7 @@ public class ParserATNFactory implements ATNFactory {
 
 	/** Build what amounts to an epsilon transition with an action.
 	 *  The action goes into ATN though it is ignored during prediction
-	 *  if actionIndex < 0.  Only forced are executed during prediction.
+	 *  if actionIndex &lt; 0.  Only forced are executed during prediction.
 	 */
 	@Override
 	public Handle action(ActionAST action) {
@@ -328,7 +319,7 @@ public class ParserATNFactory implements ATNFactory {
 	 *  begin/end.
 	 *
 	 *  Special case: if just a list of tokens/chars/sets, then collapse
-	 *  to a single edge'd o-set->o graph.
+	 *  to a single edged o-set->o graph.
 	 *
 	 *  TODO: Set alt number (1..n) in the states?
 	 */
@@ -373,7 +364,7 @@ public class ParserATNFactory implements ATNFactory {
 			epsilon(alt.right, end);
 			// no back link in ATN so must walk entire alt to see if we can
 			// strip out the epsilon to 'end' state
-			TailEpsilonRemover opt = new TailEpsilonRemover();
+			TailEpsilonRemover opt = new TailEpsilonRemover(atn);
 			opt.visit(alt.left);
 		}
 		Handle h = new Handle(start, end);
@@ -457,7 +448,7 @@ public class ParserATNFactory implements ATNFactory {
 		atn.defineDecisionState(loop);
 		LoopEndState end = newState(LoopEndState.class, plusAST);
 		blkStart.loopBackState = loop;
-		end.loopBackStateNumber = loop.stateNumber;
+		end.loopBackState = loop;
 
 		plusAST.atnState = blkStart;
 		epsilon(blkEnd, loop);		// blk can see loop back
@@ -500,7 +491,7 @@ public class ParserATNFactory implements ATNFactory {
 		LoopEndState end = newState(LoopEndState.class, starAST);
 		StarLoopbackState loop = newState(StarLoopbackState.class, starAST);
 		entry.loopBackState = loop;
-		end.loopBackStateNumber = loop.stateNumber;
+		end.loopBackState = loop;
 
 		BlockAST blkAST = (BlockAST)starAST.getChild(0);
 		entry.isGreedy = isGreedy(blkAST);

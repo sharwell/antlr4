@@ -34,9 +34,18 @@ import org.antlr.v4.codegen.CodeGenerator;
 import org.antlr.v4.misc.CharSupport;
 import org.antlr.v4.parse.ANTLRParser;
 import org.antlr.v4.runtime.CharStream;
-import org.antlr.v4.runtime.atn.*;
+import org.antlr.v4.runtime.atn.ATN;
+import org.antlr.v4.runtime.atn.ATNState;
+import org.antlr.v4.runtime.atn.ActionTransition;
+import org.antlr.v4.runtime.atn.AtomTransition;
+import org.antlr.v4.runtime.atn.NotSetTransition;
+import org.antlr.v4.runtime.atn.RangeTransition;
+import org.antlr.v4.runtime.atn.RuleStartState;
+import org.antlr.v4.runtime.atn.SetTransition;
+import org.antlr.v4.runtime.atn.TokensStartState;
+import org.antlr.v4.runtime.atn.Transition;
+import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.IntervalSet;
-import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.LexerGrammar;
 import org.antlr.v4.tool.Rule;
 import org.antlr.v4.tool.ast.ActionAST;
@@ -53,7 +62,7 @@ public class LexerATNFactory extends ParserATNFactory {
 	public LexerATNFactory(LexerGrammar g) {
 		super(g);
 		// use codegen to get correct language templates for lexer commands
-		String language = Grammar.getLanguageOption(g.ast);
+		String language = g.getOptionString("language");
 		CodeGenerator gen = new CodeGenerator(g.tool, null, language);
 		codegenTemplates = gen.templates;
 	}
@@ -64,11 +73,8 @@ public class LexerATNFactory extends ParserATNFactory {
 		Set<String> modes = ((LexerGrammar) g).modes.keySet();
 		for (String modeName : modes) {
 			// create s0, start state; implied Tokens rule node
-			TokensStartState startState =
-				newState(TokensStartState.class, null);
-			atn.modeNameToStartState.put(modeName, startState);
-			atn.modeToStartState.add(startState);
-			atn.defineDecisionState(startState);
+			TokensStartState startState = newState(TokensStartState.class, null);
+			atn.defineMode(modeName, startState);
 		}
 
 		// INIT ACTION, RULE->TOKEN_TYPE MAP
@@ -94,6 +100,7 @@ public class LexerATNFactory extends ParserATNFactory {
 			}
 		}
 
+		ATNOptimizer.optimize(g, atn);
 		return atn;
 	}
 
@@ -178,7 +185,15 @@ public class LexerATNFactory extends ParserATNFactory {
 			left.addTransition(new NotSetTransition(right, set));
 		}
 		else {
-			left.addTransition(new SetTransition(right, set));
+			Transition transition;
+			if (set.getIntervals().size() == 1) {
+				Interval interval = set.getIntervals().get(0);
+				transition = new RangeTransition(right, interval.a, interval.b);
+			} else {
+				transition = new SetTransition(right, set);
+			}
+
+			left.addTransition(transition);
 		}
 		associatedAST.atnState = left;
 		return new Handle(left, right);

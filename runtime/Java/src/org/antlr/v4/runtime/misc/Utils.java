@@ -29,9 +29,14 @@
 
 package org.antlr.v4.runtime.misc;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 public class Utils {
 	public static String join(Iterable<?> iter, String separator) {
@@ -53,6 +58,18 @@ public class Utils {
         }
         return buf.toString();
     }
+
+	public static boolean equals(Object x, Object y) {
+		if (x == y) {
+			return true;
+		}
+
+		if (x == null || y == null) {
+			return false;
+		}
+
+		return x.equals(y);
+	}
 
 	public static int numNonnull(Object[] data) {
 		int n = 0;
@@ -79,4 +96,44 @@ public class Utils {
 		}
 		return buf.toString();
 	}
+
+	public static void writeFile(String fileName, String content) throws IOException {
+		FileWriter fw = new FileWriter(fileName);
+		Writer w = new BufferedWriter(fw);
+		w.write(content);
+		w.close();
+	}
+
+	public static <T> void removeAll(@NotNull List<T> list, @NotNull Predicate<? super T> predicate) {
+		int j = 0;
+		for (int i = 0; i < list.size(); i++) {
+			T item = list.get(i);
+			if (!predicate.eval(item)) {
+				if (j != i) {
+					list.set(j, item);
+				}
+
+				j++;
+			}
+		}
+
+		if (j < list.size()) {
+			list.subList(j, list.size()).clear();
+		}
+	}
+
+	public static <T> void removeAll(@NotNull Iterable<T> iterable, @NotNull Predicate<? super T> predicate) {
+		if (iterable instanceof List<?>) {
+			removeAll((List<T>)iterable, predicate);
+			return;
+		}
+
+		for (Iterator<T> iterator = iterable.iterator(); iterator.hasNext(); ) {
+			T item = iterator.next();
+			if (predicate.eval(item)) {
+				iterator.remove();
+			}
+		}
+	}
+
 }

@@ -1,17 +1,65 @@
 package org.antlr.v4.test;
 
+import org.antlr.runtime.ANTLRStringStream;
+import org.antlr.runtime.CharStream;
+import org.antlr.runtime.CommonTokenStream;
+import org.antlr.runtime.Lexer;
+import org.antlr.runtime.Parser;
 import org.antlr.runtime.RuleReturnScope;
+import org.antlr.runtime.TokenSource;
+import org.antlr.runtime.TokenStream;
 import org.antlr.runtime.tree.Tree;
-import org.junit.Before;
+import org.antlr.runtime.tree.TreeAdaptor;
 import org.junit.Test;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 
 import static org.junit.Assert.assertEquals;
 
-public class TestASTStructure extends org.antlr.v4.gunit.gUnitBase {
-	@Before public void setup() {
-	    lexerClassName = "org.antlr.v4.parse.ANTLRLexer";
-	    parserClassName = "org.antlr.v4.parse.ANTLRParser";
-	    adaptorClassName = "org.antlr.v4.parse.GrammarASTAdaptor";	}
+//  NO LONGER using gunit!!!
+
+public class TestASTStructure {
+	String lexerClassName = "org.antlr.v4.parse.ANTLRLexer";
+	String parserClassName = "org.antlr.v4.parse.ANTLRParser";
+	String  adaptorClassName = "org.antlr.v4.parse.GrammarASTAdaptor";
+
+	public Object execParser(
+	String ruleName,
+	String input,
+	int scriptLine)
+	throws Exception
+	{
+		ANTLRStringStream is = new ANTLRStringStream(input);
+		Class<? extends Lexer> lexerClass = Class.forName(lexerClassName).asSubclass(Lexer.class);
+		Class[] lexArgTypes = new Class<?>[]{CharStream.class};
+		Constructor<? extends Lexer> lexConstructor = lexerClass.getConstructor(lexArgTypes);
+		Object[] lexArgs = new Object[]{is};
+		TokenSource lexer = (TokenSource)lexConstructor.newInstance(lexArgs);
+		is.setLine(scriptLine);
+
+		CommonTokenStream tokens = new CommonTokenStream(lexer);
+
+		Class<? extends Parser> parserClass = Class.forName(parserClassName).asSubclass(Parser.class);
+		Class[] parArgTypes = new Class<?>[]{TokenStream.class};
+		Constructor<? extends Parser> parConstructor = parserClass.getConstructor(parArgTypes);
+		Object[] parArgs = new Object[]{tokens};
+		Parser parser = (Parser)parConstructor.newInstance(parArgs);
+
+		// set up customized tree adaptor if necessary
+		if ( adaptorClassName!=null ) {
+			parArgTypes = new Class<?>[]{TreeAdaptor.class};
+			Method m = parserClass.getMethod("setTreeAdaptor", parArgTypes);
+			Class<? extends TreeAdaptor> adaptorClass = Class.forName(adaptorClassName).asSubclass(TreeAdaptor.class);
+			m.invoke(parser, adaptorClass.newInstance());
+		}
+
+		Method ruleMethod = parserClass.getMethod(ruleName);
+
+		// INVOKE RULE
+		return ruleMethod.invoke(parser);
+	}
+
 	@Test public void test_grammarSpec1() throws Exception {
 		// gunit test on line 15
 		RuleReturnScope rstruct = (RuleReturnScope)execParser("grammarSpec", "parser grammar P; a : A;", 15);
@@ -22,7 +70,7 @@ public class TestASTStructure extends org.antlr.v4.gunit.gUnitBase {
 
 	@Test public void test_grammarSpec2() throws Exception {
 		// gunit test on line 18
-		RuleReturnScope rstruct = (RuleReturnScope)execParser("grammarSpec", "\n    parser grammar P;\n    tokens { A; B='33'; }\n    @header {foo}\n    a : A;\n    ", 18);
+		RuleReturnScope rstruct = (RuleReturnScope)execParser("grammarSpec", "\n    parser grammar P;\n    tokens { A, B }\n    @header {foo}\n    a : A;\n    ", 18);
 		Object actual = ((Tree)rstruct.getTree()).toStringTree();
 		Object expecting = "(PARSER_GRAMMAR P (tokens { A (= B '33')) (@ header {foo}) (RULES (RULE a (BLOCK (ALT A)))))";
 		assertEquals("testing rule grammarSpec", expecting, actual);
@@ -30,7 +78,7 @@ public class TestASTStructure extends org.antlr.v4.gunit.gUnitBase {
 
 	@Test public void test_grammarSpec3() throws Exception {
 		// gunit test on line 30
-		RuleReturnScope rstruct = (RuleReturnScope)execParser("grammarSpec", "\n    parser grammar P;\n    @header {foo}\n    tokens { A; B='33'; }\n    a : A;\n    ", 30);
+		RuleReturnScope rstruct = (RuleReturnScope)execParser("grammarSpec", "\n    parser grammar P;\n    @header {foo}\n    tokens { A,B }\n    a : A;\n    ", 30);
 		Object actual = ((Tree)rstruct.getTree()).toStringTree();
 		Object expecting = "(PARSER_GRAMMAR P (@ header {foo}) (tokens { A (= B '33')) (RULES (RULE a (BLOCK (ALT A)))))";
 		assertEquals("testing rule grammarSpec", expecting, actual);

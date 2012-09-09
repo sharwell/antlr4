@@ -30,14 +30,20 @@
 package org.antlr.v4.codegen;
 
 import org.antlr.v4.Tool;
+import org.antlr.v4.codegen.model.ModelElement;
 import org.antlr.v4.codegen.model.OutputModelObject;
 import org.antlr.v4.tool.ErrorType;
-import org.stringtemplate.v4.*;
+import org.stringtemplate.v4.ST;
+import org.stringtemplate.v4.STGroup;
 import org.stringtemplate.v4.compiler.FormalArgument;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 
 /** Convert an output model tree to template hierarchy by walking
  *  the output model. Each output model object has a corresponding template
@@ -94,13 +100,24 @@ public class OutputModelWalker {
 		st.add(modelArgName, omo);
 
 		// COMPUTE STs FOR EACH NESTED MODEL OBJECT MARKED WITH @ModelElement AND MAKE ST ATTRIBUTE
+		Set<String> usedFieldNames = new HashSet<String>();
 		Field fields[] = cl.getFields();
 		for (Field fi : fields) {
-			Annotation[] annotations = fi.getAnnotations();
-			if ( annotations.length==0 ) continue;
+			ModelElement annotation = fi.getAnnotation(ModelElement.class);
+			if (annotation == null) {
+				continue;
+			}
+
 			String fieldName = fi.getName();
+
+			if (!usedFieldNames.add(fieldName)) {
+				tool.errMgr.toolError(ErrorType.INTERNAL_ERROR, "Model object " + omo.getClass().getSimpleName() + " has multiple fields named '" + fieldName + "'");
+				continue;
+			}
+
 			// Just don't set @ModelElement fields w/o formal arg in target ST
 			if ( formalArgs.get(fieldName)==null ) continue;
+
 			try {
 				Object o = fi.get(omo);
 				if ( o instanceof OutputModelObject ) {  // SINGLE MODEL OBJECT?
@@ -109,12 +126,15 @@ public class OutputModelWalker {
 //					System.out.println("set ModelElement "+fieldName+"="+nestedST+" in "+templateName);
 					st.add(fieldName, nestedST);
 				}
-				else if ( o instanceof Collection || o instanceof OutputModelObject[] ) {
+				else if ( o instanceof Collection<?> || o instanceof OutputModelObject[] ) {
 					// LIST OF MODEL OBJECTS?
+					OutputModelObject[] nestedOmos;
 					if ( o instanceof OutputModelObject[] ) {
-						o = Arrays.asList((OutputModelObject[])o);
+						nestedOmos = (OutputModelObject[])o;
 					}
-					Collection<? extends OutputModelObject> nestedOmos = (Collection)o;
+					else {
+						nestedOmos = ((Collection<?>)o).toArray(new OutputModelObject[0]);
+					}
 					for (OutputModelObject nestedOmo : nestedOmos) {
 						if ( nestedOmo==null ) continue;
 						ST nestedST = walk(nestedOmo);
@@ -122,11 +142,13 @@ public class OutputModelWalker {
 						st.add(fieldName, nestedST);
 					}
 				}
-				else if ( o instanceof Map ) {
-					Map<Object, OutputModelObject> nestedOmoMap = (Map<Object, OutputModelObject>)o;
+				else if ( o instanceof Map<?, ?> ) {
+					Map<?, ?> nestedOmoMap = (Map<?, ?>)o;
 					Map<Object, ST> m = new HashMap<Object, ST>();
-					for (Object key : nestedOmoMap.keySet()) {
-						ST nestedST = walk(nestedOmoMap.get(key));
+					for (Map.Entry<?, ?> entry : nestedOmoMap.entrySet()) {
+						Object key = entry.getKey();
+						OutputModelObject value = (OutputModelObject)entry.getValue();
+						ST nestedST = walk(value);
 //						System.out.println("set ModelElement "+fieldName+"="+nestedST+" in "+templateName);
 						m.put(key, nestedST);
 					}

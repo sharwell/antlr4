@@ -37,12 +37,12 @@ import org.antlr.runtime.RecognitionException;
 import org.antlr.runtime.TokenStream;
 import org.antlr.v4.Tool;
 import org.antlr.v4.misc.OrderedHashMap;
-import org.antlr.v4.misc.Pair;
 import org.antlr.v4.parse.ANTLRLexer;
 import org.antlr.v4.parse.ANTLRParser;
 import org.antlr.v4.parse.GrammarASTAdaptor;
 import org.antlr.v4.parse.ScopeParser;
 import org.antlr.v4.parse.ToolANTLRParser;
+import org.antlr.v4.runtime.misc.Tuple2;
 import org.antlr.v4.tool.AttributeDict;
 import org.antlr.v4.tool.ErrorType;
 import org.antlr.v4.tool.Grammar;
@@ -69,17 +69,18 @@ import java.util.List;
 public class LeftRecursiveRuleTransformer {
 	public GrammarRootAST ast;
 	public Collection<Rule> rules;
+	public Grammar g;
 	public Tool tool;
 
-	public LeftRecursiveRuleTransformer(GrammarRootAST ast, Collection<Rule> rules, Tool tool) {
+	public LeftRecursiveRuleTransformer(GrammarRootAST ast, Collection<Rule> rules, Grammar g) {
 		this.ast = ast;
 		this.rules = rules;
-		this.tool = tool;
+		this.g = g;
+		this.tool = g.tool;
 	}
 
 	public void translateLeftRecursiveRules() {
-		// TODO: what about -language foo cmd line?
-		String language = Grammar.getLanguageOption(ast);
+		String language = g.getOptionString("language");
 		// translate all recursive rules
 		List<String> leftRecursiveRuleNames = new ArrayList<String>();
 		for (Rule r : rules) {
@@ -115,7 +116,7 @@ public class LeftRecursiveRuleTransformer {
 		String ruleName = prevRuleAST.getChild(0).getText();
 		LeftRecursiveRuleAnalyzer leftRecursiveRuleWalker =
 			new LeftRecursiveRuleAnalyzer(tokens, prevRuleAST, tool, ruleName, language);
-		boolean isLeftRec = false;
+		boolean isLeftRec;
 		try {
 //			System.out.println("TESTING ---------------\n"+
 //							   leftRecursiveRuleWalker.text(ruleAST));
@@ -165,8 +166,8 @@ public class LeftRecursiveRuleTransformer {
 
 		// define labels on recursive rule refs we delete; they don't point to nodes of course
 		// these are so $label in action translation works
-		for (Pair<GrammarAST,String> pair : leftRecursiveRuleWalker.leftRecursiveRuleRefLabels) {
-			GrammarAST labelNode = pair.a;
+		for (Tuple2<GrammarAST,String> pair : leftRecursiveRuleWalker.leftRecursiveRuleRefLabels) {
+			GrammarAST labelNode = pair.getItem1();
 			GrammarAST labelOpNode = (GrammarAST)labelNode.getParent();
 			GrammarAST elementNode = (GrammarAST)labelOpNode.getChild(1);
 			LabelElementPair lp = new LabelElementPair(g, labelNode, elementNode, labelOpNode.getType());
@@ -225,7 +226,7 @@ public class LeftRecursiveRuleTransformer {
 			altInfo.altAST = (AltAST)primaryBlk.getChild(i);
 			altInfo.altAST.leftRecursiveAltInfo = altInfo;
 			altInfo.originalAltAST.leftRecursiveAltInfo = altInfo;
-			altInfo.originalAltAST.parent = altInfo.altAST.parent;
+//			altInfo.originalAltAST.parent = altInfo.altAST.parent;
 //			System.out.println(altInfo.altAST.toStringTree());
 		}
 		for (int i = 0; i < r.recOpAlts.size(); i++) {
@@ -233,7 +234,7 @@ public class LeftRecursiveRuleTransformer {
 			altInfo.altAST = (AltAST)opsBlk.getChild(i);
 			altInfo.altAST.leftRecursiveAltInfo = altInfo;
 			altInfo.originalAltAST.leftRecursiveAltInfo = altInfo;
-			altInfo.originalAltAST.parent = altInfo.altAST.parent;
+//			altInfo.originalAltAST.parent = altInfo.altAST.parent;
 //			System.out.println(altInfo.altAST.toStringTree());
 		}
 	}

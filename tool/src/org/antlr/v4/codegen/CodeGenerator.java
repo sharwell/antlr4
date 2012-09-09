@@ -33,13 +33,22 @@ import org.antlr.v4.Tool;
 import org.antlr.v4.codegen.model.OutputModelObject;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.misc.NotNull;
-import org.antlr.v4.tool.*;
-import org.stringtemplate.v4.*;
+import org.antlr.v4.tool.ErrorType;
+import org.antlr.v4.tool.Grammar;
+import org.stringtemplate.v4.AutoIndentWriter;
+import org.stringtemplate.v4.NumberRenderer;
+import org.stringtemplate.v4.ST;
+import org.stringtemplate.v4.STGroup;
+import org.stringtemplate.v4.STGroupFile;
+import org.stringtemplate.v4.STWriter;
+import org.stringtemplate.v4.StringRenderer;
 
-import java.io.*;
-import java.lang.reflect.*;
-import java.util.*;
-import org.antlr.v4.misc.Utils.Func1;
+import java.io.IOException;
+import java.io.Writer;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashMap;
+import java.util.Map;
 
 /** General controller for code gen.  Can instantiate sub generator(s).
  */
@@ -61,7 +70,7 @@ public class CodeGenerator {
 	public int lineWidth = 72;
 
 	public CodeGenerator(@NotNull Grammar g) {
-		this(g.tool, g, g.getOptionString("language", "Java"));
+		this(g.tool, g, g.getOptionString("language"));
 	}
 
 	public CodeGenerator(@NotNull Tool tool, @NotNull Grammar g, String language) {
@@ -109,78 +118,31 @@ public class CodeGenerator {
 		}
 		catch (IllegalArgumentException iae) {
 			tool.errMgr.toolError(ErrorType.CANNOT_CREATE_TARGET_GENERATOR,
-									iae,
+									null,
 						 			language);
 		}
 	}
 
 	// CREATE TEMPLATES BY WALKING MODEL
 
-	public ST generateModelST(Func1<OutputModelController, OutputModelObject> factoryMethod) {
+	private OutputModelController createController() {
 		OutputModelFactory factory = new ParserFactory(this);
-
-		// CREATE OUTPUT MODEL FROM GRAMMAR OBJ AND AST WITHIN RULES
 		OutputModelController controller = new OutputModelController(factory);
 		factory.setController(controller);
+		return controller;
+	}
 
-		OutputModelObject outputModel = factoryMethod.exec(controller);
+	private ST walk(OutputModelObject outputModel) {
 		OutputModelWalker walker = new OutputModelWalker(tool, templates);
 		return walker.walk(outputModel);
 	}
 
-	public ST generateLexer() {
-		return generateModelST(new Func1<OutputModelController, OutputModelObject>() {
-			@Override
-			public OutputModelObject exec(OutputModelController controller) {
-				return controller.buildLexerOutputModel();
-			}
-		});
-	}
-
-	public ST generateParser() {
-		return generateModelST(new Func1<OutputModelController, OutputModelObject>() {
-			@Override
-			public OutputModelObject exec(OutputModelController controller) {
-				return controller.buildParserOutputModel();
-			}
-		});
-	}
-
-	public ST generateListener() {
-		return generateModelST(new Func1<OutputModelController, OutputModelObject>() {
-			@Override
-			public OutputModelObject exec(OutputModelController controller) {
-				return controller.buildListenerOutputModel();
-			}
-		});
-	}
-
-	public ST generateBaseListener() {
-		return generateModelST(new Func1<OutputModelController, OutputModelObject>() {
-			@Override
-			public OutputModelObject exec(OutputModelController controller) {
-				return controller.buildBaseListenerOutputModel();
-			}
-		});
-	}
-
-	public ST generateVisitor() {
-		return generateModelST(new Func1<OutputModelController, OutputModelObject>() {
-			@Override
-			public OutputModelObject exec(OutputModelController controller) {
-				return controller.buildVisitorOutputModel();
-			}
-		});
-	}
-
-	public ST generateBaseVisitor() {
-		return generateModelST(new Func1<OutputModelController, OutputModelObject>() {
-			@Override
-			public OutputModelObject exec(OutputModelController controller) {
-				return controller.buildBaseVisitorOutputModel();
-			}
-		});
-	}
+	public ST generateLexer() { return walk(createController().buildLexerOutputModel()); }
+	public ST generateParser() { return walk(createController().buildParserOutputModel()); }
+	public ST generateListener() { return walk(createController().buildListenerOutputModel()); }
+	public ST generateBaseListener() { return walk(createController().buildBaseListenerOutputModel()); }
+	public ST generateVisitor() { return walk(createController().buildVisitorOutputModel()); }
+	public ST generateBaseVisitor() { return walk(createController().buildBaseVisitorOutputModel()); }
 
 	/** Generate a token vocab file with all the token names/types.  For example:
 	 *  ID=7
@@ -279,12 +241,14 @@ public class CodeGenerator {
 
 	public void write(ST code, String fileName) {
 		try {
+			@SuppressWarnings("unused")
 			long start = System.currentTimeMillis();
 			Writer w = tool.getOutputFileWriter(g, fileName);
 			STWriter wr = new AutoIndentWriter(w);
 			wr.setLineWidth(lineWidth);
 			code.write(wr);
 			w.close();
+			@SuppressWarnings("unused")
 			long stop = System.currentTimeMillis();
 		}
 		catch (IOException ioe) {
@@ -294,7 +258,7 @@ public class CodeGenerator {
 		}
 	}
 
-	/** Generate TParser.java and TLexer.java from T.g if combined, else
+	/** Generate TParser.java and TLexer.java from T.g4 if combined, else
 	 *  just use T.java as output regardless of type.
 	 */
 	public String getRecognizerFileName() {

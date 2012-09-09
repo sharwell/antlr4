@@ -40,6 +40,8 @@ import java.util.List;
  *  LinkedHashSet.
  */
 public class OrderedHashSet<T> extends LinkedHashSet<T> {
+	private static final long serialVersionUID = 5281944403755906761L;
+
     /** Track the elements as they are added to the set */
     protected ArrayList<T> elements = new ArrayList<T>();
 
@@ -94,6 +96,10 @@ public class OrderedHashSet<T> extends LinkedHashSet<T> {
 
 	@Override
 	public boolean equals(Object o) {
+		if (!(o instanceof OrderedHashSet<?>)) {
+			return false;
+		}
+
 //		System.out.print("equals " + this + ", " + o+" = ");
 		boolean same = elements!=null && elements.equals(((OrderedHashSet<?>)o).elements);
 //		System.out.println(same);

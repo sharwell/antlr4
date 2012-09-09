@@ -31,7 +31,20 @@ package org.antlr.v4.automata;
 
 import org.antlr.v4.misc.Utils;
 import org.antlr.v4.parse.ANTLRParser;
-import org.antlr.v4.runtime.atn.*;
+import org.antlr.v4.runtime.atn.ATN;
+import org.antlr.v4.runtime.atn.ATNSimulator;
+import org.antlr.v4.runtime.atn.ATNState;
+import org.antlr.v4.runtime.atn.ActionTransition;
+import org.antlr.v4.runtime.atn.AtomTransition;
+import org.antlr.v4.runtime.atn.BlockStartState;
+import org.antlr.v4.runtime.atn.DecisionState;
+import org.antlr.v4.runtime.atn.LoopEndState;
+import org.antlr.v4.runtime.atn.PredicateTransition;
+import org.antlr.v4.runtime.atn.RangeTransition;
+import org.antlr.v4.runtime.atn.RuleTransition;
+import org.antlr.v4.runtime.atn.SetTransition;
+import org.antlr.v4.runtime.atn.Transition;
+import org.antlr.v4.runtime.misc.IntegerList;
 import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.tool.Grammar;
@@ -71,16 +84,17 @@ public class ATNSerializer {
 	 *
 	 *  Convenient to pack into unsigned shorts to make as Java string.
 	 */
-	public List<Integer> serialize() {
-		List<Integer> data = new ArrayList<Integer>();
+	public IntegerList serialize() {
+		IntegerList data = new IntegerList();
 		// convert grammar type to ATN const to avoid dependence on ANTLRParser
 		if ( g.getType()== ANTLRParser.LEXER ) data.add(ATN.LEXER);
-		else if ( g.getType()== ANTLRParser.PARSER ) data.add(ATN.PARSER);
-		else data.add(ATN.TREE_PARSER);
+		else if ( g.getType()== ANTLRParser.PARSER || g.getType() == ANTLRParser.COMBINED ) data.add(ATN.PARSER);
+		else throw new UnsupportedOperationException("Unrecognized grammar type " + String.valueOf(g.getType()) + ".");
 		data.add(g.getMaxTokenType());
-		data.add(atn.states.size());
 		int nedges = 0;
+
 		// dump states, count edges and collect sets while doing so
+		data.add(atn.states.size());
 		for (ATNState s : atn.states) {
 			if ( s==null ) { // might be optimized away
 				data.add(ATNState.INVALID_TYPE);
@@ -88,8 +102,18 @@ public class ATNSerializer {
 			}
 			data.add(s.getStateType());
 			data.add(s.ruleIndex);
-			if ( s.getStateType() == ATNState.LOOP_END ) data.add(((LoopEndState)s).loopBackStateNumber);
-			nedges += s.getNumberOfTransitions();
+			if ( s.getStateType() == ATNState.LOOP_END ) {
+				data.add(((LoopEndState)s).loopBackState.stateNumber);
+			}
+			else if ( s instanceof BlockStartState ) {
+				data.add(((BlockStartState)s).endState.stateNumber);
+			}
+
+			if (s.getStateType() != ATNState.RULE_STOP) {
+				// the deserializer can trivially derive these edges, so there's no need to serialize them
+				nedges += s.getNumberOfTransitions();
+			}
+
 			for (int i=0; i<s.getNumberOfTransitions(); i++) {
 				Transition t = s.transition(i);
 				int edgeType = Transition.serializationTypes.get(t.getClass());
@@ -99,6 +123,7 @@ public class ATNSerializer {
 				}
 			}
 		}
+
 		int nrules = atn.ruleToStartState.length;
 		data.add(nrules);
 		for (int r=0; r<nrules; r++) {
@@ -111,6 +136,7 @@ public class ATNSerializer {
 				data.add(rule.actionIndex);
 			}
 		}
+
 		int nmodes = atn.modeToStartState.size();
 		data.add(nmodes);
 		if ( nmodes>0 ) {
@@ -118,6 +144,7 @@ public class ATNSerializer {
 				data.add(modeStartState.stateNumber);
 			}
 		}
+
 		int nsets = sets.size();
 		data.add(nsets);
 		for (IntervalSet set : sets) {
@@ -127,12 +154,26 @@ public class ATNSerializer {
 				data.add(I.b);
 			}
 		}
+
 		data.add(nedges);
 		int setIndex = 0;
 		for (ATNState s : atn.states) {
-			if ( s==null ) continue; // might be optimized away
+			if ( s==null ) {
+				// might be optimized away
+				continue;
+			}
+
+			if (s.getStateType() == ATNState.RULE_STOP) {
+				continue;
+			}
+
 			for (int i=0; i<s.getNumberOfTransitions(); i++) {
 				Transition t = s.transition(i);
+
+				if (atn.states.get(t.target.stateNumber) == null) {
+					throw new IllegalStateException("Cannot serialize a transition to a removed state.");
+				}
+
 				int src = s.stateNumber;
 				int trg = t.target.stateNumber;
 				int edgeType = Transition.serializationTypes.get(t.getClass());
@@ -193,9 +234,10 @@ public class ATNSerializer {
 	public String decode(char[] data) {
 		StringBuilder buf = new StringBuilder();
 		int p = 0;
+		@SuppressWarnings("unused")
 		int grammarType = ATNSimulator.toInt(data[p++]);
 		int maxType = ATNSimulator.toInt(data[p++]);
-		buf.append("max type "+maxType+"\n");
+		buf.append("max type ").append(maxType).append("\n");
 		int nstates = ATNSimulator.toInt(data[p++]);
 		for (int i=1; i<=nstates; i++) {
 			int stype = ATNSimulator.toInt(data[p++]);
@@ -206,9 +248,13 @@ public class ATNSerializer {
 				int loopBackStateNumber = ATNSimulator.toInt(data[p++]);
 				arg = " "+loopBackStateNumber;
 			}
-			buf.append((i - 1) + ":" +
-					   ATNState.serializationNames.get(stype) + " "+
-					   ruleIndex + arg + "\n");
+			else if ( stype == ATNState.PLUS_BLOCK_START || stype == ATNState.STAR_BLOCK_START || stype == ATNState.BLOCK_START ) {
+				int endStateNumber = ATNSimulator.toInt(data[p++]);
+				arg = " "+endStateNumber;
+			}
+			buf.append(i - 1).append(":")
+				.append(ATNState.serializationNames.get(stype)).append(" ")
+				.append(ruleIndex).append(arg).append("\n");
 		}
 		int nrules = ATNSimulator.toInt(data[p++]);
 		for (int i=0; i<nrules; i++) {
@@ -216,24 +262,24 @@ public class ATNSerializer {
             if ( g.isLexer() ) {
                 int arg1 = ATNSimulator.toInt(data[p++]);
                 int arg2 = ATNSimulator.toInt(data[p++]);
-                buf.append("rule "+i+":"+s+" "+arg1+","+arg2+'\n');
+                buf.append("rule ").append(i).append(":").append(s).append(" ").append(arg1).append(",").append(arg2).append('\n');
             }
             else {
-                buf.append("rule "+i+":"+s+'\n');
+                buf.append("rule ").append(i).append(":").append(s).append('\n');
             }
 		}
 		int nmodes = ATNSimulator.toInt(data[p++]);
 		for (int i=0; i<nmodes; i++) {
 			int s = ATNSimulator.toInt(data[p++]);
-			buf.append("mode "+i+":"+s+'\n');
+			buf.append("mode ").append(i).append(":").append(s).append('\n');
 		}
 		int nsets = ATNSimulator.toInt(data[p++]);
 		for (int i=1; i<=nsets; i++) {
 			int nintervals = ATNSimulator.toInt(data[p++]);
-			buf.append((i-1)+":");
+			buf.append(i-1).append(":");
 			for (int j=1; j<=nintervals; j++) {
 				if ( j>1 ) buf.append(", ");
-				buf.append(getTokenName(ATNSimulator.toInt(data[p]))+".."+getTokenName(ATNSimulator.toInt(data[p + 1])));
+				buf.append(getTokenName(ATNSimulator.toInt(data[p]))).append("..").append(getTokenName(ATNSimulator.toInt(data[p + 1])));
 				p += 2;
 			}
 			buf.append("\n");
@@ -246,17 +292,17 @@ public class ATNSerializer {
 			int arg1 = ATNSimulator.toInt(data[p + 3]);
 			int arg2 = ATNSimulator.toInt(data[p + 4]);
 			int arg3 = ATNSimulator.toInt(data[p + 5]);
-			buf.append(src+"->"+trg+
-					   " "+Transition.serializationNames.get(ttype)+
-					   " "+arg1+","+arg2+","+arg3+
-					   "\n");
+			buf.append(src).append("->").append(trg)
+				.append(" ").append(Transition.serializationNames.get(ttype))
+				.append(" ").append(arg1).append(",").append(arg2).append(",").append(arg3)
+				.append("\n");
 			p += 6;
 		}
 		int ndecisions = ATNSimulator.toInt(data[p++]);
 		for (int i=1; i<=ndecisions; i++) {
 			int s = ATNSimulator.toInt(data[p++]);
 			int isGreedy = ATNSimulator.toInt(data[p++]);
-			buf.append((i-1)+":"+s+" "+isGreedy+"\n");
+			buf.append(i-1).append(":").append(s).append(" ").append(isGreedy).append("\n");
 		}
 		return buf.toString();
 	}
@@ -272,7 +318,7 @@ public class ATNSerializer {
 		return new String(Utils.toCharArray(getSerialized(g, atn)));
 	}
 
-	public static List<Integer> getSerialized(Grammar g, ATN atn) {
+	public static IntegerList getSerialized(Grammar g, ATN atn) {
 		return new ATNSerializer(g, atn).serialize();
 	}
 
@@ -281,7 +327,7 @@ public class ATNSerializer {
 	}
 
 	public static String getDecoded(Grammar g, ATN atn) {
-		List<Integer> serialized = getSerialized(g, atn);
+		IntegerList serialized = getSerialized(g, atn);
 		char[] data = Utils.toCharArray(serialized);
 		return new ATNSerializer(g, atn).decode(data);
 	}

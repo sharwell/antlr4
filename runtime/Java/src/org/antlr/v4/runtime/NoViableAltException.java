@@ -30,10 +30,14 @@ package org.antlr.v4.runtime;
 
 import org.antlr.v4.runtime.atn.ATNConfigSet;
 
-/** The parser could not decide which path in the decision to take based
- *  upon the remaining input.
+/** Indicates that the parser could not decide which of two or more paths
+ *  to take based upon the remaining input. It tracks the starting token
+ *  of the offending input and also knows where the parser was
+ *  in the various paths when the error. Reported by reportNoViableAlternative()
  */
 public class NoViableAltException extends RecognitionException {
+	private static final long serialVersionUID = 5096000008992867052L;
+
 	/** Which configurations did we try at input.index() that couldn't match input.LT(1)? */
 	public ATNConfigSet deadEndConfigs;
 
@@ -41,7 +45,7 @@ public class NoViableAltException extends RecognitionException {
 	 * 	not be buffering tokens so get a reference to it. (At the
 	 *  time the error occurred, of course the stream needs to keep a
 	 *  buffer all of the tokens but later we might not have access to those.)
- 	 */
+	 */
 	public Token startToken;
 
 	public <Symbol extends Token> NoViableAltException(Parser<Symbol> recognizer) { // LL(1) error
@@ -53,7 +57,7 @@ public class NoViableAltException extends RecognitionException {
 	}
 
 	public <Symbol extends Token> NoViableAltException(Recognizer<Symbol, ?> recognizer,
-													   SymbolStream<Symbol> input,
+													   TokenStream<? extends Symbol> input,
 													   Symbol startToken,
 													   Symbol offendingToken,
 													   ATNConfigSet deadEndConfigs,
@@ -66,7 +70,7 @@ public class NoViableAltException extends RecognitionException {
 	}
 
 	@SuppressWarnings("unchecked") // safe
-	public <T extends Token> T getStartToken(Recognizer<T, ?> recognizer) {
+	public <T> T getStartToken(Recognizer<T, ?> recognizer) {
 		return this.recognizer == recognizer ? (T)startToken : null;
 	}
 }

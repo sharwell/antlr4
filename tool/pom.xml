@@ -35,12 +35,7 @@
         <dependency>
             <groupId>org.antlr</groupId>
             <artifactId>ST4</artifactId>
-            <version>4.0.4</version>
-        </dependency>
-        <dependency>
-            <groupId>org.antlr</groupId>
-            <artifactId>antlr4-gunit</artifactId>
-            <version>${project.version}</version>
+            <version>4.0.6-SNAPSHOT</version>
         </dependency>
     </dependencies>
 
@@ -59,7 +54,7 @@
            <plugin>
                 <groupId>org.antlr</groupId>
                 <artifactId>antlr3-maven-plugin</artifactId>
-                <version>3.4</version>
+                <version>3.4.1-SNAPSHOT</version>
                 <configuration>
                     <sourceDirectory>src</sourceDirectory>
                     <verbose>true</verbose>
@@ -79,6 +74,11 @@
                 <configuration>
                     <source>1.6</source>
                     <target>1.6</target>
+                    <showDeprecation>true</showDeprecation>
+                    <showWarnings>true</showWarnings>
+                    <compilerArguments>
+                        <Xlint/>
+                    </compilerArguments>
                 </configuration>
             </plugin>
 

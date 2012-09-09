@@ -42,7 +42,6 @@ import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.tool.Grammar;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -100,11 +99,17 @@ public class GrammarAST extends CommonTree {
 		List<GrammarAST> work = new LinkedList<GrammarAST>();
 		work.add(this);
 		GrammarAST t;
-		while ( work.size()>0 ) {
+		while ( !work.isEmpty() ) {
 			t = work.remove(0);
 			if ( types.contains(t.getType()) ) nodes.add(t);
-			if ( t.children!=null ) work.addAll((Collection)t.children);
+			for (int i = 0; i < t.getChildCount(); i++) {
+				Object child = t.getChild(i);
+				if (child instanceof GrammarAST) {
+					work.add((GrammarAST)child);
+				}
+			}
 		}
+
 		return nodes;
 	}
 

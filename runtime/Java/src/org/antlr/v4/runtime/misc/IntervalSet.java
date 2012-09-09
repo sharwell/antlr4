@@ -28,9 +28,15 @@
  */
 package org.antlr.v4.runtime.misc;
 
-import org.antlr.v4.runtime.*;
+import org.antlr.v4.runtime.Lexer;
+import org.antlr.v4.runtime.Token;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Set;
 
 /** A set of integers that relies on ranges being common to do
  *  "run-length-encoded" like compression (if you view an IntSet like
@@ -111,7 +117,7 @@ public class IntervalSet implements IntSet {
      *  {1..5, 6..7, 10..20}.  Adding 4..8 yields {1..8, 10..20}.
      */
     public void add(int a, int b) {
-        add(Interval.create(a,b));
+        add(Interval.of(a, b));
     }
 
 	// copy on write so we can cache a..a intervals and sets of that
@@ -524,6 +530,20 @@ public class IntervalSet implements IntSet {
 		return n;
     }
 
+	public IntegerList toIntegerList() {
+		IntegerList values = new IntegerList(size());
+		int n = intervals.size();
+		for (int i = 0; i < n; i++) {
+			Interval I = intervals.get(i);
+			int a = I.a;
+			int b = I.b;
+			for (int v=a; v<=b; v++) {
+				values.add(v);
+			}
+		}
+		return values;
+	}
+
     @Override
     public List<Integer> toList() {
 		List<Integer> values = new ArrayList<Integer>();
@@ -551,41 +571,8 @@ public class IntervalSet implements IntSet {
 		return s;
 	}
 
-	/** Get the ith element of ordered set.  Used only by RandomPhrase so
-	 *  don't bother to implement if you're not doing that for a new
-	 *  ANTLR code gen target.
-	 */
-	public int get(int i) {
-		int n = intervals.size();
-		int index = 0;
-		for (int j = 0; j < n; j++) {
-			Interval I = intervals.get(j);
-			int a = I.a;
-			int b = I.b;
-			for (int v=a; v<=b; v++) {
-				if ( index==i ) {
-					return v;
-				}
-				index++;
-			}
-		}
-		return -1;
-	}
-
 	public int[] toArray() {
-		int[] values = new int[size()];
-		int n = intervals.size();
-		int j = 0;
-		for (int i = 0; i < n; i++) {
-			Interval I = intervals.get(i);
-			int a = I.a;
-			int b = I.b;
-			for (int v=a; v<=b; v++) {
-				values[j] = v;
-				j++;
-			}
-		}
-		return values;
+		return toIntegerList().toArray();
 	}
 
 	@Override
@@ -606,18 +593,18 @@ public class IntervalSet implements IntSet {
             }
             // if on left edge x..b, adjust left
             if ( el==a ) {
-                I.a++;
+                intervals.set(i, Interval.of(I.a + 1, I.b));
                 break;
             }
             // if on right edge a..x, adjust right
             if ( el==b ) {
-                I.b--;
+                intervals.set(i, Interval.of(I.a, I.b - 1));
                 break;
             }
             // if in middle a..x..b, split interval
             if ( el>a && el<b ) { // found in this interval
                 int oldb = I.b;
-                I.b = el-1;      // [a..x-1]
+                intervals.set(i, Interval.of(I.a, el - 1)); // [a..x-1]
                 add(el+1, oldb); // add [x+1..b]
             }
         }

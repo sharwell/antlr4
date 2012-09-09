@@ -29,8 +29,10 @@
 package org.antlr.v4.runtime;
 
 import org.antlr.v4.runtime.atn.LexerATNSimulator;
+import org.antlr.v4.runtime.misc.IntegerStack;
+import org.antlr.v4.runtime.misc.Interval;
 
-import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.EmptyStackException;
 import java.util.List;
 
@@ -89,7 +91,7 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	/** The token type for the current token */
 	public int _type;
 
-	public ArrayDeque<Integer> _modeStack = new ArrayDeque<Integer>();
+	public final IntegerStack _modeStack = new IntegerStack();
 	public int _mode = Lexer.DEFAULT_MODE;
 
 	/** You can set the text for the current token to override what is in
@@ -126,40 +128,57 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	 */
 	@Override
 	public Token nextToken() {
-		if (_hitEOF) return anEOF();
+		if (_input == null) {
+			throw new IllegalStateException("nextToken requires a non-null input stream.");
+		}
 
-		outer:
-		while (true) {
-			_token = null;
-			_channel = Token.DEFAULT_CHANNEL;
-			_tokenStartCharIndex = _input.index();
-			_tokenStartCharPositionInLine = getInterpreter().getCharPositionInLine();
-			_tokenStartLine = getInterpreter().getLine();
-			_text = null;
-			do {
-				_type = Token.INVALID_TYPE;
+		if (_hitEOF) {
+			emitEOF();
+			return _token;
+		}
+
+		// Mark start location in char stream so unbuffered streams are
+		// guaranteed at least have text of current token
+		int tokenStartMarker = _input.mark();
+		try{
+			outer:
+			while (true) {
+				_token = null;
+				_channel = Token.DEFAULT_CHANNEL;
+				_tokenStartCharIndex = _input.index();
+				_tokenStartCharPositionInLine = getInterpreter().getCharPositionInLine();
+				_tokenStartLine = getInterpreter().getLine();
+				_text = null;
+				do {
+					_type = Token.INVALID_TYPE;
 //				System.out.println("nextToken line "+tokenStartLine+" at "+((char)input.LA(1))+
 //								   " in mode "+mode+
 //								   " at index "+input.index());
-				int ttype;
-				try {
-					ttype = getInterpreter().match(_input, _mode);
-				}
-				catch (LexerNoViableAltException e) {
-					notifyListeners(e);		// report error
-					recover(e);
-					ttype = SKIP;
-				}
-				if ( _input.LA(1)==CharStream.EOF ) {
-					_hitEOF = true;
-				}
-				if ( _type == Token.INVALID_TYPE ) _type = ttype;
-				if ( _type ==SKIP ) {
-					continue outer;
-				}
-			} while ( _type ==MORE );
-			if ( _token ==null ) emit();
-			return _token;
+					int ttype;
+					try {
+						ttype = getInterpreter().match(_input, _mode);
+					}
+					catch (LexerNoViableAltException e) {
+						notifyListeners(e);		// report error
+						recover(e);
+						ttype = SKIP;
+					}
+					if ( _input.LA(1)==CharStream.EOF ) {
+						_hitEOF = true;
+					}
+					if ( _type == Token.INVALID_TYPE ) _type = ttype;
+					if ( _type ==SKIP ) {
+						continue outer;
+					}
+				} while ( _type ==MORE );
+				if ( _token == null ) emit();
+				return _token;
+			}
+		}
+		finally {
+			// make sure we release marker after match or
+			// unbuffered char stream will keep buffering
+			_input.release(tokenStartMarker);
 		}
 	}
 
@@ -207,11 +226,10 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	}
 
 	/** Set the char stream and reset the lexer */
-	@Override
-	public void setInputStream(IntStream<Integer> input) {
+	public void setInputStream(CharStream input) {
 		this._input = null;
 		reset();
-		this._input = (CharStream)input;
+		this._input = input;
 	}
 
 	@Override
@@ -224,10 +242,10 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 		return _input;
 	}
 
-	/** Currently does not support multiple emits per nextToken invocation
-	 *  for efficiency reasons.  Subclass and override this method and
-	 *  nextToken (to push tokens into a list and pull from that list rather
-	 *  than a single variable as this implementation does).
+	/** By default does not support multiple emits per nextToken invocation
+	 *  for efficiency reasons.  Subclass and override this method, nextToken,
+	 *  and getToken (to push tokens into a list and pull from that list
+	 *  rather than a single variable as this implementation does).
 	 */
 	public void emit(Token token) {
 		getInterpreter().traceEmit(token);
@@ -248,7 +266,7 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 		return t;
 	}
 
-	public Token anEOF() {
+	public Token emitEOF() {
 		int cpos = getCharPositionInLine();
 		// The character position for EOF is one beyond the position of
 		// the previous token's last character
@@ -258,6 +276,7 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 		}
 		Token eof = _factory.create(this, Token.EOF, null, Token.DEFAULT_CHANNEL, _input.index(), _input.index()-1,
 									getLine(), cpos);
+		emit(eof);
 		return eof;
 	}
 
@@ -269,6 +288,14 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	@Override
 	public int getCharPositionInLine() {
 		return getInterpreter().getCharPositionInLine();
+	}
+
+	public void setLine(int line) {
+		getInterpreter().setLine(line);
+	}
+
+	public void setCharPositionInLine(int charPositionInLine) {
+		getInterpreter().setCharPositionInLine(charPositionInLine);
 	}
 
 	/** What is the index of the current character of lookahead? */
@@ -284,7 +311,13 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 			return _text;
 		}
 		return getInterpreter().getText(_input);
-//		return ((CharStream)input).substring(tokenStartCharIndex,getCharIndex()-1);
+	}
+
+	/** Get the text from start of token to current lookahead char.
+	 *  Use this in predicates to test text matched so far in a lexer rule.
+	 */
+	public String getSpeculativeText() {
+		return getInterpreter().getSpeculativeText(_input);
 	}
 
 	/** Set the complete text of this token; it wipes any previous
@@ -292,6 +325,13 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	 */
 	public void setText(String text) {
 		this._text = text;
+	}
+
+	/** Override if emitting multiple tokens. */
+	public Token getToken() { return _token; }
+
+	public void setToken(Token _token) {
+		this._token = _token;
 	}
 
 	public String[] getModeNames() {
@@ -307,23 +347,29 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 		return null;
 	}
 
+	/** Return a list of all Token objects in input char stream.
+	 *  Forces load of all tokens. Does not include EOF token.
+	 */
+	public List<? extends Token> getAllTokens() {
+		List<Token> tokens = new ArrayList<Token>();
+		Token t = nextToken();
+		while ( t.getType()!=Token.EOF ) {
+			tokens.add(t);
+			t = nextToken();
+		}
+		return tokens;
+	}
+
 	public void recover(LexerNoViableAltException e) {
 		getInterpreter().consume(_input); // skip a char and try again
 	}
 
 	public void notifyListeners(LexerNoViableAltException e) {
 		String msg = "token recognition error at: '"+
-			_input.substring(_tokenStartCharIndex, _input.index())+"'";
-		List<? extends ANTLRErrorListener<? super Integer>> listeners = getErrorListeners();
-		if ( listeners.isEmpty() ) {
-			System.err.println("line "+ _tokenStartLine +":"+
-							   _tokenStartCharPositionInLine +" "+
-							   msg);
-			return;
-		}
-		for (ANTLRErrorListener<? super Integer> pl : listeners) {
-			pl.error(this, null, _tokenStartLine, _tokenStartCharPositionInLine, msg, e);
-		}
+			_input.getText(Interval.of(_tokenStartCharIndex, _input.index()))+"'";
+
+		ANTLRErrorListener<? super Integer> listener = getErrorListenerDispatch();
+		listener.syntaxError(this, null, _tokenStartLine, _tokenStartCharPositionInLine, msg, e);
 	}
 
 	public String getCharErrorDisplay(int c) {

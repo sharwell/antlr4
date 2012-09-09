@@ -33,9 +33,6 @@ import org.antlr.v4.runtime.Lexer;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class TestIntervalSet extends BaseTest {
 
     /** Public default constructor used by TestRig */
@@ -369,7 +366,6 @@ public class TestIntervalSet extends BaseTest {
 		s.add(50,55);
 		s.add(5,5);
 		String expecting = "[5, 20, 21, 22, 23, 24, 25, 50, 51, 52, 53, 54, 55]";
-		List foo = new ArrayList();
 		String result = String.valueOf(s.toList());
 		assertEquals(result, expecting);
 	}

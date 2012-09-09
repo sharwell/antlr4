@@ -29,7 +29,10 @@
 
 package org.antlr.v4.parse;
 
-import org.antlr.runtime.*;
+import org.antlr.runtime.NoViableAltException;
+import org.antlr.runtime.Parser;
+import org.antlr.runtime.RecognitionException;
+import org.antlr.runtime.TokenStream;
 import org.antlr.v4.Tool;
 import org.antlr.v4.tool.ErrorType;
 
@@ -49,8 +52,8 @@ public class ToolANTLRParser extends ANTLRParser {
 										RecognitionException e)
 	{
 		String msg = getParserErrorMessage(this, e);
-		if ( paraphrases.size()>0 ) {
-			String paraphrase = (String)paraphrases.peek();
+		if ( !paraphrases.isEmpty() ) {
+			String paraphrase = paraphrases.peek();
 			msg = msg+" while "+paraphrase;
 		}
 	//	List stack = getRuleInvocationStack(e, this.getClass().getName());
@@ -59,7 +62,7 @@ public class ToolANTLRParser extends ANTLRParser {
 	}
 
 	public String getParserErrorMessage(Parser parser, RecognitionException e) {
-		String msg = null;
+		String msg;
 		if ( e instanceof NoViableAltException) {
 			String name = parser.getTokenErrorDisplay(e.token);
 			msg = name+" came as a complete surprise to me";

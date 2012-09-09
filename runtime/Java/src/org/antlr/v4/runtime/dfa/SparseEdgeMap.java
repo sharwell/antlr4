@@ -27,12 +27,17 @@
  */
 package org.antlr.v4.runtime.dfa;
 
+import org.antlr.v4.runtime.misc.NotNull;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
 
 /**
  *
@@ -52,6 +57,17 @@ public class SparseEdgeMap<T> extends AbstractEdgeMap<T> {
 		super(minIndex, maxIndex);
 		this.keys = new int[maxSparseSize];
 		this.values = new ArrayList<T>(maxSparseSize);
+	}
+
+	private SparseEdgeMap(@NotNull SparseEdgeMap<T> map, int maxSparseSize) {
+		super(map.minIndex, map.maxIndex);
+		if (maxSparseSize < map.values.size()) {
+			throw new IllegalArgumentException();
+		}
+
+		keys = Arrays.copyOf(map.keys, maxSparseSize);
+		values = new ArrayList<T>(maxSparseSize);
+		values.addAll(map.values);
 	}
 
 	public int[] getKeys() {
@@ -92,7 +108,7 @@ public class SparseEdgeMap<T> extends AbstractEdgeMap<T> {
 	}
 
 	@Override
-	public EdgeMap<T> put(int key, T value) {
+	public AbstractEdgeMap<T> put(int key, T value) {
 		if (key < minIndex || key > maxIndex) {
 			return this;
 		}
@@ -101,50 +117,69 @@ public class SparseEdgeMap<T> extends AbstractEdgeMap<T> {
 			return remove(key);
 		}
 
-		int index = Arrays.binarySearch(keys, 0, size(), key);
-		if (index >= 0) {
-			// replace existing entry
-			values.set(index, value);
-			return this;
-		}
+		synchronized (values) {
+			int index = Arrays.binarySearch(keys, 0, size(), key);
+			if (index >= 0) {
+				// replace existing entry
+				values.set(index, value);
+				return this;
+			}
 
-		assert index < 0 && value != null;
-		if (size() < getMaxSparseSize()) {
-			// stay sparse and add new entry
+			assert index < 0 && value != null;
 			int insertIndex = -index - 1;
-			System.arraycopy(keys, insertIndex, keys, insertIndex + 1, keys.length - insertIndex - 1);
-			keys[insertIndex] = key;
-			values.add(insertIndex, value);
-			return this;
-		}
+			if (size() < getMaxSparseSize() && insertIndex == size()) {
+				// stay sparse and add new entry
+				keys[insertIndex] = key;
+				values.add(value);
+				return this;
+			}
 
-		assert size() == getMaxSparseSize();
-		ArrayEdgeMap<T> arrayMap = new ArrayEdgeMap<T>(minIndex, maxIndex);
-		arrayMap = arrayMap.putAll(this);
-		arrayMap.put(key, value);
-		return arrayMap;
+			int desiredSize = size() >= getMaxSparseSize() ? getMaxSparseSize() * 2 : getMaxSparseSize();
+			int space = maxIndex - minIndex + 1;
+			// SparseEdgeMap only uses less memory than ArrayEdgeMap up to half the size of the symbol space
+			if (desiredSize >= space / 2) {
+				ArrayEdgeMap<T> arrayMap = new ArrayEdgeMap<T>(minIndex, maxIndex);
+				arrayMap = arrayMap.putAll(this);
+				arrayMap.put(key, value);
+				return arrayMap;
+			}
+			else {
+				SparseEdgeMap<T> resized = new SparseEdgeMap<T>(this, desiredSize);
+				System.arraycopy(resized.keys, insertIndex, resized.keys, insertIndex + 1, resized.keys.length - insertIndex - 1);
+				resized.keys[insertIndex] = key;
+				resized.values.add(insertIndex, value);
+				return resized;
+			}
+		}
 	}
 
 	@Override
 	public SparseEdgeMap<T> remove(int key) {
 		int index = Arrays.binarySearch(keys, 0, size(), key);
-		if (index >= 0) {
-			System.arraycopy(keys, index + 1, keys, index, size() - index - 1);
-			values.remove(index);
+		if (index < 0) {
+			return this;
 		}
 
-		return this;
-	}
+		if (index == values.size() - 1) {
+			values.remove(index);
+			return this;
+		}
 
-	@Override
-	public EdgeMap<T> putAll(EdgeMap<? extends T> m) {
-		throw new UnsupportedOperationException("Not supported yet.");
+		SparseEdgeMap<T> result = new SparseEdgeMap<T>(this, getMaxSparseSize());
+		System.arraycopy(result.keys, index + 1, result.keys, index, size() - index - 1);
+		result.values.remove(index);
+		return result;
 	}
 
 	@Override
 	public SparseEdgeMap<T> clear() {
-		values.clear();
-		return this;
+		if (isEmpty()) {
+			return this;
+		}
+
+		SparseEdgeMap<T> result = new SparseEdgeMap<T>(this, getMaxSparseSize());
+		result.values.clear();
+		return result;
 	}
 
 	@Override
@@ -161,4 +196,57 @@ public class SparseEdgeMap<T> extends AbstractEdgeMap<T> {
 		return result;
 	}
 
+	@Override
+	public Set<Map.Entry<Integer, T>> entrySet() {
+		return new EntrySet();
+	}
+
+	private class EntrySet extends AbstractEntrySet {
+		@Override
+		public Iterator<Map.Entry<Integer, T>> iterator() {
+			return new EntryIterator();
+		}
+	}
+
+	private class EntryIterator implements Iterator<Map.Entry<Integer, T>> {
+		private int current;
+
+		@Override
+		public boolean hasNext() {
+			return current < size();
+		}
+
+		@Override
+		public Map.Entry<Integer, T> next() {
+			if (current >= size()) {
+				throw new NoSuchElementException();
+			}
+
+			current++;
+			return new Map.Entry<Integer, T>() {
+				private final int key = keys[current - 1];
+				private final T value = values.get(current - 1);
+
+				@Override
+				public Integer getKey() {
+					return key;
+				}
+
+				@Override
+				public T getValue() {
+					return value;
+				}
+
+				@Override
+				public T setValue(T value) {
+					throw new UnsupportedOperationException("Not supported yet.");
+				}
+			};
+		}
+
+		@Override
+		public void remove() {
+			throw new UnsupportedOperationException("Not supported yet.");
+		}
+	}
 }

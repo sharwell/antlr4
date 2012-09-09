@@ -28,7 +28,10 @@
 package org.antlr.v4.runtime.dfa;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
 
 /**
  *
@@ -36,11 +39,13 @@ import java.util.Map;
  */
 public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 
-	private int key;
-	private T value;
+	private final int key;
+	private final T value;
 
 	public SingletonEdgeMap(int minIndex, int maxIndex) {
 		super(minIndex, maxIndex);
+		this.key = 0;
+		this.value = null;
 	}
 
 	public SingletonEdgeMap(int minIndex, int maxIndex, int key, T value) {
@@ -48,6 +53,9 @@ public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 		if (key >= minIndex && key <= maxIndex) {
 			this.key = key;
 			this.value = value;
+		} else {
+			this.key = 0;
+			this.value = null;
 		}
 	}
 
@@ -84,17 +92,15 @@ public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 	}
 
 	@Override
-	public EdgeMap<T> put(int key, T value) {
+	public AbstractEdgeMap<T> put(int key, T value) {
 		if (key < minIndex || key > maxIndex) {
 			return this;
 		}
 
 		if (key == this.key || this.value == null) {
-			this.key = key;
-			this.value = value;
-			return this;
+			return new SingletonEdgeMap<T>(minIndex, maxIndex, key, value);
 		} else if (value != null) {
-			EdgeMap<T> result = new SparseEdgeMap<T>(minIndex, maxIndex);
+			AbstractEdgeMap<T> result = new SparseEdgeMap<T>(minIndex, maxIndex);
 			result = result.put(this.key, this.value);
 			result = result.put(key, value);
 			return result;
@@ -105,21 +111,19 @@ public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 
 	@Override
 	public SingletonEdgeMap<T> remove(int key) {
-		if (key == this.key) {
-			this.value = null;
+		if (key == this.key && this.value != null) {
+			return new SingletonEdgeMap<T>(minIndex, maxIndex);
 		}
 
 		return this;
 	}
 
 	@Override
-	public EdgeMap<T> putAll(EdgeMap<? extends T> m) {
-		throw new UnsupportedOperationException("Not supported yet.");
-	}
-
-	@Override
 	public SingletonEdgeMap<T> clear() {
-		this.value = null;
+		if (this.value != null) {
+			return new SingletonEdgeMap<T>(minIndex, maxIndex);
+		}
+
 		return this;
 	}
 
@@ -132,4 +136,57 @@ public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 		return Collections.singletonMap(key, value);
 	}
 
+	@Override
+	public Set<Map.Entry<Integer, T>> entrySet() {
+		return new EntrySet();
+	}
+
+	private class EntrySet extends AbstractEntrySet {
+		@Override
+		public Iterator<Map.Entry<Integer, T>> iterator() {
+			return new EntryIterator();
+		}
+	}
+
+	private class EntryIterator implements Iterator<Map.Entry<Integer, T>> {
+		private int current;
+
+		@Override
+		public boolean hasNext() {
+			return current < size();
+		}
+
+		@Override
+		public Map.Entry<Integer, T> next() {
+			if (current >= size()) {
+				throw new NoSuchElementException();
+			}
+
+			current++;
+			return new Map.Entry<Integer, T>() {
+				private final int key = SingletonEdgeMap.this.key;
+				private final T value = SingletonEdgeMap.this.value;
+
+				@Override
+				public Integer getKey() {
+					return key;
+				}
+
+				@Override
+				public T getValue() {
+					return value;
+				}
+
+				@Override
+				public T setValue(T value) {
+					throw new UnsupportedOperationException("Not supported yet.");
+				}
+			};
+		}
+
+		@Override
+		public void remove() {
+			throw new UnsupportedOperationException("Not supported yet.");
+		}
+	}
 }

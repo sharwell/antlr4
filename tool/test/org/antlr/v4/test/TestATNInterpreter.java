@@ -1,22 +1,17 @@
 package org.antlr.v4.test;
 
 import org.antlr.v4.automata.ParserATNFactory;
-import org.antlr.v4.runtime.NoViableAltException;
-import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.TokenStream;
 import org.antlr.v4.runtime.atn.ATN;
 import org.antlr.v4.runtime.atn.ATNState;
 import org.antlr.v4.runtime.atn.BlockStartState;
 import org.antlr.v4.runtime.atn.LexerATNSimulator;
+import org.antlr.v4.runtime.misc.IntegerList;
 import org.antlr.v4.tool.DOTGenerator;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.LexerGrammar;
 import org.antlr.v4.tool.Rule;
 import org.antlr.v4.tool.interp.ParserInterpreter;
 import org.junit.Test;
-
-import java.util.List;
-
 
 	// NOTICE: TOKENS IN LEXER, PARSER MUST BE SAME OR TOKEN TYPE MISMATCH
 	// NOTICE: TOKENS IN LEXER, PARSER MUST BE SAME OR TOKEN TYPE MISMATCH
@@ -43,7 +38,7 @@ public class TestATNInterpreter extends BaseTest {
 			"C : 'c' ;\n");
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
-			"tokens {A; B; C;}\n" +
+			"tokens {A,B,C}\n" +
 			"a : ~A ;");
 		checkMatchedAlt(lg, g, "b", 1);
 	}
@@ -71,17 +66,8 @@ public class TestATNInterpreter extends BaseTest {
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
 			"a : A | A B ;");
-		int errorIndex = 0;
-		int errorTokenType = 0;
-		try {
-			checkMatchedAlt(lg, g, "ac", 1);
-		}
-		catch (NoViableAltException re) {
-			errorIndex = re.getOffendingToken().getTokenIndex();
-			errorTokenType = re.getOffendingToken().getType();
-		}
-		assertEquals(1, errorIndex);
-		assertEquals(errorTokenType, 5);
+
+		checkMatchedAlt(lg, g, "ac", 1);
 	}
 
 	@Test public void testMustTrackPreviousGoodAlt2() throws Exception {
@@ -97,17 +83,7 @@ public class TestATNInterpreter extends BaseTest {
 		checkMatchedAlt(lg, g, "a", 1	);
 		checkMatchedAlt(lg, g, "ab", 2);
 		checkMatchedAlt(lg, g, "abc", 3);
-		int errorIndex = 0;
-		int errorTokenType = 0;
-		try {
-			checkMatchedAlt(lg, g, "abd", 1);
-		}
-		catch (NoViableAltException re) {
-			errorIndex = re.getOffendingToken().getTokenIndex();
-			errorTokenType = re.getOffendingToken().getType();
-		}
-		assertEquals(2, errorIndex);
-		assertEquals(errorTokenType, 6);
+		checkMatchedAlt(lg, g, "abd", 2); // matched ab, ignores d on end
 	}
 
 	@Test public void testMustTrackPreviousGoodAlt3() throws Exception {
@@ -120,17 +96,8 @@ public class TestATNInterpreter extends BaseTest {
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
 			"a : A B | A | A B C ;");
-		int errorIndex = 0;
-		int errorTokenType = 0;
-		try {
-			checkMatchedAlt(lg, g, "abd", 1);
-		}
-		catch (NoViableAltException re) {
-			errorIndex = re.getOffendingToken().getTokenIndex();
-			errorTokenType = re.getOffendingToken().getType();
-		}
-		assertEquals(2, errorIndex);
-		assertEquals(errorTokenType, 6);
+
+		checkMatchedAlt(lg, g, "abd", 1);
 	}
 
 	@Test public void testAmbigAltChooseFirst() throws Exception {
@@ -188,19 +155,7 @@ public class TestATNInterpreter extends BaseTest {
 			"a : A B | A B | A B C ;");
 		checkMatchedAlt(lg, g, "ab", 1);
 		checkMatchedAlt(lg, g, "abc", 3);
-
-		int errorIndex = 0;
-		int errorTokenType = 0;
-		try {
-			checkMatchedAlt(lg, g, "abd", 1);
-		}
-		catch (NoViableAltException re) {
-			errorIndex = re.getOffendingToken().getTokenIndex();
-			errorTokenType = re.getOffendingToken().getType();
-		}
-		assertEquals(2, errorIndex);
-		assertEquals(6, errorTokenType);
-
+		checkMatchedAlt(lg, g, "abd", 1); // ignores d on end
 		checkMatchedAlt(lg, g, "abcd", 3); // ignores d on end
 	}
 
@@ -257,7 +212,7 @@ public class TestATNInterpreter extends BaseTest {
 		);
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
-			"tokens {A;B;C;LP;RP;INT;}\n" +
+			"tokens {A,B,C,LP,RP,INT}\n" +
 			"a : e B | e C ;\n" +
 			"e : LP e RP\n" +
 			"  | INT\n" +
@@ -276,17 +231,16 @@ public class TestATNInterpreter extends BaseTest {
 	{
 		ATN lexatn = createATN(lg);
 		LexerATNSimulator lexInterp = new LexerATNSimulator(lexatn);
-		List<Integer> types = getTokenTypesViaATN(inputString, lexInterp);
+		IntegerList types = getTokenTypesViaATN(inputString, lexInterp);
 		System.out.println(types);
 
-		semanticProcess(lg);
 		g.importVocab(lg);
-		semanticProcess(g);
 
 		ParserATNFactory f = new ParserATNFactory(g);
 		ATN atn = f.createATN();
 
-		TokenStream<Token> input = new IntTokenStream(types);
+		IntTokenStream input = new IntTokenStream(types);
+		System.out.println("input="+input.types);
 		ParserInterpreter interp = new ParserInterpreter(g, input);
 		ATNState startState = atn.ruleToStartState[g.getRule("a").index];
 		if ( startState.transition(0).target instanceof BlockStartState ) {

@@ -29,10 +29,10 @@
 
 package org.antlr.v4.analysis;
 
+import org.antlr.v4.misc.Utils;
 import org.antlr.v4.runtime.atn.DecisionState;
 import org.antlr.v4.runtime.atn.LL1Analyzer;
 import org.antlr.v4.runtime.misc.IntervalSet;
-import org.antlr.v4.misc.Utils;
 import org.antlr.v4.tool.Grammar;
 
 import java.util.ArrayList;
@@ -49,18 +49,16 @@ public class AnalysisPipeline {
 		// LEFT-RECURSION CHECK
 		LeftRecursionDetector lr = new LeftRecursionDetector(g, g.atn);
 		lr.check();
-		if ( lr.listOfRecursiveCycles.size()>0 ) return; // bail out
+		if ( !lr.listOfRecursiveCycles.isEmpty() ) return; // bail out
 
 		// BUILD DFA FOR EACH DECISION
-		if ( !g.isLexer() ) processParserOrTreeParser();
+		if ( !g.isLexer() ) processParser();
 	}
 
-	void processParserOrTreeParser() {
-		g.decisionLOOK =
-			new ArrayList<IntervalSet[]>(g.atn.getNumberOfDecisions()+1);
+	void processParser() {
+		g.decisionLOOK = new ArrayList<IntervalSet[]>(g.atn.getNumberOfDecisions()+1);
 		for (DecisionState s : g.atn.decisionToState) {
             g.tool.log("LL1", "\nDECISION "+s.decision+" in rule "+g.getRule(s.ruleIndex).name);
-
 			LL1Analyzer anal = new LL1Analyzer(g.atn);
 			IntervalSet[] look = anal.getDecisionLookahead(s);
             g.tool.log("LL1", "look=" + Arrays.toString(look));

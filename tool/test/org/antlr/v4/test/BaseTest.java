@@ -35,16 +35,32 @@ import org.antlr.v4.automata.ATNPrinter;
 import org.antlr.v4.automata.LexerATNFactory;
 import org.antlr.v4.automata.ParserATNFactory;
 import org.antlr.v4.codegen.CodeGenerator;
-import org.antlr.v4.misc.Utils;
-import org.antlr.v4.runtime.*;
+import org.antlr.v4.runtime.ANTLRInputStream;
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.CommonToken;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.Lexer;
+import org.antlr.v4.runtime.RuleContext;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.TokenSource;
+import org.antlr.v4.runtime.TokenStream;
+import org.antlr.v4.runtime.WritableToken;
 import org.antlr.v4.runtime.atn.ATN;
 import org.antlr.v4.runtime.atn.ATNState;
 import org.antlr.v4.runtime.atn.DecisionState;
 import org.antlr.v4.runtime.atn.LexerATNSimulator;
 import org.antlr.v4.runtime.dfa.DFA;
+import org.antlr.v4.runtime.misc.IntegerList;
+import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.Nullable;
 import org.antlr.v4.semantics.SemanticPipeline;
-import org.antlr.v4.tool.*;
+import org.antlr.v4.tool.ANTLRMessage;
+import org.antlr.v4.tool.DOTGenerator;
+import org.antlr.v4.tool.DefaultToolListener;
+import org.antlr.v4.tool.Grammar;
+import org.antlr.v4.tool.GrammarSemanticsMessage;
+import org.antlr.v4.tool.LexerGrammar;
+import org.antlr.v4.tool.Rule;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -56,13 +72,29 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -72,6 +104,7 @@ public abstract class BaseTest {
 	public static final String pathSep = System.getProperty("path.separator");
 
 	public static final boolean TEST_IN_SAME_PROCESS = Boolean.parseBoolean(System.getProperty("antlr.testinprocess"));
+	public static final boolean STRICT_COMPILE_CHECKS = Boolean.parseBoolean(System.getProperty("antlr.strictcompile"));
 
     /**
      * Build up the full classpath we need, including the surefire path (if present)
@@ -153,8 +186,8 @@ public abstract class BaseTest {
 //		dfa.minimized = dmin.minimize();
 //	}
 
-	List<Integer> getTypesFromString(Grammar g, String expecting) {
-		List<Integer> expectingTokenTypes = new ArrayList<Integer>();
+	IntegerList getTypesFromString(Grammar g, String expecting) {
+		IntegerList expectingTokenTypes = new IntegerList();
 		if ( expecting!=null && !expecting.trim().isEmpty() ) {
 			for (String tname : expecting.replace(" ", "").split(",")) {
 				int ttype = g.getTokenType(tname);
@@ -164,9 +197,9 @@ public abstract class BaseTest {
 		return expectingTokenTypes;
 	}
 
-	public List<Integer> getTokenTypesViaATN(String input, LexerATNSimulator lexerATN) {
+	public IntegerList getTokenTypesViaATN(String input, LexerATNSimulator lexerATN) {
 		ANTLRInputStream in = new ANTLRInputStream(input);
-		List<Integer> tokenTypes = new ArrayList<Integer>();
+		IntegerList tokenTypes = new IntegerList();
 		int ttype;
 		do {
 			ttype = lexerATN.matchATN(in);
@@ -291,8 +324,15 @@ public abstract class BaseTest {
 		Iterable<? extends JavaFileObject> compilationUnits =
 			fileManager.getJavaFileObjectsFromFiles(files);
 
-		Iterable<String> compileOptions =
-			Arrays.asList("-g", "-d", tmpdir, "-cp", tmpdir+pathSep+CLASSPATH);
+		List<String> compileOptions = new ArrayList<String>();
+		compileOptions.add("-g");
+		if (STRICT_COMPILE_CHECKS) {
+			compileOptions.add("-Xlint");
+			compileOptions.add("-Xlint:-serial");
+			compileOptions.add("-Werror");
+		}
+
+		compileOptions.addAll(Arrays.asList("-d", tmpdir, "-cp", tmpdir+pathSep+CLASSPATH));
 
 		JavaCompiler.CompilationTask task =
 			compiler.getTask(null, fileManager, null, compileOptions, null,
@@ -353,42 +393,62 @@ public abstract class BaseTest {
 
 
 	/** Return true if all is ok, no errors */
-	protected boolean antlr(String fileName, String grammarFileName, String grammarStr, String... extraOptions) {
+	protected boolean antlr(String fileName, String grammarFileName, String grammarStr, boolean defaultListener, String... extraOptions) {
 		boolean allIsWell = true;
 		System.out.println("dir "+tmpdir);
 		mkdir(tmpdir);
 		writeFile(tmpdir, fileName, grammarStr);
+		ErrorQueue equeue = new ErrorQueue();
+		final List<String> options = new ArrayList<String>();
+		Collections.addAll(options, extraOptions);
+		options.add("-o");
+		options.add(tmpdir);
+		options.add("-lib");
+		options.add(tmpdir);
+		options.add(new File(tmpdir,grammarFileName).toString());
 		try {
-			final List<String> options = new ArrayList<String>();
-			Collections.addAll(options, extraOptions);
-			options.add("-o");
-			options.add(tmpdir);
-			options.add("-lib");
-			options.add(tmpdir);
-			options.add(new File(tmpdir,grammarFileName).toString());
 			final String[] optionsA = new String[options.size()];
 			options.toArray(optionsA);
-			ErrorQueue equeue = new ErrorQueue();
 			Tool antlr = newTool(optionsA);
 			antlr.addListener(equeue);
-			antlr.processGrammarsOnCommandLine();
-			if ( equeue.errors.size()>0 ) {
-				allIsWell = false;
-				System.err.println("antlr reports errors from "+options);
-				for (int i = 0; i < equeue.errors.size(); i++) {
-					ANTLRMessage msg = equeue.errors.get(i);
-					System.err.println(msg);
-				}
-				System.out.println("!!!\ngrammar:");
-				System.out.println(grammarStr);
-				System.out.println("###");
+			if (defaultListener) {
+				antlr.addListener(new DefaultToolListener(antlr));
 			}
+			antlr.processGrammarsOnCommandLine();
 		}
 		catch (Exception e) {
 			allIsWell = false;
 			System.err.println("problems building grammar: "+e);
 			e.printStackTrace(System.err);
 		}
+
+		allIsWell = equeue.errors.isEmpty();
+		if ( !defaultListener && !equeue.errors.isEmpty() ) {
+			System.err.println("antlr reports errors from "+options);
+			for (int i = 0; i < equeue.errors.size(); i++) {
+				ANTLRMessage msg = equeue.errors.get(i);
+				System.err.println(msg);
+			}
+			System.out.println("!!!\ngrammar:");
+			System.out.println(grammarStr);
+			System.out.println("###");
+		}
+		if ( !defaultListener && !equeue.warnings.isEmpty() ) {
+			System.err.println("antlr reports warnings from "+options);
+			for (int i = 0; i < equeue.warnings.size(); i++) {
+				ANTLRMessage msg = equeue.warnings.get(i);
+				System.err.println(msg);
+			}
+		}
+
+		if ( !defaultListener && !equeue.warnings.isEmpty() ) {
+			System.err.println("antlr reports warnings from "+options);
+			for (int i = 0; i < equeue.warnings.size(); i++) {
+				ANTLRMessage msg = equeue.warnings.get(i);
+				System.err.println(msg);
+			}
+		}
+
 		return allIsWell;
 	}
 
@@ -429,10 +489,10 @@ public abstract class BaseTest {
 								String input, boolean debug)
 	{
 		boolean success = rawGenerateAndBuildRecognizer(grammarFileName,
-									  grammarStr,
-									  parserName,
-									  lexerName,
-									  "-visitor");
+														grammarStr,
+														parserName,
+														lexerName,
+														"-visitor");
 		assertTrue(success);
 		writeFile(tmpdir, "input", input);
 		return rawExecRecognizer(parserName,
@@ -448,9 +508,23 @@ public abstract class BaseTest {
 													String lexerName,
 													String... extraOptions)
 	{
+		return rawGenerateAndBuildRecognizer(grammarFileName, grammarStr, parserName, lexerName, false, extraOptions);
+	}
+
+	/** Return true if all is well */
+	protected boolean rawGenerateAndBuildRecognizer(String grammarFileName,
+													String grammarStr,
+													@Nullable String parserName,
+													String lexerName,
+													boolean defaultListener,
+													String... extraOptions)
+	{
 		boolean allIsWell =
-			antlr(grammarFileName, grammarFileName, grammarStr, extraOptions);
-		boolean ok;
+			antlr(grammarFileName, grammarFileName, grammarStr, defaultListener, extraOptions);
+		if (!allIsWell) {
+			return false;
+		}
+
 		List<String> files = new ArrayList<String>();
 		if ( lexerName!=null ) {
 			files.add(lexerName+".java");
@@ -460,13 +534,14 @@ public abstract class BaseTest {
 			Set<String> optionsSet = new HashSet<String>(Arrays.asList(extraOptions));
 			if (!optionsSet.contains("-no-listener")) {
 				files.add(grammarFileName.substring(0, grammarFileName.lastIndexOf('.'))+"BaseListener.java");
+				files.add(grammarFileName.substring(0, grammarFileName.lastIndexOf('.'))+"Listener.java");
 			}
 			if (optionsSet.contains("-visitor")) {
 				files.add(grammarFileName.substring(0, grammarFileName.lastIndexOf('.'))+"BaseVisitor.java");
+				files.add(grammarFileName.substring(0, grammarFileName.lastIndexOf('.'))+"Visitor.java");
 			}
 		}
-		ok = compile(files.toArray(new String[files.size()]));
-		if ( !ok ) { allIsWell = false; }
+		allIsWell = compile(files.toArray(new String[files.size()]));
 		return allIsWell;
 	}
 
@@ -606,28 +681,9 @@ public abstract class BaseTest {
 			msg = msg.replaceAll("\r","\\\\r");
 			msg = msg.replaceAll("\t","\\\\t");
 
-			// ignore error number
-			if ( expect!=null ) expect = stripErrorNum(expect);
-			actual = stripErrorNum(actual);
             assertEquals("error in: "+msg,expect,actual);
         }
     }
-
-	// can be multi-line
-	//error(29): A.g:2:11: unknown attribute reference a in $a
-	//error(29): A.g:2:11: unknown attribute reference a in $a
-	String stripErrorNum(String errs) {
-		String[] lines = errs.split("\n");
-		for (int i=0; i<lines.length; i++) {
-			String s = lines[i];
-			int lp = s.indexOf("error(");
-			int rp = s.indexOf(')', lp);
-			if ( lp>=0 && rp>=0 ) {
-				lines[i] = s.substring(0, lp) + s.substring(rp+1, s.length());
-			}
-		}
-		return Utils.join(lines, "\n");
-	}
 
 	public String getFilenameFromFirstLineOfGrammar(String line) {
 		String fileName = "<string>";
@@ -635,9 +691,9 @@ public abstract class BaseTest {
 		int semi = line.lastIndexOf(';');
 		if ( grIndex>=0 && semi>=0 ) {
 			int space = line.indexOf(' ', grIndex);
-			fileName = line.substring(space+1, semi)+".g";
+			fileName = line.substring(space+1, semi)+Tool.GRAMMAR_EXTENSION;
 		}
-		if ( fileName.length()==".g".length() ) fileName = "<string>";
+		if ( fileName.length()==Tool.GRAMMAR_EXTENSION.length() ) fileName = "<string>";
 		return fileName;
 	}
 
@@ -734,7 +790,7 @@ public abstract class BaseTest {
 	}
 
 	public static class StreamVacuum implements Runnable {
-		StringBuffer buf = new StringBuffer();
+		StringBuilder buf = new StringBuilder();
 		BufferedReader in;
 		Thread sucker;
 		public StreamVacuum(InputStream in) {
@@ -820,7 +876,7 @@ public abstract class BaseTest {
 				foundMsg = m;
 			}
 		}
-		assertTrue("no error; "+expectedMessage.errorType+" expected", equeue.errors.size()>0);
+		assertTrue("no error; "+expectedMessage.errorType+" expected", !equeue.errors.isEmpty());
 		assertTrue("too many errors; "+equeue.errors, equeue.errors.size()<=1);
 		assertNotNull("couldn't find expected error: "+expectedMessage.errorType, foundMsg);
 		/*
@@ -834,12 +890,17 @@ public abstract class BaseTest {
         public FilteringTokenStream(TokenSource<? extends Token> src) { super(src); }
         Set<Integer> hide = new HashSet<Integer>();
         @Override
-        protected void sync(int i) {
-            super.sync(i);
+        protected boolean sync(int i) {
+            if (!super.sync(i)) {
+				return false;
+			}
+
 			Token t = get(i);
 			if ( hide.contains(t.getType()) ) {
 				((WritableToken)t).setChannel(Token.HIDDEN_CHANNEL);
 			}
+
+			return true;
         }
         public void setTokenTypeChannel(int ttype, int channel) {
             hide.add(ttype);
@@ -891,7 +952,7 @@ public abstract class BaseTest {
 			createParserST =
 				new ST(
 				"        <parserName> parser = new <parserName>(tokens);\n" +
-                "        parser.setErrorHandler(new DiagnosticErrorStrategy\\<Token>());\n");
+                "        parser.addErrorListener(new DiagnosticErrorListener\\<Token>());\n");
 		}
 		outputFileST.add("createParser", createParserST);
 		outputFileST.add("parserName", parserName);
@@ -1020,13 +1081,16 @@ public abstract class BaseTest {
     public void assertNotNull(String message, Object object) { try {Assert.assertNotNull(message, object);} catch (Error e) {lastTestFailed=true; throw e;} }
     public void assertNotNull(Object object) { try {Assert.assertNotNull(object);} catch (Error e) {lastTestFailed=true; throw e;} }
 
+    public void assertNotNullOrEmpty(String message, String text) { assertNotNull(message, text); assertFalse(message, text.isEmpty()); }
+    public void assertNotNullOrEmpty(String text) { assertNotNull(text); assertFalse(text.isEmpty()); }
+
     public void assertNull(String message, Object object) { try {Assert.assertNull(message, object);} catch (Error e) {lastTestFailed=true; throw e;} }
     public void assertNull(Object object) { try {Assert.assertNull(object);} catch (Error e) {lastTestFailed=true; throw e;} }
 
 	public static class IntTokenStream implements TokenStream<Token> {
-		List<Integer> types;
+		IntegerList types;
 		int p=0;
-		public IntTokenStream(List<Integer> types) { this.types = types; }
+		public IntTokenStream(IntegerList types) { this.types = types; }
 
 		@Override
 		public void consume() { p++; }
@@ -1083,12 +1147,22 @@ public abstract class BaseTest {
 		}
 
 		@Override
-		public String toString(int start, int stop) {
-			return null;
+		public String getText() {
+			throw new UnsupportedOperationException("can't give strings");
 		}
 
 		@Override
-		public String toString(Token start, Token stop) {
+		public String getText(Interval interval) {
+			throw new UnsupportedOperationException("can't give strings");
+		}
+
+		@Override
+		public String getText(RuleContext<?> ctx) {
+			throw new UnsupportedOperationException("can't give strings");
+		}
+
+		@Override
+		public String getText(Object start, Object stop) {
 			return null;
 		}
 	}

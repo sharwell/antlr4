@@ -1,3 +1,11 @@
 /tool/target/
 /runtime/Java/target/
 /gunit/target/
+*.hprof
+/antlr4-maven-plugin/target/
+gunit/.idea
+gunit/antlr4-gunit.iml
+runtime/Java/.idea
+runtime/Java/antlr4-runtime.iml
+tool/.idea
+tool/antlr4.iml

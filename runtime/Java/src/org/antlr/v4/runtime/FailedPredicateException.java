@@ -38,6 +38,8 @@ import org.antlr.v4.runtime.misc.Nullable;
  *  prediction.
  */
 public class FailedPredicateException extends RecognitionException {
+	private static final long serialVersionUID = 5379330841495778709L;
+
 	public int ruleIndex;
 	public int predIndex;
 	public String msg;
@@ -46,13 +48,13 @@ public class FailedPredicateException extends RecognitionException {
 		this(recognizer, null);
 	}
 
-	public <Symbol extends Token> FailedPredicateException(Parser<Symbol> recognizer, @Nullable String msg) {
+	public <Symbol extends Token> FailedPredicateException(Parser<Symbol> recognizer, @Nullable String predicate) {
 		super(recognizer, recognizer.getInputStream(), recognizer._ctx);
-		ATNState s = recognizer.getInterpreter().atn.states.get(recognizer._ctx.s);
+		ATNState s = recognizer.getInterpreter().atn.states.get(recognizer.getState());
 		PredicateTransition trans = (PredicateTransition)s.transition(0);
 		ruleIndex = trans.ruleIndex;
 		predIndex = trans.predIndex;
-		this.msg = msg;
+		this.msg = String.format("failed predicate: {%s}?", predicate);
 		Token la = recognizer.getCurrentToken();
 		this.offendingToken = la;
 	}

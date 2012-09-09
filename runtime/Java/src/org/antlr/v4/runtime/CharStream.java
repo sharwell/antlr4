@@ -28,15 +28,19 @@
  */
 package org.antlr.v4.runtime;
 
+import org.antlr.v4.runtime.misc.Interval;
+
 /** A source of characters for an ANTLR lexer */
-public interface CharStream extends IntStream<Integer> {
+public interface CharStream extends IntStream {
 	public static final int EOF = -1;
 	public static final int MIN_CHAR = Character.MIN_VALUE;
 	public static final int MAX_CHAR = Character.MAX_VALUE-1; // FFFE is max
 
-	/** For unbuffered streams, you can't use this; primarily I'm providing
-	 *  a useful interface for action code.  Just make sure actions don't
-	 *  use this on streams that don't support it.
+	/** This is primaril a useful interface for action code.
+	 *  Just make sure actions don't use this on streams that don't support it.
+	 *  For unbuffered streams, you can't use this except in case
+	 *  where interval is in current buffer window. Lexer guarantees
+	 *  text of current token at emit() time will be available.
 	 */
-	public String substring(int start, int stop);
+	public String getText(Interval interval);
 }

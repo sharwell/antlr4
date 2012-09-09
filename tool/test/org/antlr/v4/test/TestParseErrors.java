@@ -28,15 +28,17 @@
 
 package org.antlr.v4.test;
 
+import org.antlr.v4.automata.ATNSerializer;
 import org.junit.Test;
 
 /** test runtime parse errors */
+@SuppressWarnings("unused")
 public class TestParseErrors extends BaseTest {
 	@Test public void testTokenMismatch() throws Exception {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' 'b' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aa", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aa", false);
 		String expecting = "line 1:1 mismatched input 'a' expecting 'b'\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -46,7 +48,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' 'b' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aab", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aab", false);
 		String expecting = "line 1:1 extraneous input 'a' expecting 'b'\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -56,7 +58,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' ('b'|'c') ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aab", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aab", false);
 		String expecting = "line 1:1 extraneous input 'a' expecting {'b', 'c'}\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -66,7 +68,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' 'b' 'c' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "ac", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "ac", false);
 		String expecting = "line 1:1 missing 'b' at 'c'\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -76,8 +78,8 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' x='b' {System.out.println(\"conjured=\"+$x);} 'c' ;";
-		String result = execParser("T.g", grammar, "TParser", "TLexer", "a", "ac", false);
-		String expecting = "conjured=[@-1,-1:-1='<missing 'b'>',<3>,1:1]\n";
+		String result = execParser("T.g4", grammar, "TParser", "TLexer", "a", "ac", false);
+		String expecting = "conjured=[@-1,-1:-1='<missing 'b'>',<1>,1:1]\n";
 		assertEquals(expecting, result);
 	}
 
@@ -85,7 +87,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' ('b'|'c') 'd' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "ad", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "ad", false);
 		String expecting = "line 1:1 missing {'b', 'c'} at 'd'\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -95,8 +97,8 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' x=('b'|'c') {System.out.println(\"conjured=\"+$x);} 'd' ;";
-		String result = execParser("T.g", grammar, "TParser", "TLexer", "a", "ad", false);
-		String expecting = "conjured=[@-1,-1:-1='<missing 'b'>',<3>,1:1]\n";
+		String result = execParser("T.g4", grammar, "TParser", "TLexer", "a", "ad", false);
+		String expecting = "conjured=[@-1,-1:-1='<missing 'b'>',<1>,1:1]\n";
 		assertEquals(expecting, result);
 	}
 
@@ -107,7 +109,7 @@ public class TestParseErrors extends BaseTest {
 			"  | 'a' 'c'" +
 			";\n" +
 			"q : 'e' ;\n";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "ae", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "ae", false);
 		String expecting = "line 1:1 no viable alternative at input 'ae'\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -121,7 +123,7 @@ public class TestParseErrors extends BaseTest {
 			"  ;\n" +
 			"q : 'e' ;\n";
 		System.out.println(grammar);
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "abe", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "abe", false);
 		String expecting = "line 1:2 no viable alternative at input 'abe'\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -134,7 +136,7 @@ public class TestParseErrors extends BaseTest {
 			"  | 'a'+ 'c'" +
 			";\n" +
 			"q : 'e' ;\n";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aaae", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aaae", false);
 		String expecting = "line 1:3 no viable alternative at input 'aaae'\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -144,7 +146,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' 'b'*;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aabc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aabc", false);
 		String expecting = "line 1:1 extraneous input 'a' expecting {<EOF>, 'b'}\n" +
 			"line 1:3 token recognition error at: 'c'\n";
 		String result = stderrDuringParse;
@@ -156,7 +158,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' 'b'* 'c';";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aacabc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aacabc", false);
 		String expecting =
 			"line 1:1 extraneous input 'a' expecting {'b', 'c'}\n";
 		String result = stderrDuringParse;
@@ -167,7 +169,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' 'b'* 'c' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "ababbc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "ababbc", false);
 		String expecting = "line 1:2 extraneous input 'a' expecting {'b', 'c'}\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -177,7 +179,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' 'b'* 'c' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "abaaababc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "abaaababc", false);
 		String expecting =
 				"line 1:2 extraneous input 'a' expecting {'b', 'c'}\n" +
 				"line 1:6 extraneous input 'a' expecting {'b', 'c'}\n";
@@ -191,7 +193,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' ('b'|'z'{;})*;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aabc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aabc", false);
 		String expecting = "line 1:1 extraneous input 'a' expecting {<EOF>, 'b', 'z'}\n" +
 			"line 1:3 token recognition error at: 'c'\n";
 		String result = stderrDuringParse;
@@ -203,7 +205,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' ('b'|'z'{;})* 'c';";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "aacabc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "aacabc", false);
 		String expecting =
 			"line 1:1 extraneous input 'a' expecting {'b', 'z', 'c'}\n";
 		String result = stderrDuringParse;
@@ -214,7 +216,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' ('b'|'z'{;})* 'c' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "ababbc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "ababbc", false);
 		String expecting = "line 1:2 extraneous input 'a' expecting {'b', 'z', 'c'}\n";
 		String result = stderrDuringParse;
 		assertEquals(expecting, result);
@@ -224,7 +226,7 @@ public class TestParseErrors extends BaseTest {
 		String grammar =
 			"grammar T;\n" +
 			"a : 'a' ('b'|'z'{;})* 'c' ;";
-		String found = execParser("T.g", grammar, "TParser", "TLexer", "a", "abaaababc", false);
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "a", "abaaababc", false);
 		String expecting =
 				"line 1:2 extraneous input 'a' expecting {'b', 'z', 'c'}\n" +
 				"line 1:6 extraneous input 'a' expecting {'b', 'z', 'c'}\n";
@@ -248,9 +250,72 @@ public class TestParseErrors extends BaseTest {
 			"@init\n" +
 			"{ System.out.println(getExpectedTokens().toString(tokenNames)); }\n" +
 			"  : ;\n";
-		String result = execParser("T.g", grammar, "TParser", "TLexer", "start", "dog and software", false);
+		String result = execParser("T.g4", grammar, "TParser", "TLexer", "start", "dog and software", false);
 		String expecting = "{'hardware', 'software'}\n";
 		assertEquals(expecting, result);
 	}
 
+	/**
+	 * Regression test for "Ambiguity at k=1 prevents full context parsing".
+	 * https://github.com/antlr/antlr4/issues/44
+	 */
+	@Test
+	public void testConflictingAltAnalysis() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"ss : s s EOF;\n" +
+			"s : | x;\n" +
+			"x : 'a' 'b';\n" +
+			"";
+		String result = execParser("T.g", grammar, "TParser", "TLexer", "ss", "abab", true);
+		String expecting = "";
+		assertEquals(expecting, result);
+		assertEquals(
+			"line 1:4 reportAttemptingFullContext d=0, input='ab'\n" +
+			"line 1:2 reportContextSensitivity d=0, input='a'\n",
+			this.stderrDuringParse);
+	}
+
+	/**
+	 * This is a regression test for #45 "NullPointerException in ATNConfig.hashCode".
+	 * https://github.com/antlr/antlr4/issues/45
+	 *
+	 * The original cause of this issue was an error in the tool's ATN state optimization,
+	 * which is now detected early in {@link ATNSerializer} by ensuring that all
+	 * serialized transitions point to states which were not removed.
+	 */
+	@Test
+	public void testInvalidATNStateRemoval() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"start : ID ':' expr;\n" +
+			"expr : primary expr? {} | expr '->' ID;\n" +
+			"primary : ID;\n" +
+			"ID : [a-z]+;\n" +
+			"\n";
+		String result = execParser("T.g4", grammar, "TParser", "TLexer", "start", "x:x", true);
+		String expecting = "";
+		assertEquals(expecting, result);
+		assertNull(this.stderrDuringParse);
+	}
+
+	@Test public void testNoViableAltAvoidance() throws Exception {
+		// "a." matches 'a' to rule e but then realizes '.' won't match.
+		// previously would cause noviablealt. now prediction pretends to
+		// have "a' predict 2nd alt of e. Will get syntax error later so
+		// let it get farther.
+		String grammar =
+			"grammar T;\n" +
+			"s : e '!' ;\n" +
+			"e : 'a' 'b'\n" +
+			"  | 'a'\n" +
+			"  ;\n" +
+			"DOT : '.' ;\n" +
+			"WS : [ \\t\\r\\n]+ -> skip;\n";
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "s", "a.", false);
+		String expecting =
+				"exec stderrVacuum: line 1:1 mismatched input '.' expecting '!'";
+		String result = stderrDuringParse;
+		assertEquals(expecting, result);
+	}
 }

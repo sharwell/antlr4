@@ -1,6 +1,7 @@
 /*
  [The "BSD license"]
   Copyright (c) 2012 Terence Parr
+  Copyright (c) 2012 Sam Harwell
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -28,19 +29,48 @@
  */
 package org.antlr.v4.runtime.tree;
 
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.misc.NotNull;
 
 /**
  *
  * @author Sam Harwell
+ * @param <Symbol> A superclass of the parse tree's symbol type.
+ * @param <Result> The return type of the visit operation. Use {@link Void} for
+ * operations with no return type.
  */
-public interface ParseTreeVisitor<Symbol extends Token, Result> {
+public interface ParseTreeVisitor<Symbol, Result> {
 
-	<T extends Symbol> Result visit(ParserRuleContext<T> ctx);
+	/**
+	 * Visit a parse tree, and return a user-defined result of the operation.
+	 *
+	 * @param tree The {@link ParseTree} to visit.
+	 * @return The result of visiting the parse tree.
+	 */
+	Result visit(@NotNull ParseTree<? extends Symbol> tree);
 
-	<T extends Symbol> Result visitChildren(ParserRuleContext<T> ctx);
+	/**
+	 * Visit the children of a node, and return a user-defined result
+	 * of the operation.
+	 *
+	 * @param node The {@link RuleNode} whose children should be visited.
+	 * @return The result of visiting the children of the node.
+	 */
+	Result visitChildren(@NotNull RuleNode<? extends Symbol> node);
 
-	<T extends Symbol> Result visitTerminal(ParserRuleContext<T> ctx, T symbol);
+	/**
+	 * Visit a terminal node, and return a user-defined result of the operation.
+	 *
+	 * @param node The {@link TerminalNode} to visit.
+	 * @return The result of visiting the node.
+	 */
+	Result visitTerminal(@NotNull TerminalNode<? extends Symbol> node);
+
+	/**
+	 * Visit an error node, and return a user-defined result of the operation.
+	 *
+	 * @param node The {@link ErrorNode} to visit.
+	 * @return The result of visiting the node.
+	 */
+	Result visitErrorNode(@NotNull ErrorNode<? extends Symbol> node);
 
 }

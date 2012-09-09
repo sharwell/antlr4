@@ -2,10 +2,8 @@ grammar A;
 
 s : e ;
 
-e : e '*' e 		-> Mult
-  | e '+' e 		-> Add
-  | INT        		-> primary
-  | '(' e ')'		-> Parens
+e : e '*' e 		# Mult
+  | INT        		# primary
   ;
 
 INT : [0-9]+ ;

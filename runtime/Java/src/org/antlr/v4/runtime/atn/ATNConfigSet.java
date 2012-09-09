@@ -28,7 +28,12 @@
 
 package org.antlr.v4.runtime.atn;
 
+import org.antlr.v4.runtime.misc.NotNull;
+import org.antlr.v4.runtime.misc.Nullable;
+import org.antlr.v4.runtime.misc.Utils;
+
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -36,11 +41,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import org.antlr.v4.runtime.misc.IntervalSet;
-import org.antlr.v4.runtime.misc.Nullable;
 
 /**
  *
@@ -48,20 +52,50 @@ import org.antlr.v4.runtime.misc.Nullable;
  */
 public class ATNConfigSet implements Set<ATNConfig> {
 
-	private final boolean localContext;
-	private final Map<Long, ATNConfig> mergedConfigs;
-	private final List<ATNConfig> unmerged;
-	private final List<ATNConfig> configs;
-
-	public int outerContextDepth;
+	/**
+	 * This maps (state, alt) -> merged {@link ATNConfig}. The key does not account for
+	 * the {@link ATNConfig#semanticContext} of the value, which is only a problem if a single
+	 * {@code ATNConfigSet} contains two configs with the same state and alternative
+	 * but different semantic contexts. When this case arises, the first config
+	 * added to this map stays, and the remaining configs are placed in {@link #unmerged}.
+	 * <p>
+	 * This map is only used for optimizing the process of adding configs to the set,
+	 * and is {@code null} for read-only sets stored in the DFA.
+	 */
+	private final HashMap<Long, ATNConfig> mergedConfigs;
+	/**
+	 * This is an "overflow" list holding configs which cannot be merged with one
+	 * of the configs in {@link #mergedConfigs} but have a colliding key. This
+	 * occurs when two configs in the set have the same state and alternative but
+	 * different semantic contexts.
+	 * <p>
+	 * This list is only used for optimizing the process of adding configs to the set,
+	 * and is {@code null} for read-only sets stored in the DFA.
+	 */
+	private final ArrayList<ATNConfig> unmerged;
+	/**
+	 * This is a list of all configs in this set.
+	 */
+	private final ArrayList<ATNConfig> configs;
 
 	private int uniqueAlt;
-	private IntervalSet conflictingAlts;
+	private BitSet conflictingAlts;
+	// Used in parser and lexer. In lexer, it indicates we hit a pred
+	// while computing a closure operation.  Don't make a DFA state from this.
 	private boolean hasSemanticContext;
 	private boolean dipsIntoOuterContext;
+	/**
+	 * When {@code true}, this config set represents configurations where the entire
+	 * outer context has been consumed by the ATN interpreter. This prevents the
+	 * {@link ParserATNSimulator#closure} from pursuing the global FOLLOW when a
+	 * rule stop state is reached with an empty prediction context.
+	 * <p>
+	 * Note: {@code outermostConfigSet} and {@link #dipsIntoOuterContext} should never
+	 * be true at the same time.
+	 */
+	private boolean outermostConfigSet;
 
-	public ATNConfigSet(boolean localContext) {
-		this.localContext = localContext;
+	public ATNConfigSet() {
 		this.mergedConfigs = new HashMap<Long, ATNConfig>();
 		this.unmerged = new ArrayList<ATNConfig>();
 		this.configs = new ArrayList<ATNConfig>();
@@ -69,37 +103,97 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		this.uniqueAlt = ATN.INVALID_ALT_NUMBER;
 	}
 
+	@SuppressWarnings("unchecked")
 	private ATNConfigSet(ATNConfigSet set, boolean readonly) {
-		this.localContext = set.localContext;
 		if (readonly) {
 			this.mergedConfigs = null;
 			this.unmerged = null;
+		} else if (!set.isReadOnly()) {
+			this.mergedConfigs = (HashMap<Long, ATNConfig>)set.mergedConfigs.clone();
+			this.unmerged = (ArrayList<ATNConfig>)set.unmerged.clone();
 		} else {
-			this.mergedConfigs = new HashMap<Long, ATNConfig>(set.mergedConfigs);
-			this.unmerged = new ArrayList<ATNConfig>(set.unmerged);
+			this.mergedConfigs = new HashMap<Long, ATNConfig>(set.configs.size());
+			this.unmerged = new ArrayList<ATNConfig>();
 		}
 
-		this.configs = new ArrayList<ATNConfig>(set.configs);
+		this.configs = (ArrayList<ATNConfig>)set.configs.clone();
 
-		this.outerContextDepth = set.outerContextDepth;
 		this.dipsIntoOuterContext = set.dipsIntoOuterContext;
 		this.hasSemanticContext = set.hasSemanticContext;
-		this.uniqueAlt = set.uniqueAlt;
-		this.conflictingAlts = set.conflictingAlts;
+		this.outermostConfigSet = set.outermostConfigSet;
+
+		if (readonly || !set.isReadOnly()) {
+			this.uniqueAlt = set.uniqueAlt;
+			this.conflictingAlts = set.conflictingAlts;
+		}
+
+		// if (!readonly && set.isReadOnly()) -> addAll is called from clone()
 	}
 
-	public boolean isLocalContext() {
-		return localContext;
+	/**
+	 * Get the set of all alternatives represented by configurations in this
+	 * set.
+	 */
+	@NotNull
+	public BitSet getRepresentedAlternatives() {
+		if (conflictingAlts != null) {
+			return (BitSet)conflictingAlts.clone();
+		}
+
+		BitSet alts = new BitSet();
+		for (ATNConfig config : this) {
+			alts.set(config.getAlt());
+		}
+
+		return alts;
 	}
 
 	public boolean isReadOnly() {
 		return mergedConfigs == null;
 	}
 
+	public final void stripHiddenConfigs() {
+		ensureWritable();
+
+		Iterator<Map.Entry<Long, ATNConfig>> iterator = mergedConfigs.entrySet().iterator();
+		while (iterator.hasNext()) {
+			if (iterator.next().getValue().isHidden()) {
+				iterator.remove();
+			}
+		}
+
+		ListIterator<ATNConfig> iterator2 = unmerged.listIterator();
+		while (iterator2.hasNext()) {
+			if (iterator2.next().isHidden()) {
+				iterator2.remove();
+			}
+		}
+
+		iterator2 = configs.listIterator();
+		while (iterator2.hasNext()) {
+			if (iterator2.next().isHidden()) {
+				iterator2.remove();
+			}
+		}
+	}
+
+	public boolean isOutermostConfigSet() {
+		return outermostConfigSet;
+	}
+
+	public void setOutermostConfigSet(boolean outermostConfigSet) {
+		if (this.outermostConfigSet && !outermostConfigSet) {
+			throw new IllegalStateException();
+		}
+
+		assert !outermostConfigSet || !dipsIntoOuterContext;
+		this.outermostConfigSet = outermostConfigSet;
+	}
+
 	public Set<ATNState> getStates() {
 		Set<ATNState> states = new HashSet<ATNState>();
 		for (ATNConfig c : this.configs) {
-			states.add(c.state);
+			states.add(c.getState());
 		}
 
 		return states;
@@ -112,12 +206,17 @@ public class ATNConfigSet implements Set<ATNConfig> {
 
 		for (int i = 0; i < configs.size(); i++) {
 			ATNConfig config = configs.get(i);
-			config.context = interpreter.getCachedContext(config.context);
+			config.setContext(interpreter.atn.getCachedContext(config.getContext()));
 		}
 	}
 
 	public ATNConfigSet clone(boolean readonly) {
-		return new ATNConfigSet(this, readonly);
+		ATNConfigSet copy = new ATNConfigSet(this, readonly);
+		if (!readonly && this.isReadOnly()) {
+			copy.addAll(this.configs);
+		}
+
+		return copy;
 	}
 
 	@Override
@@ -173,84 +272,79 @@ public class ATNConfigSet implements Set<ATNConfig> {
 
 	public boolean add(ATNConfig e, @Nullable PredictionContextCache contextCache) {
 		ensureWritable();
-		boolean added;
+		assert !outermostConfigSet || !e.getReachesIntoOuterContext();
+		assert !e.isHidden();
+
+		if (contextCache == null) {
+			contextCache = PredictionContextCache.UNCACHED;
+		}
+
 		boolean addKey;
 		long key = getKey(e);
 		ATNConfig mergedConfig = mergedConfigs.get(key);
 		addKey = (mergedConfig == null);
 		if (mergedConfig != null && canMerge(e, key, mergedConfig)) {
-			mergedConfig.reachesIntoOuterContext = Math.max(mergedConfig.reachesIntoOuterContext, e.reachesIntoOuterContext);
-			if (contextCache == null) {
-				boolean localJoin = localContext || dipsIntoOuterContext || mergedConfig.reachesIntoOuterContext > 0;
-				contextCache = localJoin ? PredictionContextCache.UNCACHED_LOCAL : PredictionContextCache.UNCACHED_FULL;
-			}
+			mergedConfig.setOuterContextDepth(Math.max(mergedConfig.getOuterContextDepth(), e.getOuterContextDepth()));
 
-			PredictionContext joined = PredictionContext.join(mergedConfig.context, e.context, contextCache);
-			if (mergedConfig.context == joined) {
+			PredictionContext joined = PredictionContext.join(mergedConfig.getContext(), e.getContext(), contextCache);
+			updatePropertiesForMergedConfig(e);
+			if (mergedConfig.getContext() == joined) {
 				return false;
 			}
 
-			mergedConfig.context = joined;
-			updatePropertiesForMergedConfig(e);
+			mergedConfig.setContext(joined);
 			return true;
 		}
 
 		for (int i = 0; i < unmerged.size(); i++) {
 			ATNConfig unmergedConfig = unmerged.get(i);
 			if (canMerge(e, key, unmergedConfig)) {
-				unmergedConfig.reachesIntoOuterContext = Math.max(unmergedConfig.reachesIntoOuterContext, e.reachesIntoOuterContext);
-				if (contextCache == null) {
-					boolean localJoin = localContext || dipsIntoOuterContext || unmergedConfig.reachesIntoOuterContext > 0;
-					contextCache = localJoin ? PredictionContextCache.UNCACHED_LOCAL : PredictionContextCache.UNCACHED_FULL;
-				}
+				unmergedConfig.setOuterContextDepth(Math.max(unmergedConfig.getOuterContextDepth(), e.getOuterContextDepth()));
 
-				PredictionContext joined = PredictionContext.join(unmergedConfig.context, e.context, contextCache);
-				if (unmergedConfig.context == joined) {
+				PredictionContext joined = PredictionContext.join(unmergedConfig.getContext(), e.getContext(), contextCache);
+				updatePropertiesForMergedConfig(e);
+				if (unmergedConfig.getContext() == joined) {
 					return false;
 				}
 
-				unmergedConfig.context = joined;
+				unmergedConfig.setContext(joined);
 
 				if (addKey) {
 					mergedConfigs.put(key, unmergedConfig);
 					unmerged.remove(i);
 				}
 
-				updatePropertiesForMergedConfig(e);
 				return true;
 			}
 		}
 
-		added = true;
-
-		if (added) {
-			configs.add(e);
-			if (addKey) {
-				mergedConfigs.put(key, e);
-			} else {
-				unmerged.add(e);
-			}
-
-			updatePropertiesForAddedConfig(e);
+		configs.add(e);
+		if (addKey) {
+			mergedConfigs.put(key, e);
+		} else {
+			unmerged.add(e);
 		}
 
-		return added;
+		updatePropertiesForAddedConfig(e);
+		return true;
 	}
 
 	private void updatePropertiesForMergedConfig(ATNConfig config) {
 		// merged configs can't change the alt or semantic context
-		dipsIntoOuterContext |= config.reachesIntoOuterContext > 0;
+		dipsIntoOuterContext |= config.getReachesIntoOuterContext();
+		assert !outermostConfigSet || !dipsIntoOuterContext;
 	}
 
 	private void updatePropertiesForAddedConfig(ATNConfig config) {
 		if (configs.size() == 1) {
-			uniqueAlt = config.alt;
-		} else if (uniqueAlt != config.alt) {
+			uniqueAlt = config.getAlt();
+		} else if (uniqueAlt != config.getAlt()) {
 			uniqueAlt = ATN.INVALID_ALT_NUMBER;
 		}
 
-		hasSemanticContext |= !SemanticContext.NONE.equals(config.semanticContext);
-		dipsIntoOuterContext |= config.reachesIntoOuterContext > 0;
+		hasSemanticContext |= !SemanticContext.NONE.equals(config.getSemanticContext());
+		dipsIntoOuterContext |= config.getReachesIntoOuterContext();
+		assert !outermostConfigSet || !dipsIntoOuterContext;
 	}
 
 	private static boolean canMerge(ATNConfig left, ATNConfig right) {
@@ -258,11 +352,11 @@ public class ATNConfigSet implements Set<ATNConfig> {
 			return false;
 		}
 
-		return left.semanticContext.equals(right.semanticContext);
+		return left.getSemanticContext().equals(right.getSemanticContext());
 	}
 
 	private static boolean canMerge(ATNConfig left, long leftKey, ATNConfig right) {
-		if (left.state.stateNumber != right.state.stateNumber) {
+		if (left.getState().stateNumber != right.getState().stateNumber) {
 			return false;
 		}
 
@@ -270,11 +364,11 @@ public class ATNConfigSet implements Set<ATNConfig> {
 			return false;
 		}
 
-		return left.semanticContext.equals(right.semanticContext);
+		return left.getSemanticContext().equals(right.getSemanticContext());
 	}
 
 	private static long getKey(ATNConfig e) {
-		long key = ((long)e.state.stateNumber << 32) + (e.alt << 3);
+		long key = ((long)e.getState().stateNumber << 32) + (e.getAlt() << 3);
 		//key |= e.reachesIntoOuterContext != 0 ? 1 : 0;
 		//key |= e.resolveWithPredicate ? 1 << 1 : 0;
 		//key |= e.traversedPredicate ? 1 << 2 : 0;
@@ -339,8 +433,6 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		unmerged.clear();
 		configs.clear();
 
-		outerContextDepth = 0;
-
 		dipsIntoOuterContext = false;
 		hasSemanticContext = false;
 		uniqueAlt = ATN.INVALID_ALT_NUMBER;
@@ -358,15 +450,16 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		}
 
 		ATNConfigSet other = (ATNConfigSet)obj;
-		return this.localContext == other.localContext
+		return this.outermostConfigSet == other.outermostConfigSet
+			&& Utils.equals(conflictingAlts, other.conflictingAlts)
 			&& configs.equals(other.configs);
 	}
 
 	@Override
 	public int hashCode() {
 		int hashCode = 1;
-		hashCode = 5 * hashCode + (localContext ? 1 : 0);
-		hashCode = 5 * hashCode + configs.hashCode();
+		hashCode = 5 * hashCode ^ (outermostConfigSet ? 1 : 0);
+		hashCode = 5 * hashCode ^ configs.hashCode();
 		return hashCode;
 	}
 
@@ -381,14 +474,14 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		Collections.sort(sortedConfigs, new Comparator<ATNConfig>() {
 			@Override
 			public int compare(ATNConfig o1, ATNConfig o2) {
-				if (o1.alt != o2.alt) {
-					return o1.alt - o2.alt;
+				if (o1.getAlt() != o2.getAlt()) {
+					return o1.getAlt() - o2.getAlt();
 				}
-				else if (o1.state.stateNumber != o2.state.stateNumber) {
-					return o1.state.stateNumber - o2.state.stateNumber;
+				else if (o1.getState().stateNumber != o2.getState().stateNumber) {
+					return o1.getState().stateNumber - o2.getState().stateNumber;
 				}
 				else {
-					return o1.semanticContext.toString().compareTo(o2.semanticContext.toString());
+					return o1.getSemanticContext().toString().compareTo(o2.getSemanticContext().toString());
 				}
 			}
 		});
@@ -398,13 +491,13 @@ public class ATNConfigSet implements Set<ATNConfig> {
 			if (i > 0) {
 				buf.append(", ");
 			}
-			buf.append(sortedConfigs.get(i).toString(null, true, true));
+			buf.append(sortedConfigs.get(i).toString(null, true, showContext));
 		}
 		buf.append("]");
 
-		if ( hasSemanticContext ) buf.append(",hasSemanticContext="+hasSemanticContext);
-		if ( uniqueAlt!=ATN.INVALID_ALT_NUMBER ) buf.append(",uniqueAlt="+uniqueAlt);
-		if ( conflictingAlts!=null ) buf.append(",conflictingAlts="+conflictingAlts);
+		if ( hasSemanticContext ) buf.append(",hasSemanticContext=").append(hasSemanticContext);
+		if ( uniqueAlt!=ATN.INVALID_ALT_NUMBER ) buf.append(",uniqueAlt=").append(uniqueAlt);
+		if ( conflictingAlts!=null ) buf.append(",conflictingAlts=").append(conflictingAlts);
 		if ( dipsIntoOuterContext ) buf.append(",dipsIntoOuterContext");
 		return buf.toString();
 	}
@@ -417,12 +510,17 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		return hasSemanticContext;
 	}
 
-	public IntervalSet getConflictingAlts() {
+	public void markExplicitSemanticContext() {
+		ensureWritable();
+		hasSemanticContext = true;
+	}
+
+	public BitSet getConflictingAlts() {
 		return conflictingAlts;
 	}
 
-	public void setConflictingAlts(IntervalSet conflictingAlts) {
-		//ensureWritable(); <-- these do end up set after the DFAState is created, but set to a distinct value
+	public void setConflictingAlts(BitSet conflictingAlts) {
+		ensureWritable();
 		this.conflictingAlts = conflictingAlts;
 	}
 

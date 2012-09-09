@@ -128,10 +128,12 @@ package org.antlr.v4.parse;
 
 import org.antlr.v4.tool.*;
 import org.antlr.v4.tool.ast.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
 }
 
 @members {
-Stack paraphrases = new Stack();
+Deque<String> paraphrases = new ArrayDeque<String>();
 /** Affects tree construction; no SET collapsing if AST (ID|INT) would hide them from rewrite.
  *  Could use for just AST ops, but we can't see -> until after building sets.
 boolean buildAST;
@@ -283,16 +285,7 @@ delegateGrammar
  *  {tree} parser.
  */
 tokensSpec
-	: TOKENS_SPEC tokenSpec+ RBRACE -> ^(TOKENS_SPEC tokenSpec+)
-	;
-
-tokenSpec
-	:	id
-		(	ASSIGN STRING_LITERAL	-> ^(ASSIGN id STRING_LITERAL<TerminalAST>)
-		|							-> id
-		)
-		SEMI
-	|	RULE_REF // INVALID! (an error alt)
+	: TOKENS_SPEC id (COMMA id)* COMMA? RBRACE -> ^(TOKENS_SPEC id+)
 	;
 
 // A declaration of a language target specifc section,
@@ -535,7 +528,7 @@ ruleAltList
 
 labeledAlt
 	:	alternative
-		(	RARROW! id! {((AltAST)$alternative.tree).altLabel=$id.tree;}
+		(	POUND! id! {((AltAST)$alternative.tree).altLabel=$id.tree;}
 		)?
 	;
 
@@ -655,7 +648,7 @@ lexerCommandName
         :       id
         |       MODE    ->ID[$MODE]
         ;
-        
+
 altList
     :	alternative (OR alternative)* -> alternative+
     ;

@@ -30,11 +30,8 @@ package org.antlr.v4.runtime;
 
 /** A simple stream of integers used when all I care about is the char
  *  or token type sequence (such as interpretation).
- *
- *  Do like Java IO and have new BufferedStream(new TokenStream) rather than
- *  using inheritance?
  */
-public interface IntStream<Symbol> {
+public interface IntStream {
 	void consume();
 
 	/** Get int at current input pointer + i ahead where i=1 is next int.

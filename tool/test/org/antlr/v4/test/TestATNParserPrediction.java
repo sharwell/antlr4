@@ -35,16 +35,18 @@ import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.TokenStream;
-import org.antlr.v4.runtime.atn.*;
+import org.antlr.v4.runtime.atn.ATN;
+import org.antlr.v4.runtime.atn.DecisionState;
+import org.antlr.v4.runtime.atn.LexerATNSimulator;
+import org.antlr.v4.runtime.atn.ParserATNSimulator;
 import org.antlr.v4.runtime.dfa.DFA;
+import org.antlr.v4.runtime.misc.IntegerList;
 import org.antlr.v4.tool.DOTGenerator;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.LexerGrammar;
 import org.antlr.v4.tool.Rule;
 import org.antlr.v4.tool.interp.ParserInterpreter;
 import org.junit.Test;
-
-import java.util.List;
 
 	// NOTICE: TOKENS IN LEXER, PARSER MUST BE SAME OR TOKEN TYPE MISMATCH
 	// NOTICE: TOKENS IN LEXER, PARSER MUST BE SAME OR TOKEN TYPE MISMATCH
@@ -183,7 +185,7 @@ public class TestATNParserPrediction extends BaseTest {
 			"C : 'c' ;\n");
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
-			"tokens {A;B;C;}\n" +
+			"tokens {A,B,C}\n" +
 			"a : x B ;\n" +
 			"b : x C ;\n" +
 			"x : A | ;\n");
@@ -299,7 +301,7 @@ public class TestATNParserPrediction extends BaseTest {
 		);
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
-			"tokens {A;B;C;LP;RP;INT;}\n" +
+			"tokens {A,B,C,LP,RP,INT}\n" +
 			"a : e B | e C ;\n" +
 			"e : LP e RP\n" +
 			"  | INT\n" +
@@ -358,7 +360,7 @@ public class TestATNParserPrediction extends BaseTest {
 		);
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
-			"tokens {A;B;C;LP;RP;INT;}\n" +
+			"tokens {A,B,C,LP,RP,INT}\n" +
 			"a : e A | e A B ;\n" +
 			"e : LP e RP\n" +
 			"  | INT\n" +
@@ -422,7 +424,7 @@ public class TestATNParserPrediction extends BaseTest {
 		);
 		Grammar g = new Grammar(
 			"parser grammar T;\n"+
-			"tokens {ID;SEMI;INT;}\n" +
+			"tokens {ID,SEMI,INT}\n" +
 			"a : (ID | ID ID?) SEMI ;");
 		int decision = 1;
 		checkPredictedAlt(lg, g, decision, "a;", 1);
@@ -477,7 +479,7 @@ public class TestATNParserPrediction extends BaseTest {
 		Tool.internalOption_ShowATNConfigsInDFA = true;
 		ATN lexatn = createATN(lg);
 		LexerATNSimulator lexInterp = new LexerATNSimulator(lexatn);
-		List<Integer> types = getTokenTypesViaATN(inputString, lexInterp);
+		IntegerList types = getTokenTypesViaATN(inputString, lexInterp);
 		System.out.println(types);
 
 		semanticProcess(lg);
@@ -542,7 +544,7 @@ public class TestATNParserPrediction extends BaseTest {
 //		System.out.println(dot.getDOT(atn.ruleToStartState.get(g.getRule("e"))));
 
 		ParserATNSimulator<Token> interp = new ParserATNSimulator<Token>(atn);
-		List<Integer> types = getTokenTypesViaATN(inputString, lexInterp);
+		IntegerList types = getTokenTypesViaATN(inputString, lexInterp);
 		System.out.println(types);
 		TokenStream<Token> input = new IntTokenStream(types);
 		try {
@@ -572,7 +574,7 @@ public class TestATNParserPrediction extends BaseTest {
 		ParserInterpreter interp = new ParserInterpreter(g, null);
 		for (int i=0; i<inputString.length; i++) {
 			// Check DFA
-			List<Integer> types = getTokenTypesViaATN(inputString[i], lexInterp);
+			IntegerList types = getTokenTypesViaATN(inputString[i], lexInterp);
 			System.out.println(types);
 			TokenStream<Token> input = new IntTokenStream(types);
 			try {
@@ -581,7 +583,7 @@ public class TestATNParserPrediction extends BaseTest {
 			catch (NoViableAltException nvae) {
 				nvae.printStackTrace(System.err);
 			}
-			DFA dfa = interp.getATNSimulator().decisionToDFA[decision];
+			DFA dfa = interp.getATNSimulator().atn.decisionToDFA[decision];
 			assertEquals(dfaString[i], dfa.toString(g.getTokenDisplayNames(), g.rules.keySet().toArray(new String[g.rules.size()])));
 		}
 	}

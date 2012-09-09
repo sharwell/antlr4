@@ -30,9 +30,12 @@
 package org.antlr.v4.runtime;
 
 import org.antlr.v4.runtime.atn.ATNConfigSet;
+import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.Utils;
 
 public class LexerNoViableAltException extends RecognitionException {
+	private static final long serialVersionUID = -730999203913001726L;
+
 	/** Matching attempted at what input index? */
 	public int startIndex;
 
@@ -57,7 +60,7 @@ public class LexerNoViableAltException extends RecognitionException {
 	public String toString() {
 		String symbol = "";
 		if (startIndex >= 0 && startIndex < input.size()) {
-			symbol = getInputStream().substring(startIndex, startIndex);
+			symbol = getInputStream().getText(Interval.of(startIndex,startIndex));
 			symbol = Utils.escapeWhitespace(symbol, false);
 		}
 

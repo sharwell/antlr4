@@ -29,11 +29,21 @@
 
 package org.antlr.v4.tool;
 
-import org.antlr.v4.misc.Triple;
-import org.antlr.v4.tool.ast.*;
-import org.stringtemplate.v4.misc.MultiMap;
+import org.antlr.v4.runtime.misc.MultiMap;
+import org.antlr.v4.runtime.misc.Tuple;
+import org.antlr.v4.runtime.misc.Tuple3;
+import org.antlr.v4.tool.ast.ActionAST;
+import org.antlr.v4.tool.ast.AltAST;
+import org.antlr.v4.tool.ast.GrammarAST;
+import org.antlr.v4.tool.ast.PredAST;
+import org.antlr.v4.tool.ast.RuleAST;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class Rule implements AttributeResolver {
 	/** Rule refs have a predefined set of attributes as well as
@@ -46,8 +56,6 @@ public class Rule implements AttributeResolver {
             add(new Attribute("text"));
             add(new Attribute("start"));
             add(new Attribute("stop"));
-            add(new Attribute("tree"));
-            add(new Attribute("st"));
             add(new Attribute("ctx"));
         }};
 
@@ -55,15 +63,11 @@ public class Rule implements AttributeResolver {
         new AttributeDict(AttributeDict.DictType.PREDEFINED_LEXER_RULE) {{
             add(new Attribute("text"));
             add(new Attribute("type"));
-            add(new Attribute("line"));
-            add(new Attribute("index"));
-            add(new Attribute("pos"));
-            add(new Attribute("channel"));
-            add(new Attribute("start"));
-            add(new Attribute("stop"));
-            add(new Attribute("int"));
+			add(new Attribute("channel"));
+			add(new Attribute("mode"));
         }};
 
+	@SuppressWarnings("serial")
 	public static Set<String> validLexerCommands = new HashSet<String>() {{
 		// CALLS
 		add("mode");
@@ -182,7 +186,7 @@ public class Rule implements AttributeResolver {
         for (int i=1; i<=numberOfAlts; i++) {
             refs.addAll(alt[i].labelDefs.keySet());
         }
-		if ( refs.size()==0 ) return null;
+		if ( refs.isEmpty() ) return null;
         return refs;
     }
 
@@ -209,15 +213,15 @@ public class Rule implements AttributeResolver {
 	}
 
 	/** Get -> labels. */
-	public List<Triple<Integer,AltAST,String>> getAltLabels() {
-		List<Triple<Integer,AltAST,String>> labels = new ArrayList<Triple<Integer,AltAST,String>>();
+	public List<Tuple3<Integer,AltAST,String>> getAltLabels() {
+		List<Tuple3<Integer,AltAST,String>> labels = new ArrayList<Tuple3<Integer,AltAST,String>>();
 		for (int i=1; i<=numberOfAlts; i++) {
 			GrammarAST altLabel = alt[i].ast.altLabel;
 			if ( altLabel!=null ) {
-				labels.add(new Triple<Integer,AltAST,String>(i,alt[i].ast,altLabel.getText()));
+				labels.add(Tuple.create(i,alt[i].ast,altLabel.getText()));
 			}
 		}
-		if ( labels.size()==0 ) return null;
+		if ( labels.isEmpty() ) return null;
 		return labels;
 	}
 
@@ -227,7 +231,7 @@ public class Rule implements AttributeResolver {
 			GrammarAST altLabel = alt[i].ast.altLabel;
 			if ( altLabel==null ) alts.add(alt[i].ast);
 		}
-		if ( alts.size()==0 ) return null;
+		if ( alts.isEmpty() ) return null;
 		return alts;
 	}
 
@@ -330,15 +334,23 @@ public class Rule implements AttributeResolver {
 
 	@Override
 	public boolean equals(Object obj) {
-		return this==obj || name.equals(((Rule)obj).name);
+		if (this == obj) {
+			return true;
+		}
+
+		if (!(obj instanceof Rule)) {
+			return false;
+		}
+
+		return name.equals(((Rule)obj).name);
 	}
 
 	@Override
     public String toString() {
 		StringBuilder buf = new StringBuilder();
-		buf.append("Rule{name="+name);
-		if ( args!=null ) buf.append(", args=" + args);
-		if ( retvals!=null ) buf.append(", retvals=" + retvals);
+		buf.append("Rule{name=").append(name);
+		if ( args!=null ) buf.append(", args=").append(args);
+		if ( retvals!=null ) buf.append(", retvals=").append(retvals);
 		buf.append("}");
 		return buf.toString();
     }

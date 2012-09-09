@@ -29,25 +29,18 @@
 
 package org.antlr.v4.misc;
 
+import org.antlr.v4.runtime.misc.Func1;
+import org.antlr.v4.runtime.misc.IntegerList;
+import org.antlr.v4.runtime.misc.Predicate;
 import org.antlr.v4.tool.ast.GrammarAST;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /** */
 public class Utils {
 	public static final int INTEGER_POOL_MAX_VALUE = 1000;
-
-	public interface Filter<T> {
-		boolean select(T t);
-	}
-
-	public interface Func0<TResult> {
-		TResult exec();
-	}
-
-	public interface Func1<T1, TResult> {
-		TResult exec(T1 arg1);
-	}
 
 	static Integer[] ints = new Integer[INTEGER_POOL_MAX_VALUE+1];
 
@@ -137,13 +130,6 @@ public class Utils {
 //		return x;
 //	}
 
-	public static int[] toIntArray(List<Integer> list) {
-		if ( list==null ) return null;
-		int[] a = new int[list.size()];
-		for (int i=0; i<list.size(); i++) a[i] = list.get(i);
-		return a;
-	}
-
 	public static String capitalize(String s) {
 		return Character.toUpperCase(s.charAt(0)) + s.substring(1);
 	}
@@ -152,11 +138,11 @@ public class Utils {
 		return Character.toLowerCase(s.charAt(0)) + s.substring(1);
 	}
 
-	public static char[] toCharArray(List<Integer> data) {
+	public static char[] toCharArray(IntegerList data) {
 		if ( data==null ) return null;
 		char[] cdata = new char[data.size()];
 		for (int i=0; i<data.size(); i++) {
-			cdata[i] = (char)(int)data.get(i);
+			cdata[i] = (char)data.get(i);
 		}
 		return cdata;
 	}
@@ -168,7 +154,7 @@ public class Utils {
 		if ( list==null ) return null;
 		List<To> b = new ArrayList<To>();
 		for (From f : list) {
-			b.add(selector.exec(f));
+			b.add(selector.eval(f));
 		}
 		return b;
 	}
@@ -182,16 +168,16 @@ public class Utils {
 		return null;
 	}
 
-	public static <T> int indexOf(List<? extends T> elems, Filter<T> filter) {
+	public static <T> int indexOf(List<? extends T> elems, Predicate<? super T> match) {
 		for (int i=0; i<elems.size(); i++) {
-			if ( filter.select(elems.get(i)) ) return i;
+			if ( match.eval(elems.get(i)) ) return i;
 		}
 		return -1;
 	}
 
-	public static <T> int lastIndexOf(List<? extends T> elems, Filter<T> filter) {
+	public static <T> int lastIndexOf(List<? extends T> elems, Predicate<? super T> match) {
 		for (int i=elems.size()-1; i>=0; i--) {
-			if ( filter.select(elems.get(i)) ) return i;
+			if ( match.eval(elems.get(i)) ) return i;
 		}
 		return -1;
 	}

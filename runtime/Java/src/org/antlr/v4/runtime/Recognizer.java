@@ -31,19 +31,25 @@ package org.antlr.v4.runtime;
 
 import org.antlr.v4.runtime.atn.ATN;
 import org.antlr.v4.runtime.atn.ATNSimulator;
+import org.antlr.v4.runtime.misc.Args;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	public static final int EOF=-1;
 
-	private List<ANTLRErrorListener<? super Symbol>> _listeners;
+	@SuppressWarnings("serial")
+	@NotNull
+	private List<ANTLRErrorListener<? super Symbol>> _listeners =
+		new CopyOnWriteArrayList<ANTLRErrorListener<? super Symbol>>() {{ add(ConsoleErrorListener.INSTANCE); }};
 
 	protected ATNInterpreter _interp;
+
+	private int _stateNumber = -1;
 
 	/** Used to print out token names like ID during debugging and
 	 *  error reporting.  The generated parsers implement a method
@@ -58,9 +64,17 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	 */
 	public abstract String getGrammarFileName();
 
-	public abstract ATN getATN();
+	public ATN getATN() {
+		return _interp.atn;
+	}
 
-	public ATNInterpreter getInterpreter() { return _interp; }
+	public ATNInterpreter getInterpreter() {
+		return _interp;
+	}
+
+	public void setInterpreter(ATNInterpreter interpreter) {
+		_interp = interpreter;
+	}
 
 	/** What is the error header, normally line/character position information? */
 	public String getErrorHeader(RecognitionException e) {
@@ -94,26 +108,29 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 		return "'"+s+"'";
 	}
 
-	public void addErrorListener(ANTLRErrorListener<? super Symbol> pl) {
-		if ( _listeners ==null ) {
-			_listeners =
-				Collections.synchronizedList(new ArrayList<ANTLRErrorListener<? super Symbol>>(2));
-		}
-		if ( pl!=null ) _listeners.add(pl);
+	/**
+	 * @throws NullPointerException if {@code listener} is {@code null}.
+	 */
+	public void addErrorListener(@NotNull ANTLRErrorListener<? super Symbol> listener) {
+		Args.notNull("listener", listener);
+		_listeners.add(listener);
 	}
 
-	public void removeErrorListener(ANTLRErrorListener<? super Symbol> pl) {
-		if ( _listeners!=null ) _listeners.remove(pl);
+	public void removeErrorListener(@NotNull ANTLRErrorListener<? super Symbol> listener) {
+		_listeners.remove(listener);
 	}
 
-	public void removeErrorListeners() { if ( _listeners!=null ) _listeners.clear(); }
+	public void removeErrorListeners() {
+		_listeners.clear();
+	}
 
-	public @NotNull List<? extends ANTLRErrorListener<? super Symbol>> getErrorListeners() {
-		if (_listeners == null) {
-			return Collections.emptyList();
-		}
-
+	@NotNull
+	public List<? extends ANTLRErrorListener<? super Symbol>> getErrorListeners() {
 		return new ArrayList<ANTLRErrorListener<? super Symbol>>(_listeners);
+	}
+
+	public ANTLRErrorListener<? super Symbol> getErrorListenerDispatch() {
+		return new ProxyErrorListener<Symbol>(getErrorListeners());
 	}
 
 	// subclass needs to override these if there are sempreds or actions
@@ -125,7 +142,22 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	public void action(@Nullable RuleContext<Symbol> _localctx, int ruleIndex, int actionIndex) {
 	}
 
-	public abstract IntStream<Symbol> getInputStream();
+	public final int getState() {
+		return _stateNumber;
+	}
 
-	public abstract void setInputStream(IntStream<Symbol> input);
+	/** Indicate that the recognizer has changed internal state that is
+	 *  consistent with the ATN state passed in.  This way we always know
+	 *  where we are in the ATN as the parser goes along. The rule
+	 *  context objects form a stack that lets us see the stack of
+	 *  invoking rules. Combine this and we have complete ATN
+	 *  configuration information.
+	 */
+	public final void setState(int atnState) {
+//		System.err.println("setState "+atnState);
+		_stateNumber = atnState;
+//		if ( traceATNStates ) _ctx.trace(atnState);
+	}
+
+	public abstract IntStream getInputStream();
 }

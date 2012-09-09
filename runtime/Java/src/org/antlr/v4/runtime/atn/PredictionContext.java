@@ -27,42 +27,93 @@
  */
 package org.antlr.v4.runtime.atn;
 
-import java.util.*;
 import org.antlr.v4.runtime.Recognizer;
 import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.misc.NotNull;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.concurrent.ConcurrentMap;
+
 public abstract class PredictionContext {
 	@NotNull
-	public static final PredictionContext EMPTY = new EmptyPredictionContext();
-	public static final int EMPTY_STATE_KEY = Integer.MAX_VALUE;
+	public static final PredictionContext EMPTY_LOCAL = EmptyPredictionContext.LOCAL_CONTEXT;
+	@NotNull
+	public static final PredictionContext EMPTY_FULL = EmptyPredictionContext.FULL_CONTEXT;
 
+	public static final int EMPTY_LOCAL_STATE_KEY = Integer.MIN_VALUE;
+	public static final int EMPTY_FULL_STATE_KEY = Integer.MAX_VALUE;
+
+	private static final int INITIAL_HASH = 1;
+	private static final int HASH_MULTIPLIER = 31;
+
+	/**
+	 * Stores the computed hash code of this PredictionContext. The hash code is
+	 * computed in parts to match the following reference algorithm.
+	 *
+	 * <pre>
+	 *  private int referenceHashCode() {
+	 *  	int invokingStateHashCode = {@link #INITIAL_HASH INITIAL_HASH};
+	 *  	for (int i = 0; i &lt; size(); i++) {
+	 *  		invokingStateHashCode = invokingStateHashCode * {@link #HASH_MULTIPLIER HASH_MULTIPLIER} ^ getInvokingState(i);
+	 *  	}
+	 *
+	 *  	int parentHashCode = INITIAL_HASH;
+	 *  	for (int i = 0; i &lt; size(); i++) {
+	 *  		parentHashCode = parentHashCode * HASH_MULTIPLIER ^ getParent(i).hashCode();
+	 *  	}
+	 *
+	 *  	int hashCode = INITIAL_HASH;
+	 *  	hashCode = hashCode * HASH_MULTIPLIER ^ parentHashCode;
+	 *  	hashCode = hashCode * HASH_MULTIPLIER ^ invokingStateHashCode;
+	 *  	return hashCode;
+	 *  }
+	 * </pre>
+	 */
 	private final int cachedHashCode;
 
 	protected PredictionContext(int cachedHashCode) {
 		this.cachedHashCode = cachedHashCode;
 	}
 
+	protected static int calculateEmptyParentHashCode() {
+		return INITIAL_HASH;
+	}
+
+	protected static int calculateParentHashCode(PredictionContext parent) {
+		return INITIAL_HASH * HASH_MULTIPLIER ^ parent.hashCode();
+	}
+
 	protected static int calculateParentHashCode(PredictionContext[] parents) {
-		int hashCode = 1;
+		int hashCode = INITIAL_HASH;
 		for (PredictionContext context : parents) {
-			hashCode = hashCode * 31 ^ context.hashCode();
+			hashCode = hashCode * HASH_MULTIPLIER ^ context.hashCode();
 		}
 
 		return hashCode;
 	}
 
+	protected static int calculateEmptyInvokingStateHashCode() {
+		return INITIAL_HASH;
+	}
+
+	protected static int calculateInvokingStateHashCode(int invokingState) {
+		return INITIAL_HASH * HASH_MULTIPLIER ^ invokingState;
+	}
+
 	protected static int calculateInvokingStatesHashCode(int[] invokingStates) {
-		int hashCode = 1;
+		int hashCode = INITIAL_HASH;
 		for (int state : invokingStates) {
-			hashCode = hashCode * 31 ^ state;
+			hashCode = hashCode * HASH_MULTIPLIER ^ state;
 		}
 
 		return hashCode;
 	}
 
 	protected static int calculateHashCode(int parentHashCode, int invokingStateHashCode) {
-		return 5 * 5 * 7 + 5 * parentHashCode + invokingStateHashCode;
+		return (INITIAL_HASH * HASH_MULTIPLIER ^ parentHashCode) * HASH_MULTIPLIER ^ invokingStateHashCode;
 	}
 
 	public abstract int size();
@@ -77,15 +128,18 @@ public abstract class PredictionContext {
 	protected abstract PredictionContext addEmptyContext();
 
 	public static PredictionContext fromRuleContext(@NotNull RuleContext<?> outerContext) {
+		return fromRuleContext(outerContext, true);
+	}
+	public static PredictionContext fromRuleContext(@NotNull RuleContext<?> outerContext, boolean fullContext) {
 		if (outerContext.isEmpty()) {
-			return PredictionContext.EMPTY;
+			return fullContext ? EMPTY_FULL : EMPTY_LOCAL;
 		}
 
 		PredictionContext parent;
 		if (outerContext.parent != null) {
-			parent = PredictionContext.fromRuleContext(outerContext.parent);
+			parent = PredictionContext.fromRuleContext(outerContext.parent, fullContext);
 		} else {
-			parent = PredictionContext.EMPTY;
+			parent = fullContext ? EMPTY_FULL : EMPTY_LOCAL;
 		}
 
 		return parent.getChild(outerContext.invokingState);
@@ -95,8 +149,8 @@ public abstract class PredictionContext {
 		return context.addEmptyContext();
 	}
 
-	public static PredictionContext join(PredictionContext context0, PredictionContext context1, boolean local) {
-		return join(context0, context1, local ? PredictionContextCache.UNCACHED_LOCAL : PredictionContextCache.UNCACHED_FULL);
+	public static PredictionContext join(PredictionContext context0, PredictionContext context1) {
+		return join(context0, context1, PredictionContextCache.UNCACHED);
 	}
 
 	/*package*/ static PredictionContext join(@NotNull final PredictionContext context0, @NotNull final PredictionContext context1, @NotNull PredictionContextCache contextCache) {
@@ -104,15 +158,10 @@ public abstract class PredictionContext {
 			return context0;
 		}
 
-		boolean local = !contextCache.isContextSensitive();
 		if (context0.isEmpty()) {
-			return local ? context0 : addEmptyContext(context1);
+			return isEmptyLocal(context0) ? context0 : addEmptyContext(context1);
 		} else if (context1.isEmpty()) {
-			return local ? context1 : addEmptyContext(context0);
-		}
-
-		if (local && (context0.hasEmpty() || context1.hasEmpty())) {
-			return PredictionContext.EMPTY;
+			return isEmptyLocal(context1) ? context1 : addEmptyContext(context0);
 		}
 
 		final int context0size = context0.size();
@@ -129,8 +178,6 @@ public abstract class PredictionContext {
 		}
 
 		int count = 0;
-		int parentHashCode = 1;
-		int invokingStateHashCode = 1;
 		PredictionContext[] parentsList = new PredictionContext[context0size + context1size];
 		int[] invokingStatesList = new int[parentsList.length];
 		int leftIndex = 0;
@@ -160,8 +207,6 @@ public abstract class PredictionContext {
 				rightIndex++;
 			}
 
-			parentHashCode = 31 * parentHashCode ^ parentsList[count].hashCode();
-			invokingStateHashCode = 31 * invokingStateHashCode ^ invokingStatesList[count];
 			count++;
 		}
 
@@ -170,8 +215,6 @@ public abstract class PredictionContext {
 			invokingStatesList[count] = context0.getInvokingState(leftIndex);
 			leftIndex++;
 			canReturnRight = false;
-			parentHashCode = 31 * parentHashCode ^ parentsList[count].hashCode();
-			invokingStateHashCode = 31 * invokingStateHashCode ^ invokingStatesList[count];
 			count++;
 		}
 
@@ -180,8 +223,6 @@ public abstract class PredictionContext {
 			invokingStatesList[count] = context1.getInvokingState(rightIndex);
 			rightIndex++;
 			canReturnLeft = false;
-			parentHashCode = 31 * parentHashCode ^ parentsList[count].hashCode();
-			invokingStateHashCode = 31 * invokingStateHashCode ^ invokingStatesList[count];
 			count++;
 		}
 
@@ -198,19 +239,24 @@ public abstract class PredictionContext {
 		}
 
 		if (parentsList.length == 0) {
-			return EMPTY;
+			// if one of them was EMPTY_LOCAL, it would be empty and handled at the beginning of the method
+			return EMPTY_FULL;
 		}
 		else if (parentsList.length == 1) {
 			return new SingletonPredictionContext(parentsList[0], invokingStatesList[0]);
 		}
 		else {
-			return new ArrayPredictionContext(parentsList, invokingStatesList, parentHashCode, invokingStateHashCode);
+			return new ArrayPredictionContext(parentsList, invokingStatesList);
 		}
+	}
+
+	public static boolean isEmptyLocal(PredictionContext context) {
+		return context == EMPTY_LOCAL;
 	}
 
 	public static PredictionContext getCachedContext(
 		@NotNull PredictionContext context,
-		@NotNull Map<PredictionContext, PredictionContext> contextCache,
+		@NotNull ConcurrentMap<PredictionContext, PredictionContext> contextCache,
 		@NotNull IdentityHashMap<PredictionContext, PredictionContext> visited) {
 		if (context.isEmpty()) {
 			return context;
@@ -246,16 +292,14 @@ public abstract class PredictionContext {
 		}
 
 		if (!changed) {
-			contextCache.put(context, context);
-			visited.put(context, context);
+			existing = contextCache.putIfAbsent(context, context);
+			visited.put(context, existing != null ? existing : context);
 			return context;
 		}
 
+		// We know parents.length>0 because context.isEmpty() is checked at the beginning of the method.
 		PredictionContext updated;
-		if (parents.length == 0) {
-			updated = EMPTY;
-		}
-		else if (parents.length == 1) {
+		if (parents.length == 1) {
 			updated = new SingletonPredictionContext(parents[0], context.getInvokingState(0));
 		}
 		else {
@@ -263,20 +307,18 @@ public abstract class PredictionContext {
 			updated = new ArrayPredictionContext(parents, arrayPredictionContext.invokingStates, context.cachedHashCode);
 		}
 
-		contextCache.put(updated, updated);
-		visited.put(updated, updated);
-		visited.put(context, updated);
+		existing = contextCache.putIfAbsent(updated, updated);
+		visited.put(updated, existing != null ? existing : updated);
+		visited.put(context, existing != null ? existing : updated);
 
 		return updated;
 	}
 
 	public PredictionContext appendContext(int invokingContext, PredictionContextCache contextCache) {
-		return appendContext(PredictionContext.EMPTY.getChild(invokingContext), contextCache);
+		return appendContext(PredictionContext.EMPTY_FULL.getChild(invokingContext), contextCache);
 	}
 
 	public abstract PredictionContext appendContext(PredictionContext suffix, PredictionContextCache contextCache);
-
-	public abstract PredictionContext popAll(int invokingState, PredictionContextCache contextCache);
 
 	public PredictionContext getChild(int invokingState) {
 		return new SingletonPredictionContext(this, invokingState);
@@ -286,125 +328,8 @@ public abstract class PredictionContext {
 
 	public abstract boolean hasEmpty();
 
-	/** Two contexts conflict() if they are equals() or one is a stack suffix
-	 *  of the other.  For example, contexts [21 12 $] and [21 9 $] do not
-	 *  conflict, but [21 $] and [21 12 $] do conflict.  Note that I should
-	 *  probably not show the $ in this case.  There is a dummy node for each
-	 *  stack that just means empty; $ is a marker that's all.
-	 *
-	 *  This is used in relation to checking conflicts associated with a
-	 *  single NFA state's configurations within a single DFA state.
-	 *  If there are configurations s and t within a DFA state such that
-	 *  s.state=t.state && s.alt != t.alt && s.ctx conflicts t.ctx then
-	 *  the DFA state predicts more than a single alt--it's nondeterministic.
-	 *  Two contexts conflict if they are the same or if one is a suffix
-	 *  of the other.
-	 *
-	 *  When comparing contexts, if one context has a stack and the other
-	 *  does not then they should be considered the same context.  The only
-	 *  way for an NFA state p to have an empty context and a nonempty context
-	 *  is the case when closure falls off end of rule without a call stack
-	 *  and re-enters the rule with a context.  This resolves the issue I
-	 *  discussed with Sriram Srinivasan Feb 28, 2005 about not terminating
-	 *  fast enough upon nondeterminism.
-	 */
-	public boolean conflictsWith(PredictionContext other) {
-		return this.suffix(other); // || this.equals(other);
-	}
-
-	/** [$] suffix any context
-	 *  [21 $] suffix [21 12 $]
-	 *  [21 12 $] suffix [21 $]
-	 *  [21 18 $] suffix [21 18 12 9 $]
-	 *  [21 18 12 9 $] suffix [21 18 $]
-	 *  [21 12 $] not suffix [21 9 $]
-	 *
-	 *  Example "[21 $] suffix [21 12 $]" means: rule r invoked current rule
-	 *  from state 21.  Rule s invoked rule r from state 12 which then invoked
-	 *  current rule also via state 21.  While the context prior to state 21
-	 *  is different, the fact that both contexts emanate from state 21 implies
-	 *  that they are now going to track perfectly together.  Once they
-	 *  converged on state 21, there is no way they can separate.  In other
-	 *  words, the prior stack state is not consulted when computing where to
-	 *  go in the closure operation.  ?$ and ??$ are considered the same stack.
-	 *  If ? is popped off then $ and ?$ remain; they are now an empty and
-	 *  nonempty context comparison.  So, if one stack is a suffix of
-	 *  another, then it will still degenerate to the simple empty stack
-	 *  comparison case.
-	 */
-	protected boolean suffix(PredictionContext other) {
-
-		int currentSize = this.size();
-		int otherSize = other.size();
-
-		if (currentSize == 0 || otherSize == 0) {
-			return true;
-		}
-
-		Deque<PredictionContext> leftWorkList = new ArrayDeque<PredictionContext>();
-		Deque<PredictionContext> rightWorkList = new ArrayDeque<PredictionContext>();
-		leftWorkList.add(this);
-		rightWorkList.add(other);
-		while (!leftWorkList.isEmpty()) {
-			PredictionContext left = leftWorkList.pop();
-			PredictionContext right = rightWorkList.pop();
-
-			if (left == right || left.isEmpty() || right.isEmpty()) {
-				continue;
-			}
-
-			final int leftSize = left.size();
-			final int rightSize = right.size();
-			int leftIndex = 0;
-			int rightIndex = 0;
-			int leftState = left.getInvokingState(0);
-			int rightState = right.getInvokingState(0);
-			while (leftIndex < leftSize || rightIndex < rightSize) {
-				if (leftState == rightState) {
-					PredictionContext leftParent = left.getParent(leftIndex);
-					PredictionContext rightParent = right.getParent(rightIndex);
-					if (leftParent != rightParent) {
-						leftWorkList.push(left.getParent(leftIndex));
-						rightWorkList.push(right.getParent(rightIndex));
-					}
-					if (leftState != -1) {
-						leftIndex++;
-						leftState = (leftIndex < leftSize) ? left.getInvokingState(leftIndex) : -1;
-					}
-					if (rightState != -1) {
-						rightIndex++;
-						rightState = (rightIndex < rightSize) ? right.getInvokingState(rightIndex) : -1;
-					}
-
-					continue;
-				}
-
-				if (leftState < rightState) {
-					if (leftState == -1 && rightState != EMPTY_STATE_KEY) {
-						return false;
-					} else if (leftState != -1) {
-						return false;
-					}
-
-					break;
-				} else {
-					assert rightState < leftState;
-					if (rightState == -1 && leftState != EMPTY_STATE_KEY) {
-						return false;
-					} else if (rightState != -1) {
-						return false;
-					}
-
-					break;
-				}
-			}
-		}
-
-		return true;
-	}
-
 	@Override
-	public int hashCode() {
+	public final int hashCode() {
 		return cachedHashCode;
 	}
 
@@ -417,7 +342,7 @@ public abstract class PredictionContext {
 	//}
 
 	public String[] toStrings(Recognizer<?, ?> recognizer, int currentState) {
-		return toStrings(recognizer, PredictionContext.EMPTY, currentState);
+		return toStrings(recognizer, PredictionContext.EMPTY_FULL, currentState);
 	}
 
 	public String[] toStrings(Recognizer<?, ?> recognizer, PredictionContext stop, int currentState) {
@@ -431,7 +356,7 @@ public abstract class PredictionContext {
 			int stateNumber = currentState;
 			StringBuilder localBuffer = new StringBuilder();
 			localBuffer.append("[");
-			while ( p != null && p != stop ) {
+			while ( !p.isEmpty() && p != stop ) {
 				int index = 0;
 				if (p.size() > 0) {
 					int bits = 1;
@@ -459,7 +384,7 @@ public abstract class PredictionContext {
 					String ruleName = recognizer.getRuleNames()[s.ruleIndex];
 					localBuffer.append(ruleName);
 				}
-				else if ( p.getInvokingState(index)!=EMPTY_STATE_KEY ) {
+				else if ( p.getInvokingState(index)!=EMPTY_FULL_STATE_KEY ) {
 					if ( !p.isEmpty() ) {
 						if (localBuffer.length() > 1) {
 							// first char is '[', if more than that this isn't the first rule

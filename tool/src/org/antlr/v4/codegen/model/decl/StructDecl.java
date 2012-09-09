@@ -37,7 +37,6 @@ import org.antlr.v4.codegen.model.OutputModelObject;
 import org.antlr.v4.codegen.model.VisitorDispatchMethod;
 import org.antlr.v4.runtime.misc.OrderedHashSet;
 import org.antlr.v4.tool.Attribute;
-import org.antlr.v4.tool.LeftRecursiveRule;
 import org.antlr.v4.tool.Rule;
 
 import java.util.ArrayList;
@@ -108,5 +107,5 @@ public class StructDecl extends Decl {
 		extensionMembers.add(member);
 	}
 
-	public boolean isEmpty() { return attrs.size()==0; }
+	public boolean isEmpty() { return attrs.isEmpty(); }
 }

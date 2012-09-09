@@ -27,14 +27,15 @@
  */
 package org.antlr.v4.runtime.atn;
 
+import org.antlr.v4.runtime.atn.PredictionContextCache.IdentityCommutativePredictionContextOperands;
+import org.antlr.v4.runtime.misc.NotNull;
+
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Set;
-import org.antlr.v4.runtime.atn.PredictionContextCache.IdentityCommutativeOperands;
-import org.antlr.v4.runtime.misc.NotNull;
 
 public class ArrayPredictionContext extends PredictionContext {
 
@@ -43,10 +44,10 @@ public class ArrayPredictionContext extends PredictionContext {
 	@NotNull
 	public final int[] invokingStates;
 
-	/*package*/ ArrayPredictionContext(@NotNull PredictionContext[] parents, int[] invokingStates, int parentHashCode, int invokingStateHashCode) {
-		super(calculateHashCode(parentHashCode, invokingStateHashCode));
+	/*package*/ ArrayPredictionContext(@NotNull PredictionContext[] parents, int[] invokingStates) {
+		super(calculateHashCode(calculateParentHashCode(parents), calculateInvokingStatesHashCode(invokingStates)));
 		assert parents.length == invokingStates.length;
-		assert invokingStates.length > 1 && invokingStates[0] != EMPTY_STATE_KEY : "Should be using PredictionContext.EMPTY instead.";
+		assert invokingStates.length > 1 || invokingStates[0] != EMPTY_FULL_STATE_KEY : "Should be using PredictionContext.EMPTY instead.";
 
 		this.parents = parents;
 		this.invokingStates = invokingStates;
@@ -55,7 +56,7 @@ public class ArrayPredictionContext extends PredictionContext {
 	/*package*/ ArrayPredictionContext(@NotNull PredictionContext[] parents, int[] invokingStates, int hashCode) {
 		super(hashCode);
 		assert parents.length == invokingStates.length;
-		assert invokingStates.length > 1 && invokingStates[0] != EMPTY_STATE_KEY : "Should be using PredictionContext.EMPTY instead.";
+		assert invokingStates.length > 1 || invokingStates[0] != EMPTY_FULL_STATE_KEY : "Should be using PredictionContext.EMPTY instead.";
 
 		this.parents = parents;
 		this.invokingStates = invokingStates;
@@ -88,12 +89,7 @@ public class ArrayPredictionContext extends PredictionContext {
 
 	@Override
 	public boolean hasEmpty() {
-		return invokingStates[invokingStates.length - 1] == EMPTY_STATE_KEY;
-	}
-
-	@Override
-	public int hashCode() {
-		return super.hashCode();
+		return invokingStates[invokingStates.length - 1] == EMPTY_FULL_STATE_KEY;
 	}
 
 	@Override
@@ -104,27 +100,33 @@ public class ArrayPredictionContext extends PredictionContext {
 
 		PredictionContext[] parents2 = Arrays.copyOf(parents, parents.length + 1);
 		int[] invokingStates2 = Arrays.copyOf(invokingStates, invokingStates.length + 1);
-		parents2[parents2.length - 1] = PredictionContext.EMPTY;
-		invokingStates2[invokingStates2.length - 1] = PredictionContext.EMPTY_STATE_KEY;
-		int newParentHashCode = calculateParentHashCode(parents2);
-		int newInvokingStateHashCode = calculateInvokingStatesHashCode(invokingStates2);
-		return new ArrayPredictionContext(parents2, invokingStates2, newParentHashCode, newInvokingStateHashCode);
+		parents2[parents2.length - 1] = PredictionContext.EMPTY_FULL;
+		invokingStates2[invokingStates2.length - 1] = PredictionContext.EMPTY_FULL_STATE_KEY;
+		return new ArrayPredictionContext(parents2, invokingStates2);
 	}
 
 	@Override
 	public PredictionContext appendContext(PredictionContext suffix, PredictionContextCache contextCache) {
+		return appendContext(this, suffix, new IdentityHashMap<PredictionContext, PredictionContext>());
+	}
+
+	private static PredictionContext appendContext(PredictionContext context, PredictionContext suffix, IdentityHashMap<PredictionContext, PredictionContext> visited) {
 		if (suffix.isEmpty()) {
-			return this;
+			if (isEmptyLocal(suffix)) {
+				if (context.hasEmpty()) {
+					return EMPTY_LOCAL;
+				}
+				
+				throw new UnsupportedOperationException("what to do here?");
+			}
+
+			return context;
 		}
 
 		if (suffix.size() != 1) {
 			throw new UnsupportedOperationException("Appending a tree suffix is not yet supported.");
 		}
 
-		return appendContext(this, suffix, new IdentityHashMap<PredictionContext, PredictionContext>());
-	}
-
-	private static PredictionContext appendContext(PredictionContext context, PredictionContext suffix, IdentityHashMap<PredictionContext, PredictionContext> visited) {
 		PredictionContext result = visited.get(context);
 		if (result == null) {
 			if (context.isEmpty()) {
@@ -142,55 +144,24 @@ public class ArrayPredictionContext extends PredictionContext {
 					updatedInvokingStates[i] = context.getInvokingState(i);
 				}
 
-				int updatedParentHashCode = 1;
-				int updatedInvokingStateHashCode = 1;
 				for (int i = 0; i < parentCount; i++) {
 					updatedParents[i] = appendContext(context.getParent(i), suffix, visited);
-					updatedParentHashCode = 31 * updatedParentHashCode ^ updatedParents[i].hashCode();
-					updatedInvokingStateHashCode = 31 * updatedInvokingStateHashCode ^ context.getInvokingState(i);
 				}
 
 				if (updatedParents.length == 1) {
 					result = new SingletonPredictionContext(updatedParents[0], updatedInvokingStates[0]);
 				}
 				else {
-					assert updatedParents.length > 0;
-					result = new ArrayPredictionContext(updatedParents, updatedInvokingStates, updatedParentHashCode, updatedInvokingStateHashCode);
+					assert updatedParents.length > 1;
+					result = new ArrayPredictionContext(updatedParents, updatedInvokingStates);
 				}
 
 				if (context.hasEmpty()) {
-					result = PredictionContext.join(result, suffix, false);
+					result = PredictionContext.join(result, suffix);
 				}
 			}
 
 			visited.put(context, result);
-		}
-
-		return result;
-	}
-
-	@Override
-	public PredictionContext popAll(int invokingState, PredictionContextCache contextCache) {
-		int index = Arrays.binarySearch(this.invokingStates, invokingState);
-		if (index < 0) {
-			return this;
-		}
-
-		PredictionContext result = this.parents[index].popAll(invokingState, contextCache);
-		for (int i = 0; i < this.invokingStates.length; i++) {
-			if (i == index) {
-				continue;
-			}
-
-			PredictionContext next;
-			if (this.invokingStates[i] == EMPTY_STATE_KEY) {
-				next = PredictionContext.EMPTY;
-			}
-			else {
-				next = contextCache.getChild(this.parents[i], this.invokingStates[i]);
-			}
-
-			result = PredictionContext.join(result, next, contextCache);
 		}
 
 		return result;
@@ -210,21 +181,29 @@ public class ArrayPredictionContext extends PredictionContext {
 		}
 
 		ArrayPredictionContext other = (ArrayPredictionContext)o;
-		return equals(other, new HashSet<IdentityCommutativeOperands<PredictionContext>>());
+		return equals(other, new HashSet<IdentityCommutativePredictionContextOperands>());
 	}
 
-	private boolean equals(ArrayPredictionContext other, Set<IdentityCommutativeOperands<PredictionContext>> visited) {
+	private boolean equals(ArrayPredictionContext other, Set<IdentityCommutativePredictionContextOperands> visited) {
 		Deque<PredictionContext> selfWorkList = new ArrayDeque<PredictionContext>();
 		Deque<PredictionContext> otherWorkList = new ArrayDeque<PredictionContext>();
 		selfWorkList.push(this);
 		otherWorkList.push(other);
 		while (!selfWorkList.isEmpty()) {
-			IdentityCommutativeOperands<PredictionContext> operands = new IdentityCommutativeOperands<PredictionContext>(selfWorkList.pop(), otherWorkList.pop());
+			IdentityCommutativePredictionContextOperands operands = new IdentityCommutativePredictionContextOperands(selfWorkList.pop(), otherWorkList.pop());
 			if (!visited.add(operands)) {
 				continue;
 			}
 
 			int selfSize = operands.getX().size();
+			if (selfSize == 0) {
+				if (!operands.getX().equals(operands.getY())) {
+					return false;
+				}
+
+				continue;
+			}
+
 			int otherSize = operands.getY().size();
 			if (selfSize != otherSize) {
 				return false;
@@ -237,6 +216,10 @@ public class ArrayPredictionContext extends PredictionContext {
 
 				PredictionContext selfParent = operands.getX().getParent(i);
 				PredictionContext otherParent = operands.getY().getParent(i);
+				if (selfParent.hashCode() != otherParent.hashCode()) {
+					return false;
+				}
+
 				if (selfParent != otherParent) {
 					selfWorkList.push(selfParent);
 					otherWorkList.push(otherParent);

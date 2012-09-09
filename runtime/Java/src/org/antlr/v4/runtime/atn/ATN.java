@@ -29,15 +29,20 @@
 
 package org.antlr.v4.runtime.atn;
 
-import org.antlr.v4.runtime.RuleContext;
+import org.antlr.v4.runtime.dfa.DFA;
+import org.antlr.v4.runtime.misc.Args;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /** */
 public class ATN {
@@ -45,7 +50,6 @@ public class ATN {
 
 	public static final int PARSER = 1;
 	public static final int LEXER = 2;
-	public static final int TREE_PARSER = 3;
 
 	@NotNull
 	public final List<ATNState> states = new ArrayList<ATNState>();
@@ -71,21 +75,61 @@ public class ATN {
 	// runtime for lexer only
 	public int[] ruleToTokenType;
 	public int[] ruleToActionIndex;
+
 	@NotNull
 	public final List<TokensStartState> modeToStartState = new ArrayList<TokensStartState>();
 
 	/** used during construction from grammar AST */
 	int stateNumber = 0;
 
+	private final ConcurrentMap<PredictionContext, PredictionContext> contextCache =
+		new ConcurrentHashMap<PredictionContext, PredictionContext>();
+
+	@NotNull
+	public DFA[] decisionToDFA = new DFA[0];
+	@NotNull
+	public DFA[] modeToDFA = new DFA[0];
+
+	protected final ConcurrentMap<Integer, Integer> LL1Table = new ConcurrentHashMap<Integer, Integer>();
+
 	/** Used for runtime deserialization of ATNs from strings */
 	public ATN() { }
 
+	public final void clearDFA() {
+		decisionToDFA = new DFA[decisionToState.size()];
+		for (int i = 0; i < decisionToDFA.length; i++) {
+			decisionToDFA[i] = new DFA(decisionToState.get(i), i);
+		}
+
+		modeToDFA = new DFA[modeToStartState.size()];
+		for (int i = 0; i < modeToDFA.length; i++) {
+			modeToDFA[i] = new DFA(modeToStartState.get(i));
+		}
+
+		contextCache.clear();
+		LL1Table.clear();
+	}
+
+	public int getContextCacheSize() {
+		return contextCache.size();
+	}
+
+	public PredictionContext getCachedContext(PredictionContext context) {
+		return PredictionContext.getCachedContext(context, contextCache, new IdentityHashMap<PredictionContext, PredictionContext>());
+	}
+
+	public final DFA[] getDecisionToDFA() {
+		assert decisionToDFA != null && decisionToDFA.length == decisionToState.size();
+		return decisionToDFA;
+	}
+
 	/** Compute the set of valid tokens that can occur starting in s.
-	 *  If ctx is null, the set of tokens will not include what can follow
+	 *  If ctx is {@link PredictionContext#EMPTY_LOCAL}, the set of tokens will not include what can follow
 	 *  the rule surrounding s. In other words, the set will be
 	 *  restricted to tokens reachable staying within s's rule.
 	 */
-	public IntervalSet nextTokens(ATNState s, PredictionContext ctx) {
+	public IntervalSet nextTokens(ATNState s, @NotNull PredictionContext ctx) {
+		Args.notNull("ctx", ctx);
 		LL1Analyzer anal = new LL1Analyzer(this);
 		IntervalSet next = anal.LOOK(s, ctx);
 		return next;
@@ -96,7 +140,7 @@ public class ATN {
      */
     public IntervalSet nextTokens(ATNState s) {
         if ( s.nextTokenWithinRule != null ) return s.nextTokenWithinRule;
-        s.nextTokenWithinRule = nextTokens(s, null);
+        s.nextTokenWithinRule = nextTokens(s, PredictionContext.EMPTY_LOCAL);
         s.nextTokenWithinRule.setReadonly(true);
         return s.nextTokenWithinRule;
     }
@@ -112,14 +156,24 @@ public class ATN {
 		states.set(state.stateNumber, null); // just free mem, don't shift states in list
 	}
 
+	public void defineMode(@NotNull String name, @NotNull TokensStartState s) {
+		modeNameToStartState.put(name, s);
+		modeToStartState.add(s);
+		modeToDFA = Arrays.copyOf(modeToDFA, modeToStartState.size());
+		modeToDFA[modeToDFA.length - 1] = new DFA(s);
+		defineDecisionState(s);
+	}
+
 	public int defineDecisionState(@NotNull DecisionState s) {
 		decisionToState.add(s);
 		s.decision = decisionToState.size()-1;
+		decisionToDFA = Arrays.copyOf(decisionToDFA, decisionToState.size());
+		decisionToDFA[decisionToDFA.length - 1] = new DFA(s, s.decision);
 		return s.decision;
 	}
 
     public DecisionState getDecisionState(int decision) {
-        if ( decisionToState.size()>0 ) {
+        if ( !decisionToState.isEmpty() ) {
             return decisionToState.get(decision);
         }
         return null;
