@@ -478,32 +478,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			assert !s.isAcceptState;
 
 			// if no edge, pop over to ATN interpreter, update DFA and return
-			DFAState target = null;
-			if (s.isPredicateEvaluationState) {
-				List<Predicate> sortedTerms = s.predicateTerms;
-				int savedIndex = input.index();
-				try {
-					input.seek(startIndex);
-					int edge = 0;
-					for (int i = 0; i < sortedTerms.size(); i++) {
-						Predicate predicate = sortedTerms.get(i);
-						if (predicate.eval(parser, outerContext)) {
-							edge |= 1 << i;
-						}
-					}
-
-					target = s.getTarget(edge);
-				}
-				finally {
-					if (target == null || !target.configs.isEmpty()) {
-						input.seek(savedIndex);
-					}
-				}
-			}
-			else {
-				target = s.getTarget(t);
-			}
-
+			DFAState target = getDFATarget(input, startIndex, t, outerContext, s);
 			if ( target == null ) {
 				if ( dfa_debug && t>=0 ) System.out.println("no edge for "+parser.getTokenNames()[t]);
 				int alt;
@@ -602,6 +577,37 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 		return acceptState.prediction;
 	}
 
+	@Nullable
+	protected DFAState getDFATarget(@NotNull TokenStream<? extends Symbol> input, int startIndex, int t, @NotNull RuleContext<Symbol> outerContext, @NotNull DFAState s) {
+		DFAState target = null;
+		if (s.isPredicateEvaluationState) {
+			List<Predicate> sortedTerms = s.predicateTerms;
+			int savedIndex = input.index();
+			try {
+				input.seek(startIndex);
+				int edge = 0;
+				for (int i = 0; i < sortedTerms.size(); i++) {
+					Predicate predicate = sortedTerms.get(i);
+					if (predicate.eval(parser, outerContext)) {
+						edge |= 1 << i;
+					}
+				}
+
+				target = s.getTarget(edge);
+			}
+			finally {
+				if (target == null || !target.configs.isEmpty()) {
+					input.seek(savedIndex);
+				}
+			}
+		}
+		else {
+			target = s.getTarget(t);
+		}
+
+		return target;
+	}
+
 	/** Performs ATN simulation to compute a predicted alternative based
 	 *  upon the remaining input, but also updates the DFA cache to avoid
 	 *  having to traverse the ATN again for the same input sequence.
@@ -661,84 +667,8 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 		SimulatorState<Symbol> previous = initialState;
 
 		PredictionContextCache contextCache = new PredictionContextCache();
-		while (true) { // while more work
-			boolean createPredicateEvaluationState = previous.s0.configs.hasSemanticContext() && input.index() > startIndex;
-			SimulatorState<Symbol> nextState = null;
-			if (createPredicateEvaluationState) {
-				// should have been created as a predicate evaluation state in the previous call to computeReachSet
-				assert previous.s0.isPredicateEvaluationState == true;
-
-				Set<Predicate> terms = new HashSet<Predicate>();
-				for (ATNConfig config : previous.s0.configs) {
-					if (config.getSemanticContext() != SemanticContext.NONE) {
-						terms.addAll(config.getSemanticContext().getTerms());
-					}
-				}
-
-				if (terms.size() > 32) {
-					throw new UnsupportedOperationException("Too many predicate terms.");
-				}
-
-				List<Predicate> sortedTerms = new ArrayList<Predicate>(terms);
-				Collections.sort(sortedTerms, new Comparator<Predicate>() {
-
-					@Override
-					public int compare(Predicate o1, Predicate o2) {
-						if (o1.ruleIndex != o2.ruleIndex) {
-							return o1.ruleIndex - o2.ruleIndex;
-						}
-						else if (o1.predIndex != o2.predIndex) {
-							return o1.predIndex - o2.predIndex;
-						}
-						else {
-							return (o1.isCtxDependent ? 1 : 0) - (o2.isCtxDependent ? 1 : 0);
-						}
-					}
-				});
-
-				previous.s0.predicateTerms = sortedTerms;
-				int savedIndex = input.index();
-				try {
-					input.seek(startIndex);
-					int edge = 0;
-					Map<Predicate, Boolean> evaluatedPredicates = new HashMap<Predicate, Boolean>();
-					for (int i = 0; i < sortedTerms.size(); i++) {
-						Predicate predicate = sortedTerms.get(i);
-						boolean evalResult = predicate.eval(parser, outerContext);
-						if (evalResult) {
-							edge |= 1 << i;
-						}
-						evaluatedPredicates.put(predicate, evalResult);
-					}
-
-					// filter results
-					ATNConfigSet filtered = new ATNConfigSet();
-					for (ATNConfig config : previous.s0.configs) {
-						if (config.getSemanticContext() != SemanticContext.NONE) {
-							if (!config.getSemanticContext().eval(evaluatedPredicates)) {
-								continue;
-							}
-
-							config = config.transform(config.getState(), SemanticContext.NONE);
-						}
-
-						filtered.add(config, contextCache);
-					}
-
-					DFAState dfaState = addDFAState(dfa, filtered, false, contextCache);
-					addDFAEdge(previous.s0, edge, dfaState);
-					nextState = new SimulatorState<Symbol>(outerContext, dfaState, useContext, previous.remainingOuterContext);
-				}
-				finally {
-					if (nextState != null && !nextState.s0.configs.isEmpty()) {
-						input.seek(savedIndex);
-					}
-				}
-			}
-			else {
-				nextState = computeReachSet(dfa, previous, t, greedy, contextCache);
-			}
-
+		while (true) {
+			SimulatorState<Symbol> nextState = getNextATNState(dfa, input, startIndex, t, greedy, previous, contextCache);
 			if (nextState == null) {
 				if (previous.s0 != null) {
 					BitSet alts = new BitSet();
@@ -856,6 +786,92 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 			previous = nextState;
 		}
+	}
+
+	protected SimulatorState<Symbol> getNextATNState(DFA dfa, TokenStream<? extends Symbol> input, int startIndex, int t, boolean greedy, SimulatorState<Symbol> previous, PredictionContextCache contextCache) {
+		SimulatorState<Symbol> nextState = null;
+		boolean createPredicateEvaluationState = shouldCreatePredicateEvaluationState(input, startIndex, previous);
+		if (createPredicateEvaluationState) {
+			// should have been created as a predicate evaluation state in the previous call to computeReachSet
+			assert previous.s0.isPredicateEvaluationState == true;
+
+			Set<Predicate> terms = new HashSet<Predicate>();
+			for (ATNConfig config : previous.s0.configs) {
+				if (config.getSemanticContext() != SemanticContext.NONE) {
+					terms.addAll(config.getSemanticContext().getTerms());
+				}
+			}
+
+			if (terms.size() > 32) {
+				throw new UnsupportedOperationException("Too many predicate terms.");
+			}
+
+			List<Predicate> sortedTerms = new ArrayList<Predicate>(terms);
+			Collections.sort(sortedTerms, new Comparator<Predicate>() {
+
+				@Override
+				public int compare(Predicate o1, Predicate o2) {
+					if (o1.ruleIndex != o2.ruleIndex) {
+						return o1.ruleIndex - o2.ruleIndex;
+					}
+					else if (o1.predIndex != o2.predIndex) {
+						return o1.predIndex - o2.predIndex;
+					}
+					else {
+						return (o1.isCtxDependent ? 1 : 0) - (o2.isCtxDependent ? 1 : 0);
+					}
+				}
+			});
+
+			previous.s0.predicateTerms = sortedTerms;
+			int savedIndex = input.index();
+			try {
+				input.seek(startIndex);
+				int edge = 0;
+				Map<Predicate, Boolean> evaluatedPredicates = new HashMap<Predicate, Boolean>();
+				for (int i = 0; i < sortedTerms.size(); i++) {
+					Predicate predicate = sortedTerms.get(i);
+					boolean evalResult = predicate.eval(parser, previous.outerContext);
+					if (evalResult) {
+						edge |= 1 << i;
+					}
+					evaluatedPredicates.put(predicate, evalResult);
+				}
+
+				// filter results
+				ATNConfigSet filtered = new ATNConfigSet();
+				for (ATNConfig config : previous.s0.configs) {
+					if (config.getSemanticContext() != SemanticContext.NONE) {
+						if (!config.getSemanticContext().eval(evaluatedPredicates)) {
+							continue;
+						}
+
+						config = config.transform(config.getState(), SemanticContext.NONE);
+					}
+
+					filtered.add(config, contextCache);
+				}
+
+				DFAState dfaState = addDFAState(dfa, filtered, false, contextCache);
+				addDFAEdge(previous.s0, edge, dfaState);
+				nextState = new SimulatorState<Symbol>(previous.outerContext, dfaState, previous.useContext, previous.remainingOuterContext);
+			}
+			finally {
+				if (nextState != null && !nextState.s0.configs.isEmpty()) {
+					input.seek(savedIndex);
+				}
+			}
+		}
+		else {
+			nextState = computeReachSet(dfa, previous, t, greedy, contextCache);
+		}
+
+		return nextState;
+	}
+
+	protected boolean shouldCreatePredicateEvaluationState(TokenStream<? extends Symbol> input, int startIndex, SimulatorState<Symbol> previous) {
+		int k = input.index() - startIndex + 1;
+		return previous.s0.configs.hasSemanticContext() && k > 1;
 	}
 
 	protected SimulatorState<Symbol> computeReachSet(DFA dfa, SimulatorState<Symbol> previous, int t, boolean greedy, PredictionContextCache contextCache) {
