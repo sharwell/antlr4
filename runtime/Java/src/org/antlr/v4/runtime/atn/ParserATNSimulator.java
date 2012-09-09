@@ -670,20 +670,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 		while (true) {
 			SimulatorState<Symbol> nextState = getNextATNState(dfa, input, startIndex, t, greedy, previous, contextCache);
 			if (nextState == null) {
-				if (previous.s0 != null) {
-					BitSet alts = new BitSet();
-					for (ATNConfig config : previous.s0.configs) {
-						if (config.getReachesIntoOuterContext() || config.getState() instanceof RuleStopState) {
-							alts.set(config.getAlt());
-						}
-					}
-
-					if (!alts.isEmpty()) {
-						return alts.nextSetBit(0);
-					}
-				}
-
-				throw noViableAlt(input, outerContext, previous.s0.configs, startIndex);
+				return handleNoViableAlt(input, startIndex, previous);
 			}
 
 			DFAState D = nextState.s0;
@@ -872,6 +859,23 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 	protected boolean shouldCreatePredicateEvaluationState(TokenStream<? extends Symbol> input, int startIndex, SimulatorState<Symbol> previous) {
 		int k = input.index() - startIndex + 1;
 		return previous.s0.configs.hasSemanticContext() && k > 1;
+	}
+
+	protected int handleNoViableAlt(@NotNull TokenStream<? extends Symbol> input, int startIndex, @NotNull SimulatorState<Symbol> previous) {
+		if (previous.s0 != null) {
+			BitSet alts = new BitSet();
+			for (ATNConfig config : previous.s0.configs) {
+				if (config.getReachesIntoOuterContext() || config.getState() instanceof RuleStopState) {
+					alts.set(config.getAlt());
+				}
+			}
+
+			if (!alts.isEmpty()) {
+				return alts.nextSetBit(0);
+			}
+		}
+
+		throw noViableAlt(input, previous.outerContext, previous.s0.configs, startIndex);
 	}
 
 	protected SimulatorState<Symbol> computeReachSet(DFA dfa, SimulatorState<Symbol> previous, int t, boolean greedy, PredictionContextCache contextCache) {
