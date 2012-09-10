@@ -881,7 +881,7 @@ public class TestPerformance extends BaseTest {
 
 		@NotNull
 		@Override
-		protected DFAState createDFAState(@NotNull ATNConfigSet configs) {
+		protected DFAState createDFAState(@NotNull ATNConfigSet configs, int minSymbol, int maxSymbol) {
 			return new DFAState(configs, -1, -1);
 		}
 

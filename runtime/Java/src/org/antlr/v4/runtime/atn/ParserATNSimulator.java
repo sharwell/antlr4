@@ -782,11 +782,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 	protected SimulatorState<Symbol> getNextATNState(DFA dfa, TokenStream<? extends Symbol> input, int startIndex, int t, boolean greedy, SimulatorState<Symbol> previous, PredictionContextCache contextCache) {
 		SimulatorState<Symbol> nextState = null;
-		boolean createPredicateEvaluationState = shouldCreatePredicateEvaluationState(input, startIndex, previous);
-		if (createPredicateEvaluationState) {
-			// should have been created as a predicate evaluation state in the previous call to computeReachSet
-			assert previous.s0.isPredicateEvaluationState == true;
-
+		if (previous.s0.isPredicateEvaluationState) {
 			Set<Predicate> terms = new HashSet<Predicate>();
 			for (ATNConfig config : previous.s0.configs) {
 				if (config.getSemanticContext() != SemanticContext.NONE) {
@@ -837,11 +833,10 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 						if (!config.getSemanticContext().eval(evaluatedPredicates)) {
 							continue;
 						}
-
-						config = config.transform(config.getState(), SemanticContext.NONE);
 					}
 
-					filtered.add(config, contextCache);
+					// Must transform every config, or ATNConfig instances could end up in more than one ATNConfigSet with some hidden and others not.
+					filtered.add(config.transform(config.getState(), SemanticContext.NONE), contextCache);
 				}
 
 				DFAState dfaState = addDFAState(dfa, filtered, false, contextCache);
@@ -855,7 +850,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			}
 		}
 		else {
-			nextState = computeReachSet(dfa, previous, t, greedy, contextCache);
+			nextState = computeReachSet(dfa, input, startIndex, previous, t, greedy, contextCache);
 		}
 
 		return nextState;
@@ -883,7 +878,7 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 		throw noViableAlt(input, previous.outerContext, previous.s0.configs, startIndex);
 	}
 
-	protected SimulatorState<Symbol> computeReachSet(DFA dfa, SimulatorState<Symbol> previous, int t, boolean greedy, PredictionContextCache contextCache) {
+	protected SimulatorState<Symbol> computeReachSet(DFA dfa, TokenStream<? extends Symbol> input, int startIndex, SimulatorState<Symbol> previous, int t, boolean greedy, PredictionContextCache contextCache) {
 		final boolean useContext = previous.useContext;
 		ParserRuleContext<Symbol> remainingGlobalContext = previous.remainingOuterContext;
 
@@ -982,7 +977,8 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 
 		DFAState dfaState = null;
 		if (s0 != null) {
-			dfaState = addDFAEdge(dfa, s0, t, contextElements, reach, contextCache);
+			boolean predicateEvaluationState = shouldCreatePredicateEvaluationState(input, startIndex, previous);
+			dfaState = addDFAEdge(dfa, s0, t, contextElements, reach, predicateEvaluationState, contextCache);
 		}
 
 		assert !useContext || !dfaState.configs.getDipsIntoOuterContext();
@@ -1768,12 +1764,13 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 								  int t,
 								  IntegerList contextTransitions,
 								  @NotNull ATNConfigSet toConfigs,
+								  boolean predicateEvaluationState,
 								  PredictionContextCache contextCache)
 	{
 		assert dfa.isContextSensitive() || contextTransitions == null || contextTransitions.isEmpty();
 
 		DFAState from = fromState;
-		DFAState to = addDFAState(dfa, toConfigs, toConfigs.hasSemanticContext(), contextCache);
+		DFAState to = addDFAState(dfa, toConfigs, predicateEvaluationState, contextCache);
 
 		if (contextTransitions != null) {
 			for (int context : contextTransitions.toArray()) {
@@ -1836,10 +1833,23 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			configs.optimizeConfigs(this);
 		}
 
-		DFAState proposed = createDFAState(configs);
+		if (predicateEvaluationState) {
+			// never create a predicate evaluation state when the configuration set has a unique alt
+			// never create a predicate evaluation state when none of the configs has semantic context
+			predicateEvaluationState = configs.getUniqueAlt() == ATN.INVALID_ALT_NUMBER && configs.hasSemanticContext();
+		}
+		else {
+			// force predicate evaluate state when the configuration set is conflicted and has semantic context
+			predicateEvaluationState = configs.getConflictingAlts() != null && configs.hasSemanticContext();
+		}
+
+		DFAState proposed = createDFAState(configs, -1, atn.maxTokenType);
 		proposed.isPredicateEvaluationState = predicateEvaluationState;
 		DFAState existing = dfa.states.get(proposed);
 		if ( existing!=null ) return existing;
+
+		int minSymbol;
+		int maxSymbol;
 
 		if (!configs.isReadOnly()) {
 			if (configs.getConflictingAlts() == null) {
@@ -1848,8 +1858,21 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 					int size = configs.size();
 					configs.stripHiddenConfigs();
 					if (configs.size() < size) {
-						proposed = createDFAState(configs);
-						proposed.isPredicateEvaluationState = predicateEvaluationState;
+						if (predicateEvaluationState) {
+							predicateEvaluationState = getUniqueAlt(configs) == ATN.INVALID_ALT_NUMBER;
+						}
+
+						if (predicateEvaluationState) {
+							minSymbol = 0;
+							maxSymbol = Integer.MAX_VALUE - 1;
+						}
+						else {
+							minSymbol = -1;
+							maxSymbol = atn.maxTokenType;
+						}
+
+						proposed = createDFAState(configs, minSymbol, maxSymbol);
+						proposed.isPredicateEvaluationState = predicateEvaluationState || configs.hasSemanticContext();
 						existing = dfa.states.get(proposed);
 						if ( existing!=null ) return existing;
 					}
@@ -1857,25 +1880,40 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			}
 		}
 
-		DFAState newState = createDFAState(configs.clone(true));
-		newState.isPredicateEvaluationState = predicateEvaluationState;
+		if (predicateEvaluationState || (configs.hasSemanticContext() && configs.getConflictingAlts() != null)) {
+			minSymbol = 0;
+			maxSymbol = Integer.MAX_VALUE - 1;
+		}
+		else {
+			minSymbol = -1;
+			maxSymbol = atn.maxTokenType;
+		}
+
+		DFAState newState = createDFAState(configs.clone(true), minSymbol, maxSymbol);
+		int predictedAlt = getUniqueAlt(configs);
+		if (predictedAlt != ATN.INVALID_ALT_NUMBER || configs.hasSemanticContext()) {
+			newState.isPredicateEvaluationState = false;
+		}
+		else {
+			newState.isPredicateEvaluationState = predicateEvaluationState || (predictedAlt == ATN.INVALID_ALT_NUMBER && configs.hasSemanticContext() && configs.getConflictingAlts() != null);
+		}
+
 		DecisionState decisionState = atn.getDecisionState(dfa.decision);
 		boolean greedy = decisionState.isGreedy;
-		int predictedAlt = getUniqueAlt(configs);
 		if ( predictedAlt!=ATN.INVALID_ALT_NUMBER ) {
 			newState.isAcceptState = true;
 			newState.prediction = predictedAlt;
 		} else if (configs.getConflictingAlts() != null) {
 			if (greedy) {
-				newState.isAcceptState = true;
-				newState.prediction = resolveToMinAlt(newState, newState.configs.getConflictingAlts());
+				newState.isAcceptState = !newState.isPredicateEvaluationState;
+				newState.prediction = newState.isAcceptState ? resolveToMinAlt(newState, newState.configs.getConflictingAlts()) : ATN.INVALID_ALT_NUMBER;
 			} else {
 				// upon ambiguity for nongreedy, default to exit branch to avoid inf loop
 				// this handles case where we find ambiguity that stops DFA construction
 				// before a config hits rule stop state. Was leaving prediction blank.
 				final int exitAlt = 2;
-				newState.isAcceptState = true; // when ambig or ctx sens or nongreedy or .* loop hitting rule stop
-				newState.prediction = exitAlt;
+				newState.isAcceptState = !newState.isPredicateEvaluationState; // when ambig or ctx sens or nongreedy or .* loop hitting rule stop
+				newState.prediction = newState.isAcceptState ? exitAlt : ATN.INVALID_ALT_NUMBER;
 			}
 		}
 
@@ -1884,19 +1922,21 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 			if ( predictedAlt != ATN.INVALID_ALT_NUMBER && configWithAltAtStopState(configs, 1) ) {
 				if ( debug ) System.out.println("nongreedy loop but unique alt "+newState.configs.getUniqueAlt()+" at "+configs);
 				// reaches end via .* means nothing after.
-				newState.isAcceptState = true;
-				newState.prediction = exitAlt;
+				newState.isAcceptState = !newState.isPredicateEvaluationState;
+				newState.prediction = newState.isAcceptState ? exitAlt : ATN.INVALID_ALT_NUMBER;
 			}
 			else {// if we reached end of rule via exit branch and decision nongreedy, we matched
 				if ( configWithAltAtStopState(configs, exitAlt) ) {
 					if ( debug ) System.out.println("nongreedy at stop state for exit branch");
-					newState.isAcceptState = true;
-					newState.prediction = exitAlt;
+					newState.isAcceptState = !newState.isPredicateEvaluationState;
+					newState.prediction = newState.isAcceptState ? exitAlt : ATN.INVALID_ALT_NUMBER;
 				}
 			}
 		}
 
 		if (newState.isAcceptState && configs.hasSemanticContext()) {
+			// we predicate the state whether or not the prediction is unique since the algorithm for handling predicate failures is not specified.
+			assert !newState.isPredicateEvaluationState;
 			predicateDFAState(newState, configs, decisionState.getNumberOfTransitions());
 		}
 
@@ -1906,8 +1946,8 @@ public class ParserATNSimulator<Symbol extends Token> extends ATNSimulator {
 	}
 
 	@NotNull
-	protected DFAState createDFAState(@NotNull ATNConfigSet configs) {
-		return new DFAState(configs, -1, atn.maxTokenType);
+	protected DFAState createDFAState(@NotNull ATNConfigSet configs, int minSymbol, int maxSymbol) {
+		return new DFAState(configs, minSymbol, maxSymbol);
 	}
 
 //	public void reportConflict(int startIndex, int stopIndex,
