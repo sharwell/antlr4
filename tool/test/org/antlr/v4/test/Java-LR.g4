@@ -876,11 +876,11 @@ UnicodeEscape
     :   '\\' 'u' HexDigit HexDigit HexDigit HexDigit
     ;
 
-ENUM:   'enum' {if (!enumIsKeyword) $type=Identifier;}
+ENUM:   'enum' {if (!enumIsKeyword) setType(Identifier);}
     ;
     
 ASSERT
-    :   'assert' {if (!assertIsKeyword) $type=Identifier;}
+    :   'assert' {if (!assertIsKeyword) setType(Identifier);}
     ;
     
 Identifier 
