@@ -30,6 +30,7 @@
 
 package org.antlr.v4.test;
 
+import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.misc.Nullable;
 import org.junit.Test;
 
@@ -655,20 +656,23 @@ public class TestLexerExec extends BaseTest {
 			"notLabel\n";
 		String found = execLexer("PositionAdjustingLexer.g4", grammar, "PositionAdjustingLexer", input);
 
+		final int ASSIGN = 1;
+		final int PLUS_ASSIGN = 2;
+		final int LCURLY = 3;
 		final int TOKENS = 4;
 		final int LABEL = 5;
 		final int IDENTIFIER = 6;
 		String expecting =
 			"[@0,0:5='tokens',<" + IDENTIFIER + ">,1:0]\n" +
 			"[@1,7:12='tokens',<" + TOKENS + ">,2:0]\n" +
-			"[@2,14:14='{',<3>,2:7]\n" +
+			"[@2,14:14='{',<" + LCURLY + ">,2:7]\n" +
 			"[@3,16:23='notLabel',<" + IDENTIFIER + ">,3:0]\n" +
 			"[@4,25:30='label1',<" + LABEL + ">,4:0]\n" +
-			"[@5,32:32='=',<1>,4:7]\n" +
+			"[@5,32:32='=',<" + ASSIGN + ">,4:7]\n" +
 			"[@6,34:39='label2',<" + LABEL + ">,5:0]\n" +
-			"[@7,41:42='+=',<2>,5:7]\n" +
+			"[@7,41:42='+=',<" + PLUS_ASSIGN + ">,5:7]\n" +
 			"[@8,44:51='notLabel',<" + IDENTIFIER + ">,6:0]\n" +
-			"[@9,53:52='<EOF>',<-1>,7:0]\n";
+			"[@9,53:52='<EOF>',<" + IntStream.EOF + ">,7:0]\n";
 
 		assertEquals(expecting, found);
 	}
