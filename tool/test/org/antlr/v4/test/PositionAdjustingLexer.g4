@@ -1,84 +1,18 @@
 lexer grammar PositionAdjustingLexer;
 
 @members {
-	@Override
-	public Token nextToken() {
-		if (!(_interp instanceof PositionAdjustingLexerATNSimulator)) {
-			_interp = new PositionAdjustingLexerATNSimulator(this, _ATN, _decisionToDFA, _sharedContextCache);
+	public boolean testAssertion(int assertionMode, int passingRule) {
+		int index = _input.index();
+		int mark = _input.mark();
+		try {
+			LexerATNSimulator interp = new LexerATNSimulator(this, _ATN, _decisionToDFA, _sharedContextCache);
+			interp.copyState(_interp);
+			int result = interp.match(_input, assertionMode);
+			return result == passingRule;
+		} finally {
+			_input.seek(index);
+			_input.release(mark);
 		}
-
-		return super.nextToken();
-	}
-
-	@Override
-	public Token emit() {
-		switch (_type) {
-		case TOKENS:
-			handleAcceptPositionForKeyword("tokens");
-			break;
-
-		case LABEL:
-			handleAcceptPositionForIdentifier();
-			break;
-
-		default:
-			break;
-		}
-
-		return super.emit();
-	}
-
-	private boolean handleAcceptPositionForIdentifier() {
-		String tokenText = getText();
-		int identifierLength = 0;
-		while (identifierLength < tokenText.length() && isIdentifierChar(tokenText.charAt(identifierLength))) {
-			identifierLength++;
-		}
-
-		if (getInputStream().index() > _tokenStartCharIndex + identifierLength) {
-			int offset = identifierLength - 1;
-			getInterpreter().resetAcceptPosition(getInputStream(), _tokenStartCharIndex + offset, _tokenStartLine, _tokenStartCharPositionInLine + offset);
-			return true;
-		}
-
-		return false;
-	}
-
-	private boolean handleAcceptPositionForKeyword(String keyword) {
-		if (getInputStream().index() > _tokenStartCharIndex + keyword.length()) {
-			int offset = keyword.length() - 1;
-			getInterpreter().resetAcceptPosition(getInputStream(), _tokenStartCharIndex + offset, _tokenStartLine, _tokenStartCharPositionInLine + offset);
-			return true;
-		}
-
-		return false;
-	}
-
-	@Override
-	public PositionAdjustingLexerATNSimulator getInterpreter() {
-		return (PositionAdjustingLexerATNSimulator)super.getInterpreter();
-	}
-
-	private static boolean isIdentifierChar(char c) {
-		return Character.isLetterOrDigit(c) || c == '_';
-	}
-
-	protected static class PositionAdjustingLexerATNSimulator extends LexerATNSimulator {
-
-		public PositionAdjustingLexerATNSimulator(Lexer recog, ATN atn,
-												  DFA[] decisionToDFA,
-												  PredictionContextCache sharedContextCache)
-		{
-			super(recog, atn, decisionToDFA, sharedContextCache);
-		}
-
-		protected void resetAcceptPosition(CharStream input, int index, int line, int charPositionInLine) {
-			input.seek(index);
-			this.line = line;
-			this.charPositionInLine = charPositionInLine;
-			consume(input);
-		}
-
 	}
 }
 
@@ -87,11 +21,11 @@ PLUS_ASSIGN : '+=' ;
 LCURLY:	'{';
 
 // 'tokens' followed by '{'
-TOKENS : 'tokens' IGNORED '{';
+TOKENS : 'tokens' {testAssertion(MODE_TOKENS_ASSERTION_1, TOKENS_ASSERTION_1_PASS)}?;
 
 // IDENTIFIER followed by '+=' or '='
 LABEL
-	:	IDENTIFIER IGNORED '+'? '='
+	:	IDENTIFIER {testAssertion(MODE_LABEL_ASSERTION_1, LABEL_ASSERTION_1_PASS)}?
 	;
 
 IDENTIFIER
@@ -110,3 +44,13 @@ NEWLINE
 WS
 	:	[ \t]+ -> skip
 	;
+
+mode MODE_TOKENS_ASSERTION_1;
+
+	TOKENS_ASSERTION_1_PASS : IGNORED '{';
+	TOKENS_ASSERTION_1_FAIL : .;
+
+mode MODE_LABEL_ASSERTION_1;
+
+	LABEL_ASSERTION_1_PASS : IGNORED '+'? '=';
+	LABEL_ASSERTION_1_FAIL : .;
