@@ -380,7 +380,7 @@ public class DefaultErrorStrategy implements ANTLRErrorStrategy {
 			current = lookback;
 		}
 		return
-			_factory.create(current.getTokenSource(), expectedTokenType, tokenText,
+			_factory.create(current.getTokenSource(), current.getTokenSource().getInputStream(), expectedTokenType, tokenText,
 							Token.DEFAULT_CHANNEL,
 							-1, -1,
 							current.getLine(), current.getCharPositionInLine());

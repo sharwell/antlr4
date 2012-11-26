@@ -259,7 +259,7 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	 *  custom Token objects or provide a new factory.
 	 */
 	public Token emit() {
-		Token t = _factory.create(this, _type, _text, _channel, _tokenStartCharIndex, getCharIndex()-1,
+		Token t = _factory.create(this, _input, _type, _text, _channel, _tokenStartCharIndex, getCharIndex()-1,
 								  _tokenStartLine, _tokenStartCharPositionInLine);
 		emit(t);
 		return t;
@@ -273,7 +273,7 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 			int n = _token.getStopIndex() - _token.getStartIndex() + 1;
 			cpos = _token.getCharPositionInLine()+n;
 		}
-		Token eof = _factory.create(this, Token.EOF, null, Token.DEFAULT_CHANNEL, _input.index(), _input.index()-1,
+		Token eof = _factory.create(this, _input, Token.EOF, null, Token.DEFAULT_CHANNEL, _input.index(), _input.index()-1,
 									getLine(), cpos);
 		emit(eof);
 		return eof;
