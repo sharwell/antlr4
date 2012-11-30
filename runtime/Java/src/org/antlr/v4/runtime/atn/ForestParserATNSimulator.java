@@ -1,6 +1,7 @@
 /*
  [The "BSD license"]
-  Copyright (c) 2011 Terence Parr
+  Copyright (c) 2012 Terence Parr
+  Copyright (c) 2012 Sam Harwell
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -295,13 +296,15 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 	public void reset() {
 	}
 
-	public int adaptivePredict(@NotNull TokenStream<? extends Symbol> input, int decision,
+	@NotNull
+	public BitSet adaptivePredict(@NotNull TokenStream<? extends Symbol> input, int decision,
 							   @Nullable ParserRuleContext<Symbol> outerContext)
 	{
 		return adaptivePredict(input, decision, outerContext, false);
 	}
 
-	public int adaptivePredict(@NotNull TokenStream<? extends Symbol> input,
+	@NotNull
+	public BitSet adaptivePredict(@NotNull TokenStream<? extends Symbol> input,
 							   int decision,
 							   @Nullable ParserRuleContext<Symbol> outerContext,
 							   boolean useContext)
@@ -314,7 +317,9 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 				int key = (decision << 16) + ll_1;
 				Integer alt = atn.LL1Table.get(key);
 				if (alt != null) {
-					return alt;
+					BitSet result = new BitSet(alt + 1);
+					result.set(alt);
+					return result;
 				}
 			}
 		}
@@ -345,7 +350,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			int m = input.mark();
 			int index = input.index();
 			try {
-				int alt = execDFA(dfa, input, index, state);
+				BitSet alt = execDFA(dfa, input, index, state);
 				return alt;
 			}
 			finally {
@@ -389,7 +394,8 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		return new SimulatorState<Symbol>(outerContext, s0, useContext, remainingContext);
 	}
 
-	public int predictATN(@NotNull DFA dfa, @NotNull TokenStream<? extends Symbol> input,
+	@NotNull
+	public BitSet predictATN(@NotNull DFA dfa, @NotNull TokenStream<? extends Symbol> input,
 						  @Nullable ParserRuleContext<Symbol> outerContext,
 						  boolean useContext)
 	{
@@ -398,7 +404,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 										" exec LA(1)=="+ getLookaheadName(input) +
 										", outerContext="+outerContext.toString(parser));
 
-		int alt = 0;
+		BitSet alt;
 		int m = input.mark();
 		int index = input.index();
 		try {
@@ -422,7 +428,8 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		return alt;
 	}
 
-	public int execDFA(@NotNull DFA dfa,
+	@NotNull
+	public BitSet execDFA(@NotNull DFA dfa,
 					   @NotNull TokenStream<? extends Symbol> input, int startIndex,
 					   @NotNull SimulatorState<Symbol> state)
     {
@@ -479,7 +486,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			DFAState target = s.getTarget(t);
 			if ( target == null ) {
 				if ( dfa_debug && t>=0 ) System.out.println("no edge for "+parser.getTokenNames()[t]);
-				int alt;
 				if ( dfa_debug ) {
 					Interval interval = Interval.of(startIndex, parser.getInputStream().index());
 					System.out.println("ATN exec upon "+
@@ -488,11 +494,11 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 				}
 
 				SimulatorState<Symbol> initialState = new SimulatorState<Symbol>(outerContext, s, state.useContext, remainingOuterContext);
-				alt = execATN(dfa, input, startIndex, initialState);
+				BitSet alt = execATN(dfa, input, startIndex, initialState);
 				// this adds edge even if next state is accept for
 				// same alt; e.g., s0-A->:s1=>2-B->:s2=>2
 				// TODO: This next stuff kills edge, but extra states remain. :(
-				if ( s.isAcceptState && alt!=-1 ) {
+				if ( s.isAcceptState && !alt.isEmpty() ) {
 					DFAState d = s.getTarget(input.LA(1));
 					if ( d.isAcceptState && d.prediction==s.prediction ) {
 						// we can carve it out.
@@ -544,7 +550,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 						input.seek(startIndex);
 						BitSet predictions = evalSemanticContext(s.predicates, outerContext, true);
 						if ( predictions.cardinality() == 1 ) {
-							return predictions.nextSetBit(0);
+							return predictions;
 						}
 					}
 
@@ -559,18 +565,24 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		if ( s.predicates!=null ) {
 			// rewind input so pred's LT(i) calls make sense
 			input.seek(startIndex);
-			// since we don't report ambiguities in execDFA, we never need to use complete predicate evaluation here
-			BitSet alts = evalSemanticContext(s.predicates, outerContext, false);
+			BitSet alts = evalSemanticContext(s.predicates, outerContext, true);
 			if (alts.isEmpty()) {
 				throw noViableAlt(input, outerContext, s.configs, startIndex);
 			}
 
-			return alts.nextSetBit(0);
+			return alts;
 		}
 
 		if ( dfa_debug ) System.out.println("DFA decision "+dfa.decision+
 											" predicts "+acceptState.prediction);
-		return acceptState.prediction;
+
+		if (acceptState.configs.getConflictingAlts() != null) {
+			return acceptState.configs.getConflictingAlts();
+		}
+
+		BitSet result = new BitSet(acceptState.prediction + 1);
+		result.set(acceptState.prediction);
+		return result;
 	}
 
 	/** Performs ATN simulation to compute a predicted alternative based
@@ -616,7 +628,8 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 	 TODO: greedy + those
 
 	 */
-	public int execATN(@NotNull DFA dfa,
+	@NotNull
+	public BitSet execATN(@NotNull DFA dfa,
 					   @NotNull TokenStream<? extends Symbol> input, int startIndex,
 					   @NotNull SimulatorState<Symbol> initialState)
 	{
@@ -665,54 +678,55 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 					}
 				}
 				else if ( D.configs.getConflictingAlts()!=null ) {
-					predictedAlt = D.prediction;
-//						int k = input.index() - startIndex + 1; // how much input we used
-//						System.out.println("used k="+k);
-						if ( !userWantsCtxSensitive ||
-							 !D.configs.getDipsIntoOuterContext() ||
-							 (treat_sllk1_conflict_as_ambiguity && input.index() == startIndex))
-						{
-							if ( reportAmbiguities && !D.configs.hasSemanticContext() ) {
-								reportAmbiguity(dfa, D, startIndex, input.index(), D.configs.getConflictingAlts(), D.configs);
-							}
+//					int k = input.index() - startIndex + 1; // how much input we used
+//					System.out.println("used k="+k);
+					if ( !userWantsCtxSensitive ||
+						 !D.configs.getDipsIntoOuterContext() ||
+						 (treat_sllk1_conflict_as_ambiguity && input.index() == startIndex))
+					{
+						if ( reportAmbiguities && !D.configs.hasSemanticContext() ) {
+							reportAmbiguity(dfa, D, startIndex, input.index(), D.configs.getConflictingAlts(), D.configs);
 						}
-						else {
-							assert !useContext;
 
-							int ambigIndex = input.index();
+						return D.configs.getConflictingAlts();
+					}
+					else {
+						assert !useContext;
 
-							if ( D.isAcceptState && D.configs.hasSemanticContext() ) {
-								int nalts = decState.getNumberOfTransitions();
-								DFAState.PredPrediction[] predPredictions = D.predicates;
-								if (predPredictions != null) {
-									input.seek(startIndex);
-									// always use complete evaluation here since we'll want to retry with full context if still ambiguous
-									BitSet alts = evalSemanticContext(predPredictions, outerContext, true);
-									if (alts.cardinality() == 1) {
-										return alts.nextSetBit(0);
-									}
+						int ambigIndex = input.index();
+
+						if ( D.isAcceptState && D.configs.hasSemanticContext() ) {
+							int nalts = decState.getNumberOfTransitions();
+							DFAState.PredPrediction[] predPredictions = D.predicates;
+							if (predPredictions != null) {
+								input.seek(startIndex);
+								// always use complete evaluation here since we'll want to retry with full context if still ambiguous
+								BitSet alts = evalSemanticContext(predPredictions, outerContext, true);
+								if (alts.cardinality() == 1) {
+									return alts;
 								}
 							}
-
-							if ( debug ) System.out.println("RETRY with outerContext="+outerContext);
-							SimulatorState<Symbol> fullContextState = computeStartState(dfa, outerContext, true);
-							reportAttemptingFullContext(dfa, fullContextState, startIndex, ambigIndex);
-							input.seek(startIndex);
-							return execATN(dfa, input, startIndex, fullContextState);
 						}
+
+						if ( debug ) System.out.println("RETRY with outerContext="+outerContext);
+						SimulatorState<Symbol> fullContextState = computeStartState(dfa, outerContext, true);
+						reportAttemptingFullContext(dfa, fullContextState, startIndex, ambigIndex);
+						input.seek(startIndex);
+						return execATN(dfa, input, startIndex, fullContextState);
+					}
 				}
 
 				if ( D.predicates != null ) {
 					int stopIndex = input.index();
 					input.seek(startIndex);
-					BitSet alts = evalSemanticContext(D.predicates, outerContext, reportAmbiguities);
+					BitSet alts = evalSemanticContext(D.predicates, outerContext, true);
 					D.prediction = ATN.INVALID_ALT_NUMBER;
 					switch (alts.cardinality()) {
 					case 0:
 						throw noViableAlt(input, outerContext, D.configs, startIndex);
 
 					case 1:
-						return alts.nextSetBit(0);
+						return alts;
 
 					default:
 						// report ambiguity after predicate evaluation to make sure the correct
@@ -721,11 +735,13 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 							reportAmbiguity(dfa, D, startIndex, stopIndex, alts, D.configs);
 						}
 
-						return alts.nextSetBit(0);
+						return alts;
 					}
 				}
 
-				return predictedAlt;
+				BitSet result = new BitSet(predictedAlt + 1);
+				result.set(predictedAlt);
+				return result;
 			}
 
 			previous = nextState;
@@ -734,7 +750,8 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		}
 	}
 
-	protected int handleNoViableAlt(@NotNull TokenStream<? extends Symbol> input, int startIndex, @NotNull SimulatorState<Symbol> previous) {
+	@NotNull
+	protected BitSet handleNoViableAlt(@NotNull TokenStream<? extends Symbol> input, int startIndex, @NotNull SimulatorState<Symbol> previous) {
 		if (previous.s0 != null) {
 			BitSet alts = new BitSet();
 			for (ATNConfig config : previous.s0.configs) {
@@ -744,7 +761,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			}
 
 			if (!alts.isEmpty()) {
-				return alts.nextSetBit(0);
+				return alts;
 			}
 		}
 
