@@ -69,7 +69,7 @@ public abstract class SemanticContext {
 	 * prediction, so we passed in the outer context here in case of context
 	 * dependent predicate evaluation.
 	 */
-    public abstract <T> boolean eval(Recognizer<T, ?> parser, RuleContext<T> outerContext);
+    public abstract boolean eval(Recognizer<?, ?> parser, RuleContext outerContext);
 
     public static class Predicate extends SemanticContext {
         public final int ruleIndex;
@@ -89,8 +89,8 @@ public abstract class SemanticContext {
         }
 
         @Override
-        public <T> boolean eval(Recognizer<T, ?> parser, RuleContext<T> outerContext) {
-            RuleContext<T> localctx = isCtxDependent ? outerContext : null;
+        public boolean eval(Recognizer<?, ?> parser, RuleContext outerContext) {
+            RuleContext localctx = isCtxDependent ? outerContext : null;
             return parser.sempred(localctx, ruleIndex, predIndex);
         }
 
@@ -131,7 +131,7 @@ public abstract class SemanticContext {
 		}
 
 		@Override
-		public <T> boolean eval(Recognizer<T, ?> parser, RuleContext<T> outerContext) {
+		public boolean eval(Recognizer<?, ?> parser, RuleContext outerContext) {
 			return parser.precpred(outerContext, precedence);
 		}
 
@@ -201,7 +201,7 @@ public abstract class SemanticContext {
 		}
 
 		@Override
-		public <T> boolean eval(Recognizer<T, ?> parser, RuleContext<T> outerContext) {
+		public boolean eval(Recognizer<?, ?> parser, RuleContext outerContext) {
 			for (SemanticContext opnd : opnds) {
 				if ( !opnd.eval(parser, outerContext) ) return false;
 			}
@@ -248,7 +248,7 @@ public abstract class SemanticContext {
 		}
 
 		@Override
-        public <T> boolean eval(Recognizer<T, ?> parser, RuleContext<T> outerContext) {
+        public boolean eval(Recognizer<?, ?> parser, RuleContext outerContext) {
 			for (SemanticContext opnd : opnds) {
 				if ( opnd.eval(parser, outerContext) ) return true;
 			}

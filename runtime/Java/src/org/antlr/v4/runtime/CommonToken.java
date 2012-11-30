@@ -43,7 +43,7 @@ public class CommonToken implements WritableToken, Serializable {
 	protected int line;
 	protected int charPositionInLine = -1; // set to invalid position
 	protected int channel=DEFAULT_CHANNEL;
-	protected Tuple2<? extends TokenSource<?>, CharStream> source;
+	protected Tuple2<? extends TokenSource, CharStream> source;
 
 	/** We need to be able to change the text once in a while.  If
 	 *  this is non-null, then getText should return this.  Note that
@@ -65,7 +65,7 @@ public class CommonToken implements WritableToken, Serializable {
 		this.type = type;
 	}
 
-	public CommonToken(@NotNull Tuple2<? extends TokenSource<?>, CharStream> source, int type, int channel, int start, int stop) {
+	public CommonToken(@NotNull Tuple2<? extends TokenSource, CharStream> source, int type, int channel, int start, int stop) {
 		this.source = source;
 		this.type = type;
 		this.channel = channel;
@@ -197,7 +197,7 @@ public class CommonToken implements WritableToken, Serializable {
 	}
 
 	@Override
-	public TokenSource<?> getTokenSource() {
+	public TokenSource getTokenSource() {
 		return source.getItem1();
 	}
 

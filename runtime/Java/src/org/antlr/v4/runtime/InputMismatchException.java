@@ -35,8 +35,8 @@ package org.antlr.v4.runtime;
 public class InputMismatchException extends RecognitionException {
 	private static final long serialVersionUID = 1532568338707443067L;
 
-	public <T extends Token> InputMismatchException(Parser<T> recognizer) {
+	public InputMismatchException(Parser recognizer) {
 		super(recognizer, recognizer.getInputStream(), recognizer._ctx);
-		this.setOffendingToken(recognizer, recognizer.getCurrentToken());
+		this.setOffendingToken(recognizer.getCurrentToken());
 	}
 }

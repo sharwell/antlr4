@@ -34,14 +34,13 @@ import org.antlr.v4.runtime.atn.ATNConfigSet;
 import org.antlr.v4.runtime.atn.SimulatorState;
 import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.misc.Interval;
-import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 
 import java.util.BitSet;
 
-public class DiagnosticErrorListener<Symbol extends Token> extends BaseErrorListener<Symbol> {
+public class DiagnosticErrorListener extends BaseErrorListener {
     @Override
-    public void reportAmbiguity(@NotNull Parser<? extends Symbol> recognizer,
+    public void reportAmbiguity(@NotNull Parser recognizer,
 								DFA dfa, int startIndex, int stopIndex, @NotNull BitSet ambigAlts,
 								@NotNull ATNConfigSet configs)
     {
@@ -54,10 +53,10 @@ public class DiagnosticErrorListener<Symbol extends Token> extends BaseErrorList
     }
 
 	@Override
-	public <T extends Symbol> void reportAttemptingFullContext(@NotNull Parser<T> recognizer,
+	public void reportAttemptingFullContext(@NotNull Parser recognizer,
 											@NotNull DFA dfa,
 											int startIndex, int stopIndex,
-											@NotNull SimulatorState<T> initialState)
+											@NotNull SimulatorState initialState)
 	{
 		String format = "reportAttemptingFullContext d=%s, input='%s'";
 		recognizer.notifyErrorListeners(
@@ -67,8 +66,8 @@ public class DiagnosticErrorListener<Symbol extends Token> extends BaseErrorList
 	}
 
 	@Override
-	public <T extends Symbol> void reportContextSensitivity(@NotNull Parser<T> recognizer, @NotNull DFA dfa,
-                                         int startIndex, int stopIndex, @NotNull SimulatorState<T> acceptState)
+	public void reportContextSensitivity(@NotNull Parser recognizer, @NotNull DFA dfa,
+                                         int startIndex, int stopIndex, @NotNull SimulatorState acceptState)
     {
 		String format = "reportContextSensitivity d=%s, input='%s'";
 		recognizer.notifyErrorListeners(
@@ -77,7 +76,7 @@ public class DiagnosticErrorListener<Symbol extends Token> extends BaseErrorList
 						  recognizer.getInputStream().getText(Interval.of(startIndex, stopIndex))));
     }
 
-	protected <T extends Symbol> String getDecisionDescription(Parser<T> recognizer, int decision) {
+	protected String getDecisionDescription(Parser recognizer, int decision) {
 		return Integer.toString(decision);
 	}
 }

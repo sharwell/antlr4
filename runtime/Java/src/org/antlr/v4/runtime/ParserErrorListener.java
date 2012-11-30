@@ -32,13 +32,12 @@ package org.antlr.v4.runtime;
 import org.antlr.v4.runtime.atn.ATNConfigSet;
 import org.antlr.v4.runtime.atn.SimulatorState;
 import org.antlr.v4.runtime.dfa.DFA;
-import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 
 import java.util.BitSet;
 
 /** How to emit recognition errors */
-public interface ParserErrorListener<Symbol extends Token> extends ANTLRErrorListener<Symbol> {
+public interface ParserErrorListener extends ANTLRErrorListener<Token> {
 	/** Called when the parser detects a true ambiguity: an input sequence can be matched
 	 * literally by two or more pass through the grammar. ANTLR resolves the ambiguity in
 	 * favor of the alternative appearing first in the grammar. The start and stop index are
@@ -46,22 +45,22 @@ public interface ParserErrorListener<Symbol extends Token> extends ANTLRErrorLis
      * that can match the input sequence. This method is only called when we are parsing with
      * full context.
      */
-    void reportAmbiguity(@NotNull Parser<? extends Symbol> recognizer,
+    void reportAmbiguity(@NotNull Parser recognizer,
 						 DFA dfa, int startIndex, int stopIndex, @NotNull BitSet ambigAlts,
 						 @NotNull ATNConfigSet configs);
 
-	<T extends Symbol> void reportAttemptingFullContext(@NotNull Parser<T> recognizer,
+	void reportAttemptingFullContext(@NotNull Parser recognizer,
 									 @NotNull DFA dfa,
 									 int startIndex, int stopIndex,
-									 @NotNull SimulatorState<T> initialState);
+									 @NotNull SimulatorState initialState);
 
 	/** Called by the parser when it find a conflict that is resolved by retrying the parse
      *  with full context. This is not a warning; it simply notifies you that your grammar
      *  is more complicated than Strong LL can handle. The parser moved up to full context
      *  parsing for that input sequence.
      */
-    <T extends Symbol> void reportContextSensitivity(@NotNull Parser<T> recognizer,
+    void reportContextSensitivity(@NotNull Parser recognizer,
                                   @NotNull DFA dfa,
                                   int startIndex, int stopIndex,
-                                  @NotNull SimulatorState<T> acceptState);
+                                  @NotNull SimulatorState acceptState);
 }

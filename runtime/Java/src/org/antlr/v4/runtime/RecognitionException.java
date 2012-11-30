@@ -48,7 +48,7 @@ public class RecognitionException extends RuntimeException {
 	// Next two (ctx,input) should be what is in recognizer, but
 	// won't work when interpreting
 
-	private RuleContext<?> ctx;
+	private RuleContext ctx;
 
 	private IntStream input;
 
@@ -67,9 +67,9 @@ public class RecognitionException extends RuntimeException {
 		this.input = input;
 	}
 
-	public <Symbol extends Token> RecognitionException(@Nullable Recognizer<Symbol, ?> recognizer,
+	public RecognitionException(@Nullable Recognizer<Token, ?> recognizer,
 													   IntStream input,
-													   @Nullable ParserRuleContext<Symbol> ctx)
+													   @Nullable ParserRuleContext ctx)
 	{
 		this.recognizer = recognizer;
 		this.input = input;
@@ -77,8 +77,8 @@ public class RecognitionException extends RuntimeException {
 		if ( recognizer!=null ) this.offendingState = recognizer.getState();
 	}
 
-	public <Symbol extends Token> RecognitionException(String message, @Nullable Recognizer<Symbol, ?> recognizer, IntStream input,
-								@Nullable ParserRuleContext<Symbol> ctx)
+	public RecognitionException(String message, @Nullable Recognizer<Token, ?> recognizer, IntStream input,
+								@Nullable ParserRuleContext ctx)
 	{
 		super(message);
 		this.recognizer = recognizer;
@@ -103,13 +103,13 @@ public class RecognitionException extends RuntimeException {
 
 	public IntervalSet getExpectedTokens() {
         // TODO: do we really need this type check?
-		if ( recognizer!=null && recognizer instanceof Parser) {
-			return ((Parser<?>) recognizer).getExpectedTokens();
+		if (recognizer instanceof Parser) {
+			return ((Parser)recognizer).getExpectedTokens();
 		}
 		return null;
 	}
 
-	public RuleContext<?> getCtx() {
+	public RuleContext getCtx() {
 		return ctx;
 	}
 
@@ -121,23 +121,11 @@ public class RecognitionException extends RuntimeException {
 		return offendingToken;
 	}
 
-	protected final <Symbol extends Token> void setOffendingToken(Recognizer<Symbol, ?> recognizer, Symbol offendingToken) {
-		if (recognizer == this.recognizer) {
-			this.offendingToken = offendingToken;
-		}
+	protected final void setOffendingToken(Token offendingToken) {
+		this.offendingToken = offendingToken;
 	}
 
 	public Recognizer<?, ?> getRecognizer() {
 		return recognizer;
-	}
-
-	@SuppressWarnings("unchecked") // safe
-	public <T> RuleContext<T> getContext(Recognizer<T, ?> recognizer) {
-		return this.recognizer == recognizer ? (RuleContext<T>)ctx : null;
-	}
-
-	@SuppressWarnings("unchecked") // safe
-	public <T> T getOffendingToken(Recognizer<T, ?> recognizer) {
-		return this.recognizer == recognizer ? (T)offendingToken : null;
 	}
 }

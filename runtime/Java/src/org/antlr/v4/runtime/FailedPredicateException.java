@@ -47,15 +47,15 @@ public class FailedPredicateException extends RecognitionException {
 	private final int predicateIndex;
 	private final String predicate;
 
-	public <Symbol extends Token> FailedPredicateException(@NotNull Parser<Symbol> recognizer) {
+	public FailedPredicateException(@NotNull Parser recognizer) {
 		this(recognizer, null);
 	}
 
-	public <Symbol extends Token> FailedPredicateException(@NotNull Parser<Symbol> recognizer, @Nullable String predicate) {
+	public FailedPredicateException(@NotNull Parser recognizer, @Nullable String predicate) {
 		this(recognizer, predicate, null);
 	}
 
-	public <Symbol extends Token> FailedPredicateException(@NotNull Parser<Symbol> recognizer,
+	public FailedPredicateException(@NotNull Parser recognizer,
 														   @Nullable String predicate,
 														   @Nullable String message)
 	{
@@ -73,7 +73,7 @@ public class FailedPredicateException extends RecognitionException {
 		}
 
 		this.predicate = predicate;
-		this.setOffendingToken(recognizer, recognizer.getCurrentToken());
+		this.setOffendingToken(recognizer.getCurrentToken());
 	}
 
 	public int getRuleIndex() {

@@ -54,7 +54,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, "abc");
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(0, "0");
 		String result = tokens.getText();
 		String expecting = "0abc";
@@ -71,7 +71,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertAfter(2, "x");
 		String result = tokens.getText();
 		String expecting = "abcx";
@@ -88,7 +88,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(1, "x");
 		tokens.insertAfter(1, "x");
 		String result = tokens.getText();
@@ -106,7 +106,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(0, "x");
 		String result = tokens.getText();
 		String expecting = "xbc";
@@ -123,7 +123,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, "x");
 		String result = tokens.getText();
 		String expecting = "abx";
@@ -140,7 +140,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(1, "x");
 		String result = tokens.getText();
 		String expecting = "axc";
@@ -162,7 +162,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(4, 8, "0");
 		stream.fill();
 // replace 3 * 0 with 0
@@ -200,7 +200,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 
 		String result = tokens.getTokenStream().getText();
 		String expecting = "x = 3 * 0 + 2 * 0;";
@@ -252,7 +252,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(1, "x");
 		tokens.replace(1, "y");
 		String result = tokens.getText();
@@ -270,7 +270,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(0, "_");
 		tokens.replace(1, "x");
 		tokens.replace(1, "y");
@@ -289,7 +289,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(1, "x");
 		tokens.delete(1);
 		String result = tokens.getText();
@@ -307,7 +307,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(0, 2, "x");
 		tokens.insertBefore(1, "0");
 		Exception exc = null;
@@ -332,7 +332,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(0, "0");
 		tokens.replace(0, "x");
 		stream.fill();
@@ -352,7 +352,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(1, "x");
 		tokens.insertBefore(1, "y");
 		String result = tokens.getText();
@@ -370,7 +370,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(0, "x");
 		tokens.insertBefore(0, "y");
 		tokens.replace(0, "z");
@@ -389,7 +389,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, "x");
 		tokens.insertBefore(2, "y");
 		String result = tokens.getText();
@@ -407,7 +407,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(2, "y");
 		tokens.replace(2, "x");
 		String result = tokens.getText();
@@ -425,7 +425,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, "x");
 		tokens.insertAfter(2, "y");
 		String result = tokens.getText();
@@ -443,7 +443,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 4, "x");
 		tokens.insertBefore(2, "y");
 		String result = tokens.getText();
@@ -461,7 +461,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 4, "x");
 		tokens.insertBefore(4, "y");
 		stream.fill(); // no effect; within range of a replace
@@ -487,7 +487,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 4, "x");
 		tokens.insertAfter(4, "y");
 		String result = tokens.getText();
@@ -505,7 +505,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(0, 6, "x");
 		String result = tokens.getText();
 		String expecting = "x";
@@ -522,7 +522,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 4, "xyz");
 		String result = tokens.getText(Interval.of(0, 6));
 		String expecting = "abxyzba";
@@ -539,7 +539,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 4, "xyz");
 		tokens.replace(3, 5, "foo");
 		stream.fill();
@@ -566,7 +566,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 4, "xyz");
 		tokens.replace(1, 3, "foo");
 		stream.fill();
@@ -593,7 +593,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 2, "xyz");
 		tokens.replace(0, 3, "foo");
 		String result = tokens.getText();
@@ -611,7 +611,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(0, "x");
 		tokens.insertBefore(0, "y");
 		String result = tokens.getText();
@@ -629,7 +629,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(1, "x");
 		tokens.insertBefore(0, "y");
 		tokens.insertBefore(1, "z");
@@ -648,7 +648,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(0, 2, "foo");
 		tokens.insertBefore(0, "z");
 		stream.fill();
@@ -668,7 +668,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.delete(0, 2);
 		tokens.insertBefore(0, "z");
 		stream.fill();
@@ -690,7 +690,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(1, "x");
 		tokens.insertBefore(2, "y");
 		tokens.insertBefore(0, "z");
@@ -709,7 +709,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(1, 2, "foo");
 		tokens.replace(0, 3, "bar");
 		stream.fill();
@@ -729,7 +729,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(0, 3, "bar");
 		tokens.replace(1, 2, "foo");
 		stream.fill();
@@ -756,7 +756,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(1, 2, "foo");
 		tokens.replace(0, 2, "bar");
 		stream.fill();
@@ -776,7 +776,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(1, 2, "foo");
 		tokens.replace(1, 3, "bar");
 		stream.fill();
@@ -796,7 +796,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(1, 2, "foo");
 		tokens.replace(1, 2, "foo");
 		stream.fill();
@@ -816,7 +816,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(1, "foo");
 		tokens.replace(1, 2, "foo");
 		stream.fill();
@@ -836,7 +836,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(1, "x");
 		tokens.replace(2, 3, "foo");
 		String result = tokens.getText();
@@ -854,7 +854,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.replace(2, 3, "foo");
 		tokens.insertBefore(1, "x");
 		String result = tokens.getText();
@@ -872,7 +872,7 @@ public class TestTokenStreamRewriter extends BaseTest {
 		LexerInterpreter lexEngine = new LexerInterpreter(g, input);
 		CommonTokenStream stream = new CommonTokenStream(lexEngine);
 		stream.fill();
-		TokenStreamRewriter<Token> tokens = new TokenStreamRewriter<Token>(stream);
+		TokenStreamRewriter tokens = new TokenStreamRewriter(stream);
 		tokens.insertBefore(2, "y");
 		tokens.delete(2);
 		String result = tokens.getText();

@@ -38,19 +38,19 @@ import java.util.BitSet;
 /**
  * @author Sam Harwell
  */
-public class BaseErrorListener<Symbol extends Token> implements ParserErrorListener<Symbol> {
+public class BaseErrorListener implements ParserErrorListener {
 	@Override
-	public <T extends Symbol> void syntaxError(Recognizer<T, ?> recognizer,
-											   T offendingSymbol,
-											   int line,
-											   int charPositionInLine,
-											   String msg,
-											   RecognitionException e)
+	public <T extends Token> void syntaxError(Recognizer<T, ?> recognizer,
+											  T offendingSymbol,
+											  int line,
+											  int charPositionInLine,
+											  String msg,
+											  RecognitionException e)
 	{
 	}
 
 	@Override
-	public void reportAmbiguity(Parser<? extends Symbol> recognizer,
+	public void reportAmbiguity(Parser recognizer,
 								DFA dfa,
 								int startIndex,
 								int stopIndex,
@@ -60,20 +60,20 @@ public class BaseErrorListener<Symbol extends Token> implements ParserErrorListe
 	}
 
 	@Override
-	public <T extends Symbol> void reportAttemptingFullContext(Parser<T> recognizer,
-															   DFA dfa,
-															   int startIndex,
-															   int stopIndex,
-															   SimulatorState<T> initialState)
+	public void reportAttemptingFullContext(Parser recognizer,
+											DFA dfa,
+											int startIndex,
+											int stopIndex,
+											SimulatorState initialState)
 	{
 	}
 
 	@Override
-	public <T extends Symbol> void reportContextSensitivity(Parser<T> recognizer,
-															DFA dfa,
-															int startIndex,
-															int stopIndex,
-															SimulatorState<T> acceptState)
+	public void reportContextSensitivity(Parser recognizer,
+										 DFA dfa,
+										 int startIndex,
+										 int stopIndex,
+										 SimulatorState acceptState)
 	{
 	}
 }

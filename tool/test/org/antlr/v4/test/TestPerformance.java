@@ -264,12 +264,10 @@ public class TestPerformance extends BaseTest {
     private static final Lexer[] sharedLexers = new Lexer[NUMBER_OF_THREADS];
 	private static final ATN[] sharedLexerATNs = new ATN[NUMBER_OF_THREADS];
 
-	@SuppressWarnings("unchecked")
-    private static final Parser<Token>[] sharedParsers = (Parser<Token>[])new Parser<?>[NUMBER_OF_THREADS];
+    private static final Parser[] sharedParsers = new Parser[NUMBER_OF_THREADS];
 	private static final ATN[] sharedParserATNs = new ATN[NUMBER_OF_THREADS];
 
-	@SuppressWarnings("unchecked")
-    private static final ParseTreeListener<Token>[] sharedListeners = (ParseTreeListener<Token>[])new ParseTreeListener<?>[NUMBER_OF_THREADS];
+    private static final ParseTreeListener[] sharedListeners = new ParseTreeListener[NUMBER_OF_THREADS];
 
     private final AtomicInteger tokenCount = new AtomicInteger();
     private int currentPass;
@@ -518,9 +516,9 @@ public class TestPerformance extends BaseTest {
 		}
 
 		if (RUN_PARSER && sharedParsers.length > 0) {
-			Parser<?> parser = sharedParsers[0];
+			Parser parser = sharedParsers[0];
             // make sure the individual DFAState objects actually have unique ATNConfig arrays
-			final ParserATNSimulator<?> interpreter = parser.getInterpreter();
+			final ParserATNSimulator interpreter = parser.getInterpreter();
             final DFA[] decisionToDFA = interpreter.atn.decisionToDFA;
 
             if (SHOW_DFA_STATE_STATS) {
@@ -689,17 +687,14 @@ public class TestPerformance extends BaseTest {
         try {
             ClassLoader loader = new URLClassLoader(new URL[] { new File(tmpdir).toURI().toURL() }, ClassLoader.getSystemClassLoader());
             final Class<? extends Lexer> lexerClass = loader.loadClass(lexerName).asSubclass(Lexer.class);
-			@SuppressWarnings("rawtypes")
             final Class<? extends Parser> parserClass = loader.loadClass(parserName).asSubclass(Parser.class);
-            @SuppressWarnings("unchecked")
-            final Class<? extends ParseTreeListener<Token>> listenerClass = (Class<? extends ParseTreeListener<Token>>)loader.loadClass(listenerName).asSubclass(ParseTreeListener.class);
+            final Class<? extends ParseTreeListener> listenerClass = (Class<? extends ParseTreeListener>)loader.loadClass(listenerName).asSubclass(ParseTreeListener.class);
 
             final Constructor<? extends Lexer> lexerCtor = lexerClass.getConstructor(CharStream.class);
-			@SuppressWarnings("rawtypes")
             final Constructor<? extends Parser> parserCtor = parserClass.getConstructor(TokenStream.class);
 
             // construct initial instances of the lexer and parser to deserialize their ATNs
-            TokenSource<Token> tokenSource = lexerCtor.newInstance(new ANTLRInputStream(""));
+            TokenSource tokenSource = lexerCtor.newInstance(new ANTLRInputStream(""));
             parserCtor.newInstance(new CommonTokenStream(tokenSource));
 
 			if (!REUSE_LEXER_DFA) {
@@ -727,7 +722,7 @@ public class TestPerformance extends BaseTest {
 					assert thread >= 0 && thread < NUMBER_OF_THREADS;
 
                     try {
-						ParseTreeListener<Token> listener = sharedListeners[thread];
+						ParseTreeListener listener = sharedListeners[thread];
 						if (listener == null) {
 							listener = listenerClass.newInstance();
 							sharedListeners[thread] = listener;
@@ -765,12 +760,11 @@ public class TestPerformance extends BaseTest {
                             return (int)checksum.getValue();
                         }
 
-						Parser<Token> parser = sharedParsers[thread];
+						Parser parser = sharedParsers[thread];
                         if (REUSE_PARSER && parser != null) {
                             parser.setInputStream(tokens);
                         } else {
-							@SuppressWarnings("unchecked")
-							Parser<Token> newParser = parserCtor.newInstance(tokens);
+							Parser newParser = parserCtor.newInstance(tokens);
 							parser = newParser;
                             sharedParsers[thread] = parser;
                         }
@@ -782,9 +776,9 @@ public class TestPerformance extends BaseTest {
 						}
 
 						if (!ENABLE_PARSER_DFA) {
-							parser.setInterpreter(new NonCachingParserATNSimulator<Token>(parser, parser.getATN()));
+							parser.setInterpreter(new NonCachingParserATNSimulator(parser, parser.getATN()));
 						} else if (!REUSE_PARSER_DFA) {
-							parser.setInterpreter(new ParserATNSimulator<Token>(parser, sharedParserATNs[thread]));
+							parser.setInterpreter(new ParserATNSimulator(parser, sharedParserATNs[thread]));
 						}
 
 						if (ENABLE_PARSER_DFA && !REUSE_PARSER_DFA) {
@@ -805,13 +799,13 @@ public class TestPerformance extends BaseTest {
 							parser.addParseListener(listener);
 						}
 						if (BAIL_ON_ERROR || TWO_STAGE_PARSING) {
-							parser.setErrorHandler(new BailErrorStrategy<Token>());
+							parser.setErrorHandler(new BailErrorStrategy());
 						}
 
                         Method parseMethod = parserClass.getMethod(entryPoint);
                         Object parseResult;
 
-						ParseTreeListener<Token> checksumParserListener = null;
+						ParseTreeListener checksumParserListener = null;
 
 						try {
 							if (COMPUTE_CHECKSUM) {
@@ -836,8 +830,7 @@ public class TestPerformance extends BaseTest {
 							if (REUSE_PARSER && sharedParsers[thread] != null) {
 								parser.setInputStream(tokens);
 							} else {
-								@SuppressWarnings("unchecked")
-								Parser<Token> newParser = parserCtor.newInstance(tokens);
+								Parser newParser = parserCtor.newInstance(tokens);
 								parser = newParser;
 								sharedParsers[thread] = parser;
 							}
@@ -846,7 +839,7 @@ public class TestPerformance extends BaseTest {
 							parser.addErrorListener(DescriptiveErrorListener.INSTANCE);
 							parser.addErrorListener(new SummarizingDiagnosticErrorListener());
 							if (!ENABLE_PARSER_DFA) {
-								parser.setInterpreter(new NonCachingParserATNSimulator<Token>(parser, parser.getATN()));
+								parser.setInterpreter(new NonCachingParserATNSimulator(parser, parser.getATN()));
 							}
 							parser.getInterpreter().setPredictionMode(PREDICTION_MODE);
 							parser.getInterpreter().force_global_context = FORCE_GLOBAL_CONTEXT;
@@ -862,7 +855,7 @@ public class TestPerformance extends BaseTest {
 								parser.addParseListener(listener);
 							}
 							if (BAIL_ON_ERROR) {
-								parser.setErrorHandler(new BailErrorStrategy<Token>());
+								parser.setErrorHandler(new BailErrorStrategy());
 							}
 
 							parseResult = parseMethod.invoke(parser);
@@ -875,7 +868,7 @@ public class TestPerformance extends BaseTest {
 
 						assertThat(parseResult, instanceOf(ParseTree.class));
                         if (BUILD_PARSE_TREES && BLANK_LISTENER) {
-                            ParseTreeWalker.DEFAULT.walk(listener, (ParserRuleContext<?>)parseResult);
+                            ParseTreeWalker.DEFAULT.walk(listener, (ParserRuleContext)parseResult);
                         }
                     } catch (Exception e) {
 						if (!REPORT_SYNTAX_ERRORS && e instanceof ParseCancellationException) {
@@ -900,7 +893,7 @@ public class TestPerformance extends BaseTest {
         int parseFile(CharStream input, int thread);
     }
 
-	private static class DescriptiveErrorListener extends BaseErrorListener<Token> {
+	private static class DescriptiveErrorListener extends BaseErrorListener {
 		public static DescriptiveErrorListener INSTANCE = new DescriptiveErrorListener();
 
 		@Override
@@ -919,10 +912,10 @@ public class TestPerformance extends BaseTest {
 
 	}
 
-	private static class SummarizingDiagnosticErrorListener extends DiagnosticErrorListener<Token> {
+	private static class SummarizingDiagnosticErrorListener extends DiagnosticErrorListener {
 
 		@Override
-		public void reportAmbiguity(Parser<? extends Token> recognizer, DFA dfa, int startIndex, int stopIndex, BitSet ambigAlts, ATNConfigSet configs) {
+		public void reportAmbiguity(Parser recognizer, DFA dfa, int startIndex, int stopIndex, BitSet ambigAlts, ATNConfigSet configs) {
 			if (!REPORT_AMBIGUITIES) {
 				return;
 			}
@@ -931,7 +924,7 @@ public class TestPerformance extends BaseTest {
 		}
 
 		@Override
-		public <T extends Token> void reportAttemptingFullContext(Parser<T> recognizer, DFA dfa, int startIndex, int stopIndex, SimulatorState<T> initialState) {
+		public void reportAttemptingFullContext(Parser recognizer, DFA dfa, int startIndex, int stopIndex, SimulatorState initialState) {
 			if (!REPORT_FULL_CONTEXT) {
 				return;
 			}
@@ -940,7 +933,7 @@ public class TestPerformance extends BaseTest {
 		}
 
 		@Override
-		public <T extends Token> void reportContextSensitivity(Parser<T> recognizer, DFA dfa, int startIndex, int stopIndex, SimulatorState<T> acceptState) {
+		public void reportContextSensitivity(Parser recognizer, DFA dfa, int startIndex, int stopIndex, SimulatorState acceptState) {
 			if (!REPORT_CONTEXT_SENSITIVITY) {
 				return;
 			}
@@ -949,7 +942,7 @@ public class TestPerformance extends BaseTest {
 		}
 
 		@Override
-		protected <T extends Token> String getDecisionDescription(Parser<T> recognizer, int decision) {
+		protected String getDecisionDescription(Parser recognizer, int decision) {
 			String format = "%d(%s)";
 			String ruleName = recognizer.getRuleNames()[recognizer.getATN().decisionToState.get(decision).ruleIndex];
 			return String.format(format, decision, ruleName);
@@ -989,9 +982,9 @@ public class TestPerformance extends BaseTest {
 
 	}
 
-	protected static class NonCachingParserATNSimulator<Symbol extends Token> extends ParserATNSimulator<Symbol> {
+	protected static class NonCachingParserATNSimulator extends ParserATNSimulator {
 
-		public NonCachingParserATNSimulator(Parser<Symbol> parser, ATN atn) {
+		public NonCachingParserATNSimulator(Parser parser, ATN atn) {
 			super(parser, atn);
 		}
 
@@ -1029,7 +1022,7 @@ public class TestPerformance extends BaseTest {
 
 	}
 
-	protected static class ChecksumParseTreeListener implements ParseTreeListener<Token> {
+	protected static class ChecksumParseTreeListener implements ParseTreeListener {
 		private static final int VISIT_TERMINAL = 1;
 		private static final int VISIT_ERROR_NODE = 2;
 		private static final int ENTER_RULE = 3;
@@ -1042,26 +1035,26 @@ public class TestPerformance extends BaseTest {
 		}
 
 		@Override
-		public void visitTerminal(TerminalNode<? extends Token> node) {
+		public void visitTerminal(TerminalNode node) {
 			checksum.update(VISIT_TERMINAL);
 			updateChecksum(checksum, node.getSymbol());
 		}
 
 		@Override
-		public void visitErrorNode(ErrorNode<? extends Token> node) {
+		public void visitErrorNode(ErrorNode node) {
 			checksum.update(VISIT_ERROR_NODE);
 			updateChecksum(checksum, node.getSymbol());
 		}
 
 		@Override
-		public void enterEveryRule(ParserRuleContext<? extends Token> ctx) {
+		public void enterEveryRule(ParserRuleContext ctx) {
 			checksum.update(ENTER_RULE);
 			updateChecksum(checksum, ctx.getRuleIndex());
 			updateChecksum(checksum, ctx.getStart());
 		}
 
 		@Override
-		public void exitEveryRule(ParserRuleContext<? extends Token> ctx) {
+		public void exitEveryRule(ParserRuleContext ctx) {
 			checksum.update(EXIT_RULE);
 			updateChecksum(checksum, ctx.getRuleIndex());
 			updateChecksum(checksum, ctx.getStop());
