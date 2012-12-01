@@ -270,7 +270,7 @@ public abstract class PredictionContext {
 	public static PredictionContext getCachedContext(
 		@NotNull PredictionContext context,
 		@NotNull ConcurrentMap<PredictionContext, PredictionContext> contextCache,
-		@NotNull PredictionContext.IdentityHashMap visited) {
+		@NotNull PredictionContext.IdentityHashMap<PredictionContext> visited) {
 		if (context.isEmpty()) {
 			return context;
 		}
@@ -421,7 +421,7 @@ public abstract class PredictionContext {
 		return result.toArray(new String[result.size()]);
 	}
 
-	public static final class IdentityHashMap extends FlexibleHashMap<PredictionContext, PredictionContext> {
+	public static final class IdentityHashMap<V> extends FlexibleHashMap<PredictionContext, V> {
 
 		public IdentityHashMap() {
 			super(IdentityEqualityComparator.INSTANCE);

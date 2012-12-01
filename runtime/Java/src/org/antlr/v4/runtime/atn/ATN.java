@@ -115,7 +115,7 @@ public class ATN {
 	}
 
 	public PredictionContext getCachedContext(PredictionContext context) {
-		return PredictionContext.getCachedContext(context, contextCache, new PredictionContext.IdentityHashMap());
+		return PredictionContext.getCachedContext(context, contextCache, new PredictionContext.IdentityHashMap<PredictionContext>());
 	}
 
 	public final DFA[] getDecisionToDFA() {

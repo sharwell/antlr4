@@ -125,10 +125,10 @@ public class ArrayPredictionContext extends PredictionContext {
 
 	@Override
 	public PredictionContext appendContext(PredictionContext suffix, PredictionContextCache contextCache) {
-		return appendContext(this, suffix, new PredictionContext.IdentityHashMap());
+		return appendContext(this, suffix, new PredictionContext.IdentityHashMap<PredictionContext>());
 	}
 
-	private static PredictionContext appendContext(PredictionContext context, PredictionContext suffix, PredictionContext.IdentityHashMap visited) {
+	private static PredictionContext appendContext(PredictionContext context, PredictionContext suffix, PredictionContext.IdentityHashMap<PredictionContext> visited) {
 		if (suffix.isEmpty()) {
 			if (isEmptyLocal(suffix)) {
 				if (context.hasEmpty()) {
