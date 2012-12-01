@@ -282,11 +282,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 	 */
 	protected boolean userWantsCtxSensitive = true;
 
-	/** Testing only! */
-	public ForestParserATNSimulator(@NotNull ATN atn) {
-		this(null, atn);
-	}
-
 	public ForestParserATNSimulator(@Nullable Parser<Symbol> parser, @NotNull ATN atn) {
 		super(atn);
 		this.parser = parser;
