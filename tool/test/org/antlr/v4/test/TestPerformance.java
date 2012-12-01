@@ -38,6 +38,7 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.DefaultErrorStrategy;
 import org.antlr.v4.runtime.DiagnosticErrorListener;
+import org.antlr.v4.runtime.ForestParser;
 import org.antlr.v4.runtime.Lexer;
 import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -71,6 +72,8 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -92,7 +95,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Formatter;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
@@ -140,6 +146,16 @@ public class TestPerformance extends BaseTest {
      * Parse each file with {@code JavaParser.compilationUnit}.
      */
     private static final boolean RUN_PARSER = true;
+	/**
+	 * {@code true} to run the forest parser instead of producing a single parse
+	 * tree.
+	 */
+	private static final boolean PARSE_FOREST = false;
+	/**
+	 * {@code true} to print the number of trees in the parse forest. Only
+	 * relevant when {@link #PARSE_FOREST} is {@code true}.
+	 */
+	private static final boolean SHOW_FOREST_SIZE = false;
     /**
      * {@code true} to use {@link BailErrorStrategy}, {@code false} to use
      * {@link DefaultErrorStrategy}.
@@ -245,6 +261,7 @@ public class TestPerformance extends BaseTest {
 	@SuppressWarnings("unchecked")
     private static final ParseTreeListener<Token>[] sharedListeners = (ParseTreeListener<Token>[])new ParseTreeListener<?>[NUMBER_OF_THREADS];
 
+	private static final Logger forestParserLogger = Logger.getLogger(ForestParser.class.getName());
     private final AtomicInteger tokenCount = new AtomicInteger();
     private int currentPass;
 
@@ -666,6 +683,19 @@ public class TestPerformance extends BaseTest {
 			@SuppressWarnings("rawtypes")
             final Constructor<? extends Parser> parserCtor = parserClass.getConstructor(TokenStream.class);
 
+			final Method parseMethod = parserClass.getMethod(entryPoint);
+
+			// Find the rule index for the named entryPoint rule in case the ForestParser is used
+			final Field ruleNamesField = parserClass.getField("ruleNames");
+			final String[] ruleNames = (String[])ruleNamesField.get(null);
+			int ruleIndexI;
+			for (ruleIndexI = 0; ruleIndexI < ruleNames.length && !ruleNames[ruleIndexI].equals(entryPoint); ruleIndexI++) {
+				// intentionally blank
+			}
+
+			final int ruleIndex = ruleIndexI;
+			assert ruleIndex >= 0 && ruleIndex < ruleNames.length && ruleNames[ruleIndex].equals(entryPoint);
+
             // construct initial instances of the lexer and parser to deserialize their ATNs
             TokenSource<Token> tokenSource = lexerCtor.newInstance(new ANTLRInputStream(""));
             parserCtor.newInstance(new CommonTokenStream(tokenSource));
@@ -684,6 +714,31 @@ public class TestPerformance extends BaseTest {
 				for (int i = 0; i < NUMBER_OF_THREADS; i++) {
 					sharedParserATNs[i] = ATNSimulator.deserialize(parserSerializedATN.toCharArray());
 				}
+			}
+
+			if (SHOW_FOREST_SIZE) {
+				forestParserLogger.setLevel(Level.FINE);
+				ConsoleHandler handler = new ConsoleHandler();
+				handler.setLevel(Level.FINE);
+				handler.setFormatter(new Formatter() {
+					@Override
+					public String format(LogRecord record) {
+						String message = formatMessage(record);
+						String throwable = "";
+						if (record.getThrown() != null) {
+							StringWriter sw = new StringWriter();
+							PrintWriter pw = new PrintWriter(sw);
+							pw.println();
+							record.getThrown().printStackTrace(pw);
+							pw.close();
+							throwable = sw.toString();
+						}
+
+						return String.format("%1$s%2$s%n", message, throwable);
+					}
+				});
+
+				forestParserLogger.addHandler(handler);
 			}
 
             return new ParserFactory() {
@@ -770,7 +825,6 @@ public class TestPerformance extends BaseTest {
 							sharedParsers[thread].setErrorHandler(new BailErrorStrategy<Token>());
 						}
 
-                        Method parseMethod = parserClass.getMethod(entryPoint);
                         Object parseResult;
 
 						ParseTreeListener<Token> checksumParserListener = null;
@@ -780,7 +834,12 @@ public class TestPerformance extends BaseTest {
 								checksumParserListener = new ChecksumParseTreeListener(checksum);
 								sharedParsers[thread].addParseListener(checksumParserListener);
 							}
-							parseResult = parseMethod.invoke(sharedParsers[thread]);
+							if (PARSE_FOREST) {
+								ForestParser<Token> forestParser = new ForestParser<Token>(sharedParsers[thread]);
+								parseResult = forestParser.parse(ruleIndex);
+							} else {
+								parseResult = parseMethod.invoke(sharedParsers[thread]);
+							}
 						} catch (InvocationTargetException ex) {
 							if (!TWO_STAGE_PARSING) {
 								throw ex;
