@@ -1334,7 +1334,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		}
 
         ATNConfig c = null;
-        if (collectPredicates && inContext) {
+        if (collectPredicates && inContext && false) {
             SemanticContext newSemCtx = SemanticContext.and(config.getSemanticContext(), pt.getPredicate());
             c = config.transform(pt.target, newSemCtx);
         }
@@ -1363,9 +1363,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		}
 
         ATNConfig c;
-        if ( collectPredicates &&
-			 (!pt.isCtxDependent || (pt.isCtxDependent&&inContext)) )
-		{
+        if (collectPredicates && !pt.isCtxDependent) {
             SemanticContext newSemCtx = SemanticContext.and(config.getSemanticContext(), pt.getPredicate());
             c = config.transform(pt.target, newSemCtx);
         }
