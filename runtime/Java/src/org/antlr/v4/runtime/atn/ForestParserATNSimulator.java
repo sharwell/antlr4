@@ -31,6 +31,7 @@
 package org.antlr.v4.runtime.atn;
 
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.ForestParser;
 import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.Parser;
@@ -255,8 +256,8 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 
 	public static boolean optimize_closure_busy = true;
 
-	@Nullable
-	protected final Parser<Symbol> parser;
+	@NotNull
+	protected final ForestParser<Symbol> forestParser;
 
 	/**
 	 * When {@code true}, ambiguous alternatives are reported when they are
@@ -277,9 +278,9 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 	 */
 	protected boolean userWantsCtxSensitive = true;
 
-	public ForestParserATNSimulator(@Nullable Parser<Symbol> parser, @NotNull ATN atn) {
+	public ForestParserATNSimulator(@NotNull ForestParser<Symbol> forestParser, @NotNull ATN atn) {
 		super(atn);
-		this.parser = parser;
+		this.forestParser = forestParser;
 	}
 
 	@Override
@@ -1060,7 +1061,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 				continue;
 			}
 
-			boolean evaluatedResult = pair.pred.eval(parser, outerContext);
+			boolean evaluatedResult = pair.pred.eval(forestParser, outerContext);
 			if ( evaluatedResult ) {
 				predictions.set(pair.alt);
 				if (!complete) {
@@ -1231,7 +1232,11 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 
 	@NotNull
 	public String getRuleName(int index) {
-		if ( parser!=null && index>=0 ) return parser.getRuleNames()[index];
+		String[] ruleNames = forestParser.getRuleNames();
+		if (index >= 0 && index < ruleNames.length) {
+			return ruleNames[index];
+		}
+
 		return "<rule "+index+">";
 	}
 
@@ -1462,11 +1467,11 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 	@NotNull
 	public String getTokenName(int t) {
 		if ( t==Token.EOF ) return "EOF";
-		if ( parser!=null && parser.getTokenNames()!=null ) {
-			String[] tokensNames = parser.getTokenNames();
-			if ( t>=tokensNames.length ) {
+		String[] tokensNames = forestParser.getTokenNames();
+		if (tokensNames != null) {
+			if ( t < 0 || t >= tokensNames.length ) {
 				System.err.println(t+" ttype out of range: "+ Arrays.toString(tokensNames));
-				System.err.println(((CommonTokenStream)parser.getInputStream()).getTokens());
+				System.err.println(((CommonTokenStream)forestParser.getInputStream()).getTokens());
 			}
 			else {
 				return tokensNames[t]+"<"+t+">";
@@ -1495,7 +1500,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 					trans = (not?"~":"")+"Set "+st.set.toString();
 				}
 			}
-			System.err.println(c.toString(parser, true)+":"+trans);
+			System.err.println(c.toString(forestParser, true)+":"+trans);
 		}
 	}
 
@@ -1505,7 +1510,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 											@NotNull ATNConfigSet configs,
 											int startIndex)
 	{
-		return new NoViableAltException(parser, input,
+		return new NoViableAltException(forestParser, input,
 											input.get(startIndex),
 											input.LT(1),
 											configs, outerContext);
@@ -1662,11 +1667,11 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 //	}
 
 	public void reportAttemptingFullContext(DFA dfa, SimulatorState<Symbol> initialState, int startIndex, int stopIndex) {
-        if ( parser!=null ) parser.getErrorListenerDispatch().reportAttemptingFullContext(parser, dfa, startIndex, stopIndex, initialState);
+        forestParser.getErrorListenerDispatch().reportAttemptingFullContext(forestParser.getParser(), dfa, startIndex, stopIndex, initialState);
     }
 
 	public void reportContextSensitivity(DFA dfa, SimulatorState<Symbol> acceptState, int startIndex, int stopIndex) {
-        if ( parser!=null ) parser.getErrorListenerDispatch().reportContextSensitivity(parser, dfa, startIndex, stopIndex, acceptState);
+        forestParser.getErrorListenerDispatch().reportContextSensitivity(forestParser.getParser(), dfa, startIndex, stopIndex, acceptState);
     }
 
     /** If context sensitive parsing, we know it's ambiguity not conflict */
@@ -1674,7 +1679,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 								@NotNull BitSet ambigAlts,
 								@NotNull ATNConfigSet configs)
 	{
-        if ( parser!=null ) parser.getErrorListenerDispatch().reportAmbiguity(parser, dfa, startIndex, stopIndex,
+        forestParser.getErrorListenerDispatch().reportAmbiguity(forestParser.getParser(), dfa, startIndex, stopIndex,
                                                                      ambigAlts, configs);
     }
 

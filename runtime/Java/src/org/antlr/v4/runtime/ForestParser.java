@@ -71,7 +71,7 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 
 	public ForestParser(Parser<Symbol> parser) {
 		_parser = parser;
-		_interp = new ForestParserATNSimulator<Symbol>(parser, parser.getATN());
+		_interp = new ForestParserATNSimulator<Symbol>(this, parser.getATN());
 	}
 
 	public ParseTree<Symbol> parse(int entryRule) {
@@ -138,6 +138,10 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 		return ParserRuleContext.emptyContext();
 	}
 
+	public Parser<Symbol> getParser() {
+		return _parser;
+	}
+
 	@Override
 	public String[] getTokenNames() {
 		return _parser.getTokenNames();
@@ -169,6 +173,26 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 		}
 
 		getInterpreter().reset();
+	}
+
+	@Override
+	public ParserErrorListener<? super Symbol> getErrorListenerDispatch() {
+		return _parser.getErrorListenerDispatch();
+	}
+
+	@Override
+	public boolean sempred(RuleContext<Symbol> _localctx, int ruleIndex, int actionIndex) {
+		return _parser.sempred(_localctx, ruleIndex, actionIndex);
+	}
+
+	@Override
+	public boolean precpred(RuleContext<Symbol> localctx, int precedence) {
+		throw new UnsupportedOperationException("not implemented yet");
+	}
+
+	@Override
+	public void action(RuleContext<Symbol> _localctx, int ruleIndex, int actionIndex) {
+		throw new UnsupportedOperationException("not implemented yet");
 	}
 
 	private ParserProgress parseNextSymbol() {
