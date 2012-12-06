@@ -41,7 +41,6 @@ import org.antlr.v4.runtime.TokenStream;
 import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.dfa.DFAState;
 import org.antlr.v4.runtime.misc.IntegerList;
-import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
@@ -243,10 +242,6 @@ import java.util.concurrent.atomic.AtomicReference;
  	 *  holds the decision were evaluating
 */
 public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator {
-	public static final boolean debug = false;
-	public static final boolean dfa_debug = false;
-	public static final boolean retry_debug = false;
-
 	public boolean disable_global_context = false;
 	public boolean force_global_context = false;
 	public boolean always_try_local_context = true;
@@ -395,9 +390,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 						  boolean useContext)
 	{
 		if ( outerContext==null ) outerContext = ParserRuleContext.emptyContext();
-		if ( debug ) System.out.println("ATN decision "+dfa.decision+
-										" exec LA(1)=="+ getLookaheadName(input) +
-										", outerContext="+outerContext.toString(parser));
 
 		BitSet alt;
 		int m = input.mark();
@@ -412,14 +404,13 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			}
 		}
 		catch (NoViableAltException nvae) {
-			if ( debug ) dumpDeadEndConfigs(nvae);
 			throw nvae;
 		}
 		finally {
 			input.seek(index);
 			input.release(m);
 		}
-		if ( debug ) System.out.println("DFA after predictATN: "+dfa.toString(parser.getTokenNames(), parser.getRuleNames()));
+
 		return alt;
 	}
 
@@ -429,10 +420,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 					   @NotNull SimulatorState<Symbol> state)
     {
 		ParserRuleContext<Symbol> outerContext = state.outerContext;
-		if ( dfa_debug ) System.out.println("DFA decision "+dfa.decision+
-											" exec LA(1)=="+ getLookaheadName(input) +
-											", outerContext="+outerContext.toString(parser));
-		if ( dfa_debug ) System.out.print(dfa.toString(parser.getTokenNames(), parser.getRuleNames()));
 		DFAState acceptState = null;
 		DFAState s = state.s0;
 
@@ -440,7 +427,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		ParserRuleContext<Symbol> remainingOuterContext = state.remainingOuterContext;
 
 		while ( true ) {
-			if ( dfa_debug ) System.out.println("DFA state "+s.stateNumber+" LA(1)=="+getLookaheadName(input));
 			if ( state.useContext ) {
 				while ( s.isContextSymbol(t) ) {
 					DFAState next = null;
@@ -460,12 +446,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 				}
 			}
 			if ( s.isAcceptState ) {
-				if ( s.predicates!=null ) {
-					if ( dfa_debug ) System.out.println("accept "+s);
-				}
-				else {
-					if ( dfa_debug ) System.out.println("accept; predict "+s.prediction +" in state "+s.stateNumber);
-				}
 				acceptState = s;
 				// keep going unless we're at EOF or state only has one alt number
 				// mentioned in configs; check if something else could match
@@ -480,14 +460,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			// if no edge, pop over to ATN interpreter, update DFA and return
 			DFAState target = s.getTarget(t);
 			if ( target == null ) {
-				if ( dfa_debug && t>=0 ) System.out.println("no edge for "+parser.getTokenNames()[t]);
-				if ( dfa_debug ) {
-					Interval interval = Interval.of(startIndex, parser.getInputStream().index());
-					System.out.println("ATN exec upon "+
-									   parser.getInputStream().getText(interval) +
-									   " at DFA state "+s.stateNumber);
-				}
-
 				SimulatorState<Symbol> initialState = new SimulatorState<Symbol>(outerContext, s, state.useContext, remainingOuterContext);
 				BitSet alt = execATN(dfa, input, startIndex, initialState);
 				// this adds edge even if next state is accept for
@@ -500,13 +472,8 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 						s.setTarget(input.LA(1), ERROR); // IGNORE really not error
 					}
 				}
-				if ( dfa_debug ) {
-					System.out.println("back from DFA update, alt="+alt+", dfa=\n"+dfa.toString(parser.getTokenNames(), parser.getRuleNames()));
-					//dump(dfa);
-				}
+
 				// action already executed
-				if ( dfa_debug ) System.out.println("DFA decision "+dfa.decision+
-													" predicts "+alt);
 				return alt; // we've updated DFA, exec'd action, and have our deepest answer
 			}
 			else if ( target == ERROR ) {
@@ -568,9 +535,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			return alts;
 		}
 
-		if ( dfa_debug ) System.out.println("DFA decision "+dfa.decision+
-											" predicts "+acceptState.prediction);
-
 		if (acceptState.configs.getConflictingAlts() != null) {
 			return acceptState.configs.getConflictingAlts();
 		}
@@ -628,8 +592,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 					   @NotNull TokenStream<? extends Symbol> input, int startIndex,
 					   @NotNull SimulatorState<Symbol> initialState)
 	{
-		if ( debug ) System.out.println("execATN decision "+dfa.decision+" exec LA(1)=="+ getLookaheadName(input));
-
 		final ParserRuleContext<Symbol> outerContext = initialState.outerContext;
 		final boolean useContext = initialState.useContext;
 
@@ -703,7 +665,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 							}
 						}
 
-						if ( debug ) System.out.println("RETRY with outerContext="+outerContext);
 						SimulatorState<Symbol> fullContextState = computeStartState(dfa, outerContext, true);
 						reportAttemptingFullContext(dfa, fullContextState, startIndex, ambigIndex);
 						input.seek(startIndex);
@@ -811,7 +772,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			int ncl = closureConfigs.size();
 			for (int ci=0; ci<ncl; ci++) { // TODO: foreach
 				ATNConfig c = closureConfigs.get(ci);
-				if ( debug ) System.out.println("testing "+getTokenName(t)+" at "+c.toString());
 				int n = c.getState().getNumberOfOptimizedTransitions();
 				for (int ti=0; ti<n; ti++) {               // for each optimized transition
 					Transition trans = c.getState().getOptimizedTransition(ti);
@@ -997,7 +957,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 													   int nalts)
 	{
 		BitSet conflictingAlts = getConflictingAltsFromConfigSet(configs);
-		if ( debug ) System.out.println("predicateDFAState "+D);
 		SemanticContext[] altToPred = getPredsForAmbigAlts(conflictingAlts, configs, nalts);
 		// altToPred[uniqueAlt] is now our validating predicate (if any)
 		DFAState.PredPrediction[] predPredictions = null;
@@ -1048,7 +1007,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 
 		// nonambig alts are null in altToPred
 		if ( nPredAlts==0 ) altToPred = null;
-		if ( debug ) System.out.println("getPredsForAmbigAlts result "+Arrays.toString(altToPred));
 		return altToPred;
 	}
 
@@ -1103,12 +1061,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			}
 
 			boolean evaluatedResult = pair.pred.eval(parser, outerContext);
-			if ( debug || dfa_debug ) {
-				System.out.println("eval pred "+pair+"="+evaluatedResult);
-			}
-
 			if ( evaluatedResult ) {
-				if ( debug || dfa_debug ) System.out.println("PREDICT "+pair.alt);
 				predictions.set(pair.alt);
 				if (!complete) {
 					break;
@@ -1162,8 +1115,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 						   @NotNull PredictionContextCache contextCache,
 						   int depth)
 	{
-		if ( debug ) System.out.println("closure("+config.toString(parser,true)+")");
-
 		if ( !optimize_closure_busy && !closureBusy.add(config) ) {
 			return; // avoid infinite recursion
 		}
@@ -1201,8 +1152,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			}
 			else {
 				// else if we have no context info, just chase follow links (if greedy)
-				if ( debug ) System.out.println("FALLING off rule "+
-												getRuleName(config.getState().ruleIndex));
 			}
 		}
 
@@ -1210,7 +1159,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		// optimization
 		if ( !p.onlyHasEpsilonTransitions() ) {
             configs.add(config, contextCache);
-            if ( debug ) System.out.println("added config "+configs);
         }
 
         for (int i=0; i<p.getNumberOfOptimizedTransitions(); i++) {
@@ -1254,7 +1202,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 
 					assert newDepth > Integer.MIN_VALUE;
 					newDepth--;
-					if ( debug ) System.out.println("dips into outer ctx: "+c);
 				}
 				else if (t instanceof RuleTransition) {
 					if (optimize_tail_calls && ((RuleTransition)t).optimizedTailCall && (!tail_call_preserves_sll || !PredictionContext.isEmptyLocal(config.getContext()))) {
@@ -1313,7 +1260,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 
 	@NotNull
 	public ATNConfig actionTransition(@NotNull ATNConfig config, @NotNull ActionTransition t) {
-		if ( debug ) System.out.println("ACTION edge "+t.ruleIndex+":"+t.actionIndex);
 		return config.transform(t.target);
 	}
 
@@ -1323,16 +1269,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 									boolean collectPredicates,
 									boolean inContext)
 	{
-		if ( debug ) {
-			System.out.println("PRED (collectPredicates="+collectPredicates+") "+
-                    pt.precedence+">=_p"+
-					", ctx dependent=true");
-			if ( parser != null ) {
-                System.out.println("context surrounding pred is "+
-                                   parser.getRuleInvocationStack());
-            }
-		}
-
         ATNConfig c = null;
         if (collectPredicates && inContext && false) {
             SemanticContext newSemCtx = SemanticContext.and(config.getSemanticContext(), pt.getPredicate());
@@ -1342,7 +1278,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			c = config.transform(pt.target);
 		}
 
-		if ( debug ) System.out.println("config from pred transition="+c);
         return c;
 	}
 
@@ -1352,16 +1287,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 									boolean collectPredicates,
 									boolean inContext)
 	{
-		if ( debug ) {
-			System.out.println("PRED (collectPredicates="+collectPredicates+") "+
-                    pt.ruleIndex+":"+pt.predIndex+
-					", ctx dependent="+pt.isCtxDependent);
-			if ( parser != null ) {
-                System.out.println("context surrounding pred is "+
-                                   parser.getRuleInvocationStack());
-            }
-		}
-
         ATNConfig c;
         if (collectPredicates && !pt.isCtxDependent) {
             SemanticContext newSemCtx = SemanticContext.and(config.getSemanticContext(), pt.getPredicate());
@@ -1371,17 +1296,11 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			c = config.transform(pt.target);
 		}
 
-		if ( debug ) System.out.println("config from pred transition="+c);
         return c;
 	}
 
 	@NotNull
 	public ATNConfig ruleTransition(@NotNull ATNConfig config, @NotNull RuleTransition t, @Nullable PredictionContextCache contextCache) {
-		if ( debug ) {
-			System.out.println("CALL rule "+getRuleName(t.target.ruleIndex)+
-							   ", ctx="+config.getContext());
-		}
-
 		ATNState returnState = t.followState;
 		PredictionContext newContext;
 
@@ -1537,7 +1456,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		// kill dead alts so we don't chase them ever
 //		killAlts(conflictingAlts, D.configset);
 		D.prediction = conflictingAlts.nextSetBit(0);
-		if ( debug ) System.out.println("RESOLVED TO "+D.prediction+" for "+D);
 		return D.prediction;
 	}
 
@@ -1653,9 +1571,7 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 			}
 		}
 
-        if ( debug ) System.out.println("EDGE "+from+" -> "+to+" upon "+getTokenName(t));
 		addDFAEdge(from, t, to);
-		if ( debug ) System.out.println("DFA=\n"+dfa.toString(parser!=null?parser.getTokenNames():null, parser!=null?parser.getRuleNames():null));
 		return to;
 	}
 
@@ -1726,7 +1642,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 		}
 
 		DFAState added = dfa.addState(newState);
-        if ( debug && added == newState ) System.out.println("adding new DFA state: "+newState);
 		return added;
 	}
 
@@ -1747,20 +1662,10 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 //	}
 
 	public void reportAttemptingFullContext(DFA dfa, SimulatorState<Symbol> initialState, int startIndex, int stopIndex) {
-        if ( debug || retry_debug ) {
-			Interval interval = Interval.of(startIndex, stopIndex);
-            System.out.println("reportAttemptingFullContext decision="+dfa.decision+":"+initialState.s0.configs+
-                               ", input="+parser.getInputStream().getText(interval));
-        }
         if ( parser!=null ) parser.getErrorListenerDispatch().reportAttemptingFullContext(parser, dfa, startIndex, stopIndex, initialState);
     }
 
 	public void reportContextSensitivity(DFA dfa, SimulatorState<Symbol> acceptState, int startIndex, int stopIndex) {
-        if ( debug || retry_debug ) {
-			Interval interval = Interval.of(startIndex, stopIndex);
-            System.out.println("reportContextSensitivity decision="+dfa.decision+":"+acceptState.s0.configs+
-                               ", input="+parser.getInputStream().getText(interval));
-        }
         if ( parser!=null ) parser.getErrorListenerDispatch().reportContextSensitivity(parser, dfa, startIndex, stopIndex, acceptState);
     }
 
@@ -1769,28 +1674,6 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 								@NotNull BitSet ambigAlts,
 								@NotNull ATNConfigSet configs)
 	{
-		if ( debug || retry_debug ) {
-//			ParserATNPathFinder finder = new ParserATNPathFinder(parser, atn);
-//			int i = 1;
-//			for (Transition t : dfa.atnStartState.transitions) {
-//				System.out.println("ALT "+i+"=");
-//				System.out.println(startIndex+".."+stopIndex+", len(input)="+parser.getInputStream().size());
-//				TraceTree path = finder.trace(t.target, parser.getContext(), (TokenStream)parser.getInputStream(),
-//											  startIndex, stopIndex);
-//				if ( path!=null ) {
-//					System.out.println("path = "+path.toStringTree());
-//					for (TraceTree leaf : path.leaves) {
-//						List<ATNState> states = path.getPathToNode(leaf);
-//						System.out.println("states="+states);
-//					}
-//				}
-//				i++;
-//			}
-			Interval interval = Interval.of(startIndex, stopIndex);
-			System.out.println("reportAmbiguity "+
-							   ambigAlts+":"+configs+
-                               ", input="+parser.getInputStream().getText(interval));
-        }
         if ( parser!=null ) parser.getErrorListenerDispatch().reportAmbiguity(parser, dfa, startIndex, stopIndex,
                                                                      ambigAlts, configs);
     }
