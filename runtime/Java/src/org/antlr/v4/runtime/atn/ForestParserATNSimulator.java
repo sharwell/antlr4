@@ -1274,11 +1274,11 @@ public class ForestParserATNSimulator<Symbol extends Token> extends ATNSimulator
 									boolean collectPredicates,
 									boolean inContext)
 	{
-        ATNConfig c = null;
-        if (collectPredicates && inContext && false) {
-            SemanticContext newSemCtx = SemanticContext.and(config.getSemanticContext(), pt.getPredicate());
-            c = config.transform(pt.target, newSemCtx);
-        }
+		ATNConfig c;
+		if (collectPredicates && inContext) {
+			SemanticContext newSemCtx = SemanticContext.and(config.getSemanticContext(), pt.getPredicate());
+			c = config.transform(pt.target, newSemCtx);
+		}
 		else {
 			c = config.transform(pt.target);
 		}

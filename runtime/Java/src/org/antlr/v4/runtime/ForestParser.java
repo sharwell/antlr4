@@ -35,6 +35,7 @@ import org.antlr.v4.runtime.atn.AtomTransition;
 import org.antlr.v4.runtime.atn.DecisionState;
 import org.antlr.v4.runtime.atn.ForestParserATNSimulator;
 import org.antlr.v4.runtime.atn.NotSetTransition;
+import org.antlr.v4.runtime.atn.PrecedencePredicateTransition;
 import org.antlr.v4.runtime.atn.PredictionContext;
 import org.antlr.v4.runtime.atn.PredictionContext.IdentityHashMap;
 import org.antlr.v4.runtime.atn.PredictionContextCache;
@@ -69,6 +70,8 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 	private final PredictionContextCache _contextCache = new PredictionContextCache();
 	private final List<ParserState<Symbol>> _states = new ArrayList<ParserState<Symbol>>();
 
+	protected int _currentPrecedence;
+
 	public ForestParser(Parser<Symbol> parser) {
 		_parser = parser;
 		_interp = new ForestParserATNSimulator<Symbol>(this, parser.getATN());
@@ -89,7 +92,9 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 		final RuleStartState startState = getATN().ruleToStartState[entryRule];
 		final RuleStopState stopState = getATN().ruleToStopState[entryRule];
 
-		_states.add(new ParserState<Symbol>(startState, PredictionContext.EMPTY_FULL, PredictionContext.EMPTY_FULL, 0));
+		// need to include 0 as a root element because _currentPrecedence is always set before calling adaptivePredict
+		PredictionContext initialPrecedence = _contextCache.getChild(PredictionContext.EMPTY_FULL, 0);
+		_states.add(new ParserState<Symbol>(startState, PredictionContext.EMPTY_FULL, PredictionContext.EMPTY_FULL, initialPrecedence, 0));
 
 		ParserProgress progress = ParserProgress.EPSILON;
 		while (progress != ParserProgress.COMPLETE) {
@@ -187,7 +192,7 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 
 	@Override
 	public boolean precpred(RuleContext<Symbol> localctx, int precedence) {
-		throw new UnsupportedOperationException("not implemented yet");
+		return precedence >= _currentPrecedence;
 	}
 
 	@Override
@@ -261,7 +266,7 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 				throw new IllegalStateException();
 			}
 
-			ParserState<Symbol> nextState = new ParserState<Symbol>(transition.target, state._context, state._trace, state._depth);
+			ParserState<Symbol> nextState = new ParserState<Symbol>(transition.target, state._context, state._trace, state._precedenceStack, state._depth);
 			_states.set(i, nextState);
 		}
 
@@ -312,11 +317,13 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 			if (state._state.onlyHasEpsilonTransitions()) {
 				int decision = state._state instanceof DecisionState ? ((DecisionState)state._state).decision : -1;
 
-				BitSet alts = decision >= 0 ? _predictions.get(decision) : null;
+				int currentPrecedence = state._precedenceStack.getReturnState(0);
+				BitSet alts = decision >= 0 ? _predictions.get(decision | (currentPrecedence << 16)) : null;
 				if (alts == null && state._state.getNumberOfTransitions() > 1) {
 					try {
+						_currentPrecedence = currentPrecedence;
 						alts = getInterpreter().adaptivePredict(getInputStream(), decision, null);
-						_predictions.put(decision, alts);
+						_predictions.put(decision | (currentPrecedence << 16), alts);
 					} catch (RecognitionException ex) {
 						_states.remove(i);
 						i--;
@@ -339,10 +346,17 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 					Transition transition = state._state.transition(j);
 					switch (transition.getSerializationType()) {
 					case Transition.ACTION:
-					case Transition.PRECEDENCE:
 					case Transition.PREDICATE:
 					case Transition.EPSILON:
-						nextState = new ParserState<Symbol>(transition.target, state._context, nextTrace, state._depth);
+						nextState = new ParserState<Symbol>(transition.target, state._context, nextTrace, state._precedenceStack, state._depth);
+						break;
+
+					case Transition.PRECEDENCE:
+						if (state._precedenceStack.getReturnState(0) > ((PrecedencePredicateTransition)transition).precedence) {
+							continue;
+						}
+
+						nextState = new ParserState<Symbol>(transition.target, state._context, nextTrace, state._precedenceStack, state._depth);
 						break;
 
 					case Transition.RULE:
@@ -351,10 +365,17 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 							lt1 = getInputStream().LT(1);
 						}
 
-						assert state._state.getNumberOfTransitions() == 1 && state._state.transition(0) instanceof RuleTransition;
-						ATNState returnState = ((RuleTransition)state._state.transition(0)).followState;
-						PredictionContext context = _contextCache.getChild(state._context, returnState.stateNumber);
-						nextState = new ParserState<Symbol>(transition.target, context, nextTrace, state._depth + 1);
+						assert j == 0 && state._state.getNumberOfTransitions() == 1;
+						RuleTransition ruleTransition = (RuleTransition)state._state.transition(0);
+						ATNState callingState = state._state;
+						PredictionContext context = _contextCache.getChild(state._context, callingState.stateNumber);
+
+						PredictionContext precedenceStack = state._precedenceStack;
+						if (((RuleStartState)ruleTransition.target).isPrecedenceRule) {
+							precedenceStack = _contextCache.getChild(precedenceStack, ruleTransition.precedence);
+						}
+
+						nextState = new ParserState<Symbol>(transition.target, context, nextTrace, precedenceStack, state._depth + 1);
 						break;
 					}
 
@@ -455,8 +476,18 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 					throw new UnsupportedOperationException("Not yet implemented.");
 				}
 
-				ATNState returnState = getATN().states.get(states.get(0)._context.getReturnState(0));
-				_states.add(new ParserState<Symbol>(returnState, states.get(0)._context.getParent(0), mergedTrace, states.get(0)._depth - 1));
+				RuleStartState startState = getATN().ruleToStartState[states.get(0)._state.ruleIndex];
+				PredictionContext precedenceStack;
+				if (startState.isPrecedenceRule) {
+					precedenceStack = states.get(0)._precedenceStack.getParent(0);
+				}
+				else {
+					precedenceStack = states.get(0)._precedenceStack;
+				}
+
+				ATNState callingState = getATN().states.get(states.get(0)._context.getReturnState(0));
+				ATNState returnState = ((RuleTransition)callingState.transition(0)).followState;
+				_states.add(new ParserState<Symbol>(returnState, states.get(0)._context.getParent(0), mergedTrace, precedenceStack, states.get(0)._depth - 1));
 			}
 		}
 
@@ -499,12 +530,14 @@ public class ForestParser<Symbol extends Token> extends Recognizer<Symbol, Fores
 		private final ATNState _state;
 		private final PredictionContext _context;
 		private final PredictionContext _trace;
+		private final PredictionContext _precedenceStack;
 		private final int _depth;
 
-		public ParserState(@NotNull ATNState state, @NotNull PredictionContext context, @NotNull PredictionContext trace, int depth) {
+		public ParserState(@NotNull ATNState state, @NotNull PredictionContext context, @NotNull PredictionContext trace, @NotNull PredictionContext precedenceStack, int depth) {
 			this._state = state;
 			this._context = context;
 			this._trace = trace;
+			this._precedenceStack = precedenceStack;
 			this._depth = depth;
 		}
 	}
