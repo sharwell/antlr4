@@ -918,15 +918,12 @@ public class ParserATNSimulator extends ATNSimulator {
 			if ( debug ) System.out.println("testing "+getTokenName(t)+" at "+c.toString());
 			if (c.state instanceof RuleStopState) {
 				assert c.context.isEmpty();
-				if (fullCtx) {
+				if (fullCtx || t == IntStream.EOF) {
 					if (skippedStopStates == null) {
 						skippedStopStates = new ArrayList<ATNConfig>();
 					}
 
 					skippedStopStates.add(c);
-				}
-				else if (t == IntStream.EOF) {
-					intermediate.add(c, mergeCache);
 				}
 
 				continue;
@@ -966,10 +963,11 @@ public class ParserATNSimulator extends ATNSimulator {
 			reach = removeNonRuleStopStates(reach);
 		}
 
-		if (skippedStopStates != null && !PredictionMode.hasConfigAtRuleStopState(reach)) {
+		if (skippedStopStates != null && (!fullCtx || !PredictionMode.hasConfigAtRuleStopState(reach))) {
 			for (ATNConfig c : skippedStopStates) {
-				assert c.reachesIntoOuterContext == 0 && c.semanticContext == SemanticContext.NONE;
 				reach.add(c, mergeCache);
+				reach.hasSemanticContext |= c.semanticContext != SemanticContext.NONE;
+				reach.dipsIntoOuterContext |= c.reachesIntoOuterContext>0;
 			}
 		}
 
@@ -1232,12 +1230,8 @@ public class ParserATNSimulator extends ATNSimulator {
 		// optimization
 		if ( !p.onlyHasEpsilonTransitions() ) {
             configs.add(config, mergeCache);
-			if ( config.semanticContext!= SemanticContext.NONE ) {
-				configs.hasSemanticContext = true;
-			}
-			if ( config.reachesIntoOuterContext>0 ) {
-				configs.dipsIntoOuterContext = true;
-			}
+			configs.hasSemanticContext |= config.semanticContext != SemanticContext.NONE;
+			configs.dipsIntoOuterContext |= config.reachesIntoOuterContext>0;
 //            if ( debug ) System.out.println("added config "+configs);
         }
 

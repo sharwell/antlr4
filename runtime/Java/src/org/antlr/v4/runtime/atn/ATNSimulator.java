@@ -37,6 +37,7 @@ import org.antlr.v4.runtime.misc.Pair;
 
 import java.io.InvalidClassException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 
@@ -99,6 +100,10 @@ public abstract class ATNSimulator {
 	}
 
 	public static ATN deserialize(@NotNull char[] data) {
+		return deserialize(data, true);
+	}
+
+	public static ATN deserialize(@NotNull char[] data, boolean generateImplicitFollow) {
 		ATN atn = new ATN();
 		List<IntervalSet> sets = new ArrayList<IntervalSet>();
 		int p = 0;
@@ -287,6 +292,91 @@ public abstract class ATNSimulator {
 			DecisionState decState = (DecisionState)atn.states.get(s);
 			atn.decisionToState.add(decState);
 			decState.decision = i-1;
+		}
+
+		/* SLL IMPLICIT FOLLOW PSEUDO-RULE
+		 *  1. Rule start state
+		 *  2. Block start state
+		 *  3. Block end state
+		 *  4. Star loop entry state
+		 *  5. Star block start state
+		 *  6. (Star) block end state
+		 *  7. Wildcard source state
+		 *  8. Star loopback state
+		 *  9. (Star) loop end state
+		 *  10. Rule stop state
+		 *  11... One basic state for each rule in the grammar
+		 */
+		if (generateImplicitFollow && atn.grammarType == ATN.PARSER) {
+			int implicitFollowRule = atn.ruleToStartState.length;
+
+			// create states
+			RuleStartState implicitFollowStartState = (RuleStartState)stateFactory(ATNState.RULE_START, implicitFollowRule);
+			BasicBlockStartState blockStartState = (BasicBlockStartState)stateFactory(ATNState.BLOCK_START, implicitFollowRule);
+			BlockEndState blockEndState = (BlockEndState)stateFactory(ATNState.BLOCK_END, implicitFollowRule);
+			StarLoopEntryState starLoopEntryState = (StarLoopEntryState)stateFactory(ATNState.STAR_LOOP_ENTRY, implicitFollowRule);
+			StarBlockStartState starBlockStartState = (StarBlockStartState)stateFactory(ATNState.STAR_BLOCK_START, implicitFollowRule);
+			BasicState wildcardSourceState = (BasicState)stateFactory(ATNState.BASIC, implicitFollowRule);
+			BlockEndState starBlockEndState = (BlockEndState)stateFactory(ATNState.BLOCK_END, implicitFollowRule);
+			StarLoopbackState starLoopbackState = (StarLoopbackState)stateFactory(ATNState.STAR_LOOP_BACK, implicitFollowRule);
+			LoopEndState loopEndState = (LoopEndState)stateFactory(ATNState.LOOP_END, implicitFollowRule);
+			RuleStopState implicitFollowStopState = (RuleStopState)stateFactory(ATNState.RULE_STOP, implicitFollowRule);
+
+			BasicState[] basicStates = new BasicState[atn.ruleToStartState.length];
+			for (int i = 0; i < basicStates.length; i++) {
+				basicStates[i] = (BasicState)stateFactory(ATNState.BASIC, implicitFollowRule);
+			}
+
+			atn.addState(implicitFollowStartState);
+			atn.addState(blockStartState);
+			atn.addState(blockEndState);
+			atn.addState(starLoopEntryState);
+			atn.addState(starBlockStartState);
+			atn.addState(wildcardSourceState);
+			atn.addState(starBlockEndState);
+			atn.addState(starLoopbackState);
+			atn.addState(loopEndState);
+			atn.addState(implicitFollowStopState);
+			for (BasicState state : basicStates) {
+				atn.addState(state);
+			}
+
+			// set state properties
+			implicitFollowStartState.stopState = implicitFollowStopState;
+
+			blockStartState.endState = blockEndState;
+			blockEndState.startState = blockStartState;
+			starLoopEntryState.loopBackState = starLoopbackState;
+			starBlockStartState.endState = starBlockEndState;
+			starBlockEndState.startState = starBlockStartState;
+			loopEndState.loopBackState = starLoopbackState;
+
+			// define decisions
+			atn.defineDecisionState(blockStartState);
+			atn.defineDecisionState(starLoopEntryState);
+
+			// add transitions
+			implicitFollowStartState.addTransition(new EpsilonTransition(blockStartState));
+			for (int i = 0; i < basicStates.length; i++) {
+				blockStartState.addTransition(new EpsilonTransition(basicStates[i]));
+				basicStates[i].addTransition(new RuleTransition(atn.ruleToStartState[i], i, blockEndState));
+				atn.ruleToStopState[i].addTransition(new EpsilonTransition(blockEndState));
+			}
+
+			blockEndState.addTransition(new EpsilonTransition(starLoopEntryState));
+			starLoopEntryState.addTransition(new EpsilonTransition(starBlockStartState));
+			starLoopEntryState.addTransition(new EpsilonTransition(loopEndState));
+			starBlockStartState.addTransition(new EpsilonTransition(wildcardSourceState));
+			wildcardSourceState.addTransition(new WildcardTransition(starBlockEndState));
+			starBlockEndState.addTransition(new EpsilonTransition(starLoopbackState));
+			starLoopbackState.addTransition(new EpsilonTransition(starLoopEntryState));
+			loopEndState.addTransition(new EpsilonTransition(implicitFollowStopState));
+
+			// link rule
+			atn.ruleToStartState = Arrays.copyOf(atn.ruleToStartState, atn.ruleToStartState.length + 1);
+			atn.ruleToStartState[atn.ruleToStartState.length - 1] = implicitFollowStartState;
+			atn.ruleToStopState = Arrays.copyOf(atn.ruleToStopState, atn.ruleToStopState.length + 1);
+			atn.ruleToStopState[atn.ruleToStopState.length - 1] = implicitFollowStopState;
 		}
 
 		verifyATN(atn);

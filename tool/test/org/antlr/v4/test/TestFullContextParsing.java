@@ -172,7 +172,8 @@ public class TestFullContextParsing extends BaseTest {
 							input, true);
 		expecting =
 			"Decision 1:\n" +
-			"s0-'else'->s1^\n";
+			"s0-'else'->s1\n" +
+			"s1-ID->s2^\n";
 		assertEquals(expecting, result);
 		// Technically, this input sequence is not ambiguous because else
 		// uniquely predicts going into the optional subrule. else cannot
@@ -180,7 +181,7 @@ public class TestFullContextParsing extends BaseTest {
 		// the start of a stat. But, we are using the theory that
 		// SLL(1)=LL(1) and so we are avoiding full context parsing
 		// by declaring all else clause parsing to be ambiguous.
-		assertEquals("line 1:19 reportAttemptingFullContext d=1, input='else'\n" +
+		assertEquals("line 1:24 reportAttemptingFullContext d=1, input='elsefoo'\n" +
 					 "line 1:19 reportContextSensitivity d=1, input='else'\n",
 					 this.stderrDuringParse);
 
@@ -190,10 +191,11 @@ public class TestFullContextParsing extends BaseTest {
 							input, true);
 		expecting =
 			"Decision 1:\n" +
-			"s0-'else'->s1^\n" +
-			"s0-'}'->:s2=>2\n";
+			"s0-'else'->s1\n" +
+			"s0-'}'->:s3=>2\n" +
+			"s1-ID->s2^\n";
 		assertEquals(expecting, result);
-		assertEquals("line 1:29 reportAttemptingFullContext d=1, input='else'\n" +
+		assertEquals("line 1:34 reportAttemptingFullContext d=1, input='elsefoo'\n" +
 					 "line 1:38 reportAmbiguity d=1: ambigAlts={1, 2}, input='elsefoo}'\n",
 					 this.stderrDuringParse);
 
@@ -207,11 +209,12 @@ public class TestFullContextParsing extends BaseTest {
 							input, true);
 		expecting =
 			"Decision 1:\n" +
-			"s0-'else'->s1^\n";
+			"s0-'else'->s1\n" +
+			"s1-ID->s2^\n";
 		assertEquals(expecting, result);
-		assertEquals("line 1:29 reportAttemptingFullContext d=1, input='else'\n" +
+		assertEquals("line 1:34 reportAttemptingFullContext d=1, input='elsefoo'\n" +
 					 "line 1:38 reportContextSensitivity d=1, input='elsefooelse'\n" +
-					 "line 1:38 reportAttemptingFullContext d=1, input='else'\n" +
+					 "line 1:43 reportAttemptingFullContext d=1, input='elsebar'\n" +
 					 "line 1:38 reportContextSensitivity d=1, input='else'\n",
 					 this.stderrDuringParse);
 
@@ -222,12 +225,13 @@ public class TestFullContextParsing extends BaseTest {
 							input, true);
 		expecting =
 			"Decision 1:\n" +
-			"s0-'else'->s1^\n" +
-			"s0-'}'->:s2=>2\n";
+			"s0-'else'->s1\n" +
+			"s0-'}'->:s3=>2\n" +
+			"s1-ID->s2^\n";
 		assertEquals(expecting, result);
-		assertEquals("line 1:19 reportAttemptingFullContext d=1, input='else'\n" +
+		assertEquals("line 1:24 reportAttemptingFullContext d=1, input='elsefoo'\n" +
 					 "line 1:19 reportContextSensitivity d=1, input='else'\n" +
-					 "line 2:27 reportAttemptingFullContext d=1, input='else'\n" +
+					 "line 2:32 reportAttemptingFullContext d=1, input='elsefoo'\n" +
 					 "line 2:36 reportAmbiguity d=1: ambigAlts={1, 2}, input='elsefoo}'\n",
 					 this.stderrDuringParse);
 
@@ -238,12 +242,13 @@ public class TestFullContextParsing extends BaseTest {
 							input, true);
 		expecting =
 				"Decision 1:\n" +
-				"s0-'else'->s1^\n" +
-				"s0-'}'->:s2=>2\n";
+				"s0-'else'->s1\n" +
+				"s0-'}'->:s3=>2\n" +
+				"s1-ID->s2^\n";
 		assertEquals(expecting, result);
-		assertEquals("line 1:19 reportAttemptingFullContext d=1, input='else'\n" +
+		assertEquals("line 1:24 reportAttemptingFullContext d=1, input='elsefoo'\n" +
 					 "line 1:19 reportContextSensitivity d=1, input='else'\n" +
-					 "line 2:27 reportAttemptingFullContext d=1, input='else'\n" +
+					 "line 2:32 reportAttemptingFullContext d=1, input='elsefoo'\n" +
 					 "line 2:36 reportAmbiguity d=1: ambigAlts={1, 2}, input='elsefoo}'\n",
 					 this.stderrDuringParse);
 	}
@@ -332,7 +337,7 @@ public class TestFullContextParsing extends BaseTest {
 		assertEquals("(expr a + (expr b))\n", found);
 
 		String expecting =
-			"line 1:1 reportAttemptingFullContext d=1, input='+'\n" +
+			"line 1:2 reportAttemptingFullContext d=1, input='+b'\n" +
 			"line 1:2 reportContextSensitivity d=1, input='+b'\n";
 		assertEquals(expecting, this.stderrDuringParse);
 
@@ -340,9 +345,9 @@ public class TestFullContextParsing extends BaseTest {
 		assertEquals("(expr a + (expr b * (expr c)))\n", found);
 
 		expecting =
-			"line 1:1 reportAttemptingFullContext d=1, input='+'\n" +
+			"line 1:2 reportAttemptingFullContext d=1, input='+b'\n" +
 			"line 1:2 reportContextSensitivity d=1, input='+b'\n" +
-			"line 1:3 reportAttemptingFullContext d=1, input='*'\n" +
+			"line 1:4 reportAttemptingFullContext d=1, input='*c'\n" +
 			"line 1:5 reportAmbiguity d=1: ambigAlts={1, 2}, input='*c'\n";
 		assertEquals(expecting, this.stderrDuringParse);
 	}

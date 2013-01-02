@@ -157,6 +157,14 @@ public abstract class BaseTest {
 	}
 
 	protected ATN createATN(Grammar g, boolean useSerializer) {
+		return createATN(g, useSerializer, useSerializer);
+	}
+
+	protected ATN createATN(Grammar g, boolean useSerializer, boolean generateImplicitFollow) {
+		if (generateImplicitFollow && !useSerializer) {
+			throw new UnsupportedOperationException();
+		}
+
 		if ( g.atn==null ) {
 			semanticProcess(g);
 
@@ -174,7 +182,7 @@ public abstract class BaseTest {
 		ATN atn = g.atn;
 		if (useSerializer) {
 			char[] serialized = ATNSerializer.getSerializedAsChars(g, atn);
-			return ATNSimulator.deserialize(serialized);
+			return ATNSimulator.deserialize(serialized, generateImplicitFollow);
 		}
 
 		return atn;

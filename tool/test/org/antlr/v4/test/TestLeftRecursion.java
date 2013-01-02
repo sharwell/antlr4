@@ -360,15 +360,15 @@ public class TestLeftRecursion extends BaseTest {
 		assertNull(stderrDuringParse);
 
 		result = execParser("Expr.g4", grammar, "ExprParser", "ExprLexer", "prog", "a+b*2\n", true);
-		assertEquals("line 1:1 reportAttemptingFullContext d=3, input='+'\n" +
+		assertEquals("line 1:2 reportAttemptingFullContext d=3, input='+b'\n" +
 					 "line 1:1 reportContextSensitivity d=3, input='+'\n" +
-					 "line 1:3 reportAttemptingFullContext d=3, input='*'\n",
+					 "line 1:4 reportAttemptingFullContext d=3, input='*2'\n",
 					 stderrDuringParse);
 
 		result = execParser("Expr.g4", grammar, "ExprParser", "ExprLexer", "prog", "(1+2)*3\n", true);
-		assertEquals("line 1:2 reportAttemptingFullContext d=3, input='+'\n" +
+		assertEquals("line 1:3 reportAttemptingFullContext d=3, input='+2'\n" +
 					 "line 1:2 reportContextSensitivity d=3, input='+'\n" +
-					 "line 1:5 reportAttemptingFullContext d=3, input='*'\n" +
+					 "line 1:6 reportAttemptingFullContext d=3, input='*3'\n" +
 					 "line 1:5 reportContextSensitivity d=3, input='*'\n",
 					 stderrDuringParse);
 	}
