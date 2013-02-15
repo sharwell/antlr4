@@ -43,15 +43,23 @@ import java.util.Iterator;
 import java.util.List;
 
 public class Utils {
+	/**
+	 * @sharpen.ignore
+	 */
 	public static String join(Iterable<?> iter, String separator) {
 		return join(iter.iterator(), separator);
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static <T> String join(T[] array, String separator) {
 		return join(Arrays.asList(array), separator);
 	}
 
-    // Seriously: why isn't this built in to java? ugh!
+	/**
+	 * @sharpen.ignore
+	 */
     public static <T> String join(Iterator<T> iter, String separator) {
         StringBuilder buf = new StringBuilder();
         while ( iter.hasNext() ) {
@@ -63,6 +71,9 @@ public class Utils {
         return buf.toString();
     }
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static boolean equals(Object x, Object y) {
 		if (x == y) {
 			return true;
@@ -101,6 +112,9 @@ public class Utils {
 		return buf.toString();
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static void writeFile(String fileName, String content) throws IOException {
 		FileWriter fw = new FileWriter(fileName);
 		Writer w = new BufferedWriter(fw);
@@ -140,6 +154,9 @@ public class Utils {
 		}
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static void waitForClose(final Window window) throws InterruptedException {
 		final Object lock = new Object();
 
