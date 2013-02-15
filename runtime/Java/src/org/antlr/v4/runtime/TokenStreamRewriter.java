@@ -133,9 +133,9 @@ public class TokenStreamRewriter {
 		@Override
 		public String toString() {
 			String opName = getClass().getName();
-			int $index = opName.indexOf('$');
-			opName = opName.substring($index+1, opName.length());
-			return "<"+opName+"@"+tokens.get(index)+
+			int index = opName.indexOf('$');
+			opName = opName.substring(index+1, opName.length());
+			return "<"+opName+"@"+tokens.get(this.index)+
 				   ":\""+text+"\">";
 		}
 	}
