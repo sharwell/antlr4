@@ -157,12 +157,19 @@ public class RuleContext implements RuleNode {
 		return visitor.visitChildren(this);
 	}
 
-	/** Call this method to view a parse tree in a dialog box visually. */
+	/**
+	 * Call this method to view a parse tree in a dialog box visually.
+	 * 
+	 * @sharpen.ignore
+	 */
 	public Future<JDialog> inspect(@Nullable Parser parser) {
 		List<String> ruleNames = parser != null ? Arrays.asList(parser.getRuleNames()) : null;
 		return inspect(ruleNames);
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public Future<JDialog> inspect(@Nullable List<String> ruleNames) {
 		TreeViewer viewer = new TreeViewer(ruleNames, this);
 		return viewer.open();

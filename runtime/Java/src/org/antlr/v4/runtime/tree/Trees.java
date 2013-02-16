@@ -48,6 +48,9 @@ import java.util.List;
 /** A set of utility routines useful for all kinds of ANTLR trees. */
 public class Trees {
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static String getPS(Tree t, @Nullable List<String> ruleNames,
 							   String fontName, int fontSize)
 	{
@@ -56,10 +59,16 @@ public class Trees {
 		return psgen.getPS();
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static String getPS(Tree t, @Nullable List<String> ruleNames) {
 		return getPS(t, ruleNames, "Helvetica", 11);
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static void writePS(Tree t, @Nullable List<String> ruleNames,
 							   String fileName,
 							   String fontName, int fontSize)
@@ -72,6 +81,9 @@ public class Trees {
 		bw.close();
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static void writePS(Tree t, @Nullable List<String> ruleNames, String fileName)
 		throws IOException
 	{
