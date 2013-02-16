@@ -126,6 +126,9 @@ public class DFAState {
 		this.maxSymbol = maxSymbol;
 	}
 
+	/**
+	 * @sharpen.property
+	 */
 	public final boolean isContextSensitive() {
 		return contextEdges != null;
 	}
@@ -173,6 +176,9 @@ public class DFAState {
 		edges = edges.put(symbol, target);
 	}
 
+	/**
+	 * @sharpen.property EdgeMap
+	 */
 	public Map<Integer, DFAState> getEdgeMap() {
 		if (edges == null) {
 			return Collections.emptyMap();
@@ -205,6 +211,9 @@ public class DFAState {
 		contextEdges = contextEdges.put(invokingState, target);
 	}
 
+	/**
+	 * @sharpen.property ContextEdgeMap
+	 */
 	public Map<Integer, DFAState> getContextEdgeMap() {
 		if (contextEdges == null) {
 			return Collections.emptyMap();

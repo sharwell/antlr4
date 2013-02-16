@@ -49,24 +49,42 @@ public interface TokenSource {
 	 */
 	public Token nextToken();
 
+	/**
+	 * @sharpen.property Line
+	 */
 	public int getLine();
 
+	/**
+	 * @sharpen.property Column
+	 */
 	public int getCharPositionInLine();
 
 	/** From what character stream was this token created?  You don't have to
 	 *  implement but it's nice to know where a Token comes from if you have
 	 *  include files etc... on the input.
+	 * 
+	 * @sharpen.property InputStream
 	 */
 	public CharStream getInputStream();
 
 	/** Where are you getting tokens from? normally the implication will simply
 	 *  ask lexers input stream.
+	 * 
+	 * @sharpen.property SourceName
 	 */
 	public String getSourceName();
 
-	/** Gets the factory used for constructing tokens. */
+	/**
+	 * Gets the factory used for constructing tokens.
+	 * 
+	 * @sharpen.property TokenFactory
+	 */
 	public TokenFactory getTokenFactory();
 
-	/** Optional method that lets users set factory in lexer or other source */
+	/**
+	 * Optional method that lets users set factory in lexer or other source
+	 * 
+	 * @sharpen.property TokenFactory
+	 */
 	public void setTokenFactory(TokenFactory factory);
 }

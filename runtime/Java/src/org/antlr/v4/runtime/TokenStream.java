@@ -73,6 +73,8 @@ public interface TokenStream extends IntStream {
 	/**
 	 * Gets the underlying {@link TokenSource} which provides tokens for this
 	 * stream.
+	 * 
+	 * @sharpen.property TokenSource
 	 */
 	@NotNull
 	public TokenSource getTokenSource();

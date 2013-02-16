@@ -108,11 +108,21 @@ public abstract class Transition {
 		this.target = target;
 	}
 
+	/**
+	 * @sharpen.property SerializationType
+	 */
 	public abstract int getSerializationType();
 
-	/** Are we epsilon, action, sempred? */
+	/**
+	 * Are we epsilon, action, sempred?
+	 * 
+	 * @sharpen.property
+	 */
 	public boolean isEpsilon() { return false; }
 
+	/**
+	 * @sharpen.property
+	 */
 	@Nullable
 	public IntervalSet label() { return null; }
 
