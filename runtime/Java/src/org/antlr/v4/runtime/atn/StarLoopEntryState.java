@@ -34,7 +34,7 @@ public final class StarLoopEntryState extends DecisionState {
 	public StarLoopbackState loopBackState;
 
 	@Override
-	public int getStateType() {
-		return STAR_LOOP_ENTRY;
+	public StateType getStateType() {
+		return StateType.STAR_LOOP_ENTRY;
 	}
 }

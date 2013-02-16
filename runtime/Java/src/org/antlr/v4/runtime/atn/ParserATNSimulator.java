@@ -1373,17 +1373,17 @@ public class ParserATNSimulator extends ATNSimulator {
 				if (optimize_closure_busy) {
 					boolean checkClosure = false;
 					switch (c.getState().getStateType()) {
-					case ATNState.STAR_LOOP_ENTRY:
-					case ATNState.BLOCK_END:
-					case ATNState.LOOP_END:
+					case STAR_LOOP_ENTRY:
+					case BLOCK_END:
+					case LOOP_END:
 						checkClosure = true;
 						break;
 
-					case ATNState.PLUS_BLOCK_START:
+					case PLUS_BLOCK_START:
 						checkClosure = true;
 						break;
 
-					case ATNState.RULE_STOP:
+					case RULE_STOP:
 						checkClosure = c.getContext().isEmpty();
 						break;
 
@@ -1444,19 +1444,19 @@ public class ParserATNSimulator extends ATNSimulator {
 	@Nullable
 	public ATNConfig getEpsilonTarget(@NotNull ATNConfig config, @NotNull Transition t, boolean collectPredicates, boolean inContext, PredictionContextCache contextCache) {
 		switch (t.getSerializationType()) {
-		case Transition.RULE:
+		case RULE:
 			return ruleTransition(config, (RuleTransition)t, contextCache);
 
-		case Transition.PRECEDENCE:
+		case PRECEDENCE:
 			return precedenceTransition(config, (PrecedencePredicateTransition)t, collectPredicates, inContext);
 
-		case Transition.PREDICATE:
+		case PREDICATE:
 			return predTransition(config, (PredicateTransition)t, collectPredicates, inContext);
 
-		case Transition.ACTION:
+		case ACTION:
 			return actionTransition(config, (ActionTransition)t);
 
-		case Transition.EPSILON:
+		case EPSILON:
 			return config.transform(t.target);
 
 		default:
@@ -2044,7 +2044,7 @@ public class ParserATNSimulator extends ATNSimulator {
 
 		while (!context.isEmpty()) {
 			ATNState state = atn.states.get(context.invokingState);
-			assert state.getNumberOfTransitions() == 1 && state.transition(0).getSerializationType() == Transition.RULE;
+			assert state.getNumberOfTransitions() == 1 && state.transition(0).getSerializationType() == TransitionType.RULE;
 			RuleTransition transition = (RuleTransition)state.transition(0);
 			if (!transition.tailCall) {
 				break;

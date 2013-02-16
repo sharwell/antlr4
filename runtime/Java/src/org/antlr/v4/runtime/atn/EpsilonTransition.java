@@ -36,8 +36,8 @@ public final class EpsilonTransition extends Transition {
 	public EpsilonTransition(@NotNull ATNState target) { super(target); }
 
 	@Override
-	public int getSerializationType() {
-		return EPSILON;
+	public TransitionType getSerializationType() {
+		return TransitionType.EPSILON;
 	}
 
 	@Override

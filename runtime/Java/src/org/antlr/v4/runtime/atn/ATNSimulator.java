@@ -103,16 +103,16 @@ public abstract class ATNSimulator {
 		List<Tuple2<BlockStartState, Integer>> endStateNumbers = new ArrayList<Tuple2<BlockStartState, Integer>>();
 		int nstates = toInt(data[p++]);
 		for (int i=1; i<=nstates; i++) {
-			int stype = toInt(data[p++]);
+			StateType stype = StateType.values()[toInt(data[p++])];
 			// ignore bad type of states
-			if ( stype==ATNState.INVALID_TYPE ) {
+			if ( stype==StateType.INVALID_TYPE ) {
 				atn.addState(null);
 				continue;
 			}
 
 			int ruleIndex = toInt(data[p++]);
 			ATNState s = stateFactory(stype, ruleIndex);
-			if ( stype == ATNState.LOOP_END ) { // special case
+			if ( stype == StateType.LOOP_END ) { // special case
 				int loopBackStateNumber = toInt(data[p++]);
 				loopBackStateNumbers.add(Tuple.create((LoopEndState)s, loopBackStateNumber));
 			}
@@ -219,7 +219,7 @@ public abstract class ATNSimulator {
 		for (int i=1; i<=nedges; i++) {
 			int src = toInt(data[p]);
 			int trg = toInt(data[p+1]);
-			int ttype = toInt(data[p+2]);
+			TransitionType ttype = TransitionType.values()[toInt(data[p+2])];
 			int arg1 = toInt(data[p+3]);
 			int arg2 = toInt(data[p+4]);
 			int arg3 = toInt(data[p+5]);
@@ -403,7 +403,7 @@ public abstract class ATNSimulator {
 			ATNState middleState = startState;
 			while (middleState.onlyHasEpsilonTransitions()
 				&& middleState.getNumberOfOptimizedTransitions() == 1
-				&& middleState.getOptimizedTransition(0).getSerializationType() == Transition.EPSILON)
+				&& middleState.getOptimizedTransition(0).getSerializationType() == TransitionType.EPSILON)
 			{
 				middleState = middleState.getOptimizedTransition(0).target;
 			}
@@ -423,14 +423,14 @@ public abstract class ATNSimulator {
 			}
 
 			switch (matchTransition.getSerializationType()) {
-			case Transition.ATOM:
-			case Transition.RANGE:
-			case Transition.SET:
+			case ATOM:
+			case RANGE:
+			case SET:
 				ruleToInlineTransition[i] = matchTransition;
 				break;
 
-			case Transition.NOT_SET:
-			case Transition.WILDCARD:
+			case NOT_SET:
+			case WILDCARD:
 				// not implemented yet
 				continue;
 
@@ -481,15 +481,15 @@ public abstract class ATNSimulator {
 				optimizedTransitions.add(new EpsilonTransition(intermediateState));
 
 				switch (effective.getSerializationType()) {
-				case Transition.ATOM:
+				case ATOM:
 					intermediateState.addTransition(new AtomTransition(target, ((AtomTransition)effective).label));
 					break;
 
-				case Transition.RANGE:
+				case RANGE:
 					intermediateState.addTransition(new RangeTransition(target, ((RangeTransition)effective).from, ((RangeTransition)effective).to));
 					break;
 
-				case Transition.SET:
+				case SET:
 					intermediateState.addTransition(new SetTransition(target, effective.label()));
 					break;
 
@@ -532,8 +532,8 @@ public abstract class ATNSimulator {
 			for (int i = 0; i < state.getNumberOfOptimizedTransitions(); i++) {
 				Transition transition = state.getOptimizedTransition(i);
 				ATNState intermediate = transition.target;
-				if (transition.getSerializationType() != Transition.EPSILON
-					|| intermediate.getStateType() != ATNState.BASIC
+				if (transition.getSerializationType() != TransitionType.EPSILON
+					|| intermediate.getStateType() != StateType.BASIC
 					|| !intermediate.onlyHasEpsilonTransitions())
 				{
 					if (optimizedTransitions != null) {
@@ -544,7 +544,7 @@ public abstract class ATNSimulator {
 				}
 
 				for (int j = 0; j < intermediate.getNumberOfOptimizedTransitions(); j++) {
-					if (intermediate.getOptimizedTransition(j).getSerializationType() != Transition.EPSILON) {
+					if (intermediate.getOptimizedTransition(j).getSerializationType() != TransitionType.EPSILON) {
 						if (optimizedTransitions != null) {
 							optimizedTransitions.add(transition);
 						}
@@ -744,7 +744,7 @@ public abstract class ATNSimulator {
 
 			List<Transition> transitions = optimizedPath ? state.optimizedTransitions : state.transitions;
 			for (Transition t : transitions) {
-				if (t.getSerializationType() != Transition.EPSILON) {
+				if (t.getSerializationType() != TransitionType.EPSILON) {
 					return false;
 				}
 
@@ -761,50 +761,50 @@ public abstract class ATNSimulator {
 
 	@NotNull
 	public static Transition edgeFactory(@NotNull ATN atn,
-										 int type, int src, int trg,
+										 TransitionType type, int src, int trg,
 										 int arg1, int arg2, int arg3,
 										 List<IntervalSet> sets)
 	{
 		ATNState target = atn.states.get(trg);
 		switch (type) {
-			case Transition.EPSILON : return new EpsilonTransition(target);
-			case Transition.RANGE : return new RangeTransition(target, arg1, arg2);
-			case Transition.RULE :
+			case EPSILON : return new EpsilonTransition(target);
+			case RANGE : return new RangeTransition(target, arg1, arg2);
+			case RULE :
 				RuleTransition rt = new RuleTransition((RuleStartState)atn.states.get(arg1), arg2, arg3, target);
 				return rt;
-			case Transition.PREDICATE :
+			case PREDICATE :
 				PredicateTransition pt = new PredicateTransition(target, arg1, arg2, arg3 != 0);
 				return pt;
-			case Transition.PRECEDENCE:
+			case PRECEDENCE:
 				return new PrecedencePredicateTransition(target, arg1);
-			case Transition.ATOM : return new AtomTransition(target, arg1);
-			case Transition.ACTION :
+			case ATOM : return new AtomTransition(target, arg1);
+			case ACTION :
 				ActionTransition a = new ActionTransition(target, arg1, arg2, arg3 != 0);
 				return a;
-			case Transition.SET : return new SetTransition(target, sets.get(arg1));
-			case Transition.NOT_SET : return new NotSetTransition(target, sets.get(arg1));
-			case Transition.WILDCARD : return new WildcardTransition(target);
+			case SET : return new SetTransition(target, sets.get(arg1));
+			case NOT_SET : return new NotSetTransition(target, sets.get(arg1));
+			case WILDCARD : return new WildcardTransition(target);
 		}
 
 		throw new IllegalArgumentException("The specified transition type is not valid.");
 	}
 
-	public static ATNState stateFactory(int type, int ruleIndex) {
+	public static ATNState stateFactory(StateType type, int ruleIndex) {
 		ATNState s;
 		switch (type) {
-			case ATNState.INVALID_TYPE: return null;
-			case ATNState.BASIC : s = new BasicState(); break;
-			case ATNState.RULE_START : s = new RuleStartState(); break;
-			case ATNState.BLOCK_START : s = new BasicBlockStartState(); break;
-			case ATNState.PLUS_BLOCK_START : s = new PlusBlockStartState(); break;
-			case ATNState.STAR_BLOCK_START : s = new StarBlockStartState(); break;
-			case ATNState.TOKEN_START : s = new TokensStartState(); break;
-			case ATNState.RULE_STOP : s = new RuleStopState(); break;
-			case ATNState.BLOCK_END : s = new BlockEndState(); break;
-			case ATNState.STAR_LOOP_BACK : s = new StarLoopbackState(); break;
-			case ATNState.STAR_LOOP_ENTRY : s = new StarLoopEntryState(); break;
-			case ATNState.PLUS_LOOP_BACK : s = new PlusLoopbackState(); break;
-			case ATNState.LOOP_END : s = new LoopEndState(); break;
+			case INVALID_TYPE: return null;
+			case BASIC : s = new BasicState(); break;
+			case RULE_START : s = new RuleStartState(); break;
+			case BLOCK_START : s = new BasicBlockStartState(); break;
+			case PLUS_BLOCK_START : s = new PlusBlockStartState(); break;
+			case STAR_BLOCK_START : s = new StarBlockStartState(); break;
+			case TOKEN_START : s = new TokensStartState(); break;
+			case RULE_STOP : s = new RuleStopState(); break;
+			case BLOCK_END : s = new BlockEndState(); break;
+			case STAR_LOOP_BACK : s = new StarLoopbackState(); break;
+			case STAR_LOOP_ENTRY : s = new StarLoopEntryState(); break;
+			case PLUS_LOOP_BACK : s = new PlusLoopbackState(); break;
+			case LOOP_END : s = new LoopEndState(); break;
             default :
 				String message = String.format("The specified state type %d is not valid.", type);
 				throw new IllegalArgumentException(message);

@@ -445,7 +445,7 @@ public class LexerATNSimulator extends ATNSimulator {
 		ATNConfig c;
 
 		switch (t.getSerializationType()) {
-		case Transition.RULE:
+		case RULE:
 			RuleTransition ruleTransition = (RuleTransition)t;
 			if (optimize_tail_calls && ruleTransition.optimizedTailCall && !config.getContext().hasEmpty()) {
 				c = config.transform(t.target);
@@ -457,10 +457,10 @@ public class LexerATNSimulator extends ATNSimulator {
 
 			break;
 
-		case Transition.PRECEDENCE:
+		case PRECEDENCE:
 			throw new UnsupportedOperationException("Precedence predicates are not supported in lexers.");
 
-		case Transition.PREDICATE:
+		case PREDICATE:
 			/*  Track traversing semantic predicates. If we traverse,
 			    we cannot add a DFA state for this "reach" computation
 				because the DFA would not test the predicate again in the
@@ -493,12 +493,12 @@ public class LexerATNSimulator extends ATNSimulator {
 			
 			break;
 			
-		case Transition.ACTION:
+		case ACTION:
 			// ignore actions; just exec one per rule upon accept
 			c = config.transform(t.target, ((ActionTransition)t).actionIndex);
 			break;
 			
-		case Transition.EPSILON:
+		case EPSILON:
 			c = config.transform(t.target);
 			break;
 

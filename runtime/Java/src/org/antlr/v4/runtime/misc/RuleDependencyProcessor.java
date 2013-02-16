@@ -59,6 +59,7 @@ import org.antlr.v4.runtime.atn.ATNSimulator;
 import org.antlr.v4.runtime.atn.ATNState;
 import org.antlr.v4.runtime.atn.RuleTransition;
 import org.antlr.v4.runtime.atn.Transition;
+import org.antlr.v4.runtime.atn.TransitionType;
 
 import java.lang.annotation.AnnotationTypeMismatchException;
 import java.util.BitSet;
@@ -623,7 +624,7 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 			}
 
 			for (Transition transition : state.getTransitions()) {
-				if (transition.getSerializationType() != Transition.RULE) {
+				if (transition.getSerializationType() != TransitionType.RULE) {
 					continue;
 				}
 

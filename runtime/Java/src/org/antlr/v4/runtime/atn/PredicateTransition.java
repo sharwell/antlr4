@@ -51,8 +51,8 @@ public final class PredicateTransition extends AbstractPredicateTransition {
 	}
 
 	@Override
-	public int getSerializationType() {
-		return PREDICATE;
+	public TransitionType getSerializationType() {
+		return TransitionType.PREDICATE;
 	}
 
 	@Override
