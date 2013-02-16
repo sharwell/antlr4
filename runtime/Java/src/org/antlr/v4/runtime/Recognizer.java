@@ -55,24 +55,40 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	/** Used to print out token names like ID during debugging and
 	 *  error reporting.  The generated parsers implement a method
 	 *  that overrides this to point to their String[] tokenNames.
+	 * 
+	 * @sharpen.property TokenNames
 	 */
 	public abstract String[] getTokenNames();
 
+	/**
+	 * @sharpen.property RuleNames
+	 */
 	public abstract String[] getRuleNames();
 
 	/** For debugging and other purposes, might want the grammar name.
 	 *  Have ANTLR generate an implementation for this method.
+	 * 
+	 * @sharpen.property GrammarFileName
 	 */
 	public abstract String getGrammarFileName();
 
+	/**
+	 * @sharpen.property Atn
+	 */
 	public ATN getATN() {
 		return _interp.atn;
 	}
 
+	/**
+	 * @sharpen.property Interpreter
+	 */
 	public ATNInterpreter getInterpreter() {
 		return _interp;
 	}
 
+	/**
+	 * @sharpen.property Interpreter
+	 */
 	public void setInterpreter(ATNInterpreter interpreter) {
 		_interp = interpreter;
 	}
@@ -147,6 +163,9 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	public void action(@Nullable RuleContext _localctx, int ruleIndex, int actionIndex) {
 	}
 
+	/**
+	 * @sharpen.property State
+	 */
 	public final int getState() {
 		return _stateNumber;
 	}
@@ -157,6 +176,8 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	 *  context objects form a stack that lets us see the stack of
 	 *  invoking rules. Combine this and we have complete ATN
 	 *  configuration information.
+	 * 
+	 * @sharpen.property State
 	 */
 	public final void setState(int atnState) {
 //		System.err.println("setState "+atnState);
@@ -164,5 +185,8 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 //		if ( traceATNStates ) _ctx.trace(atnState);
 	}
 
+	/**
+	 * @sharpen.property InputStream
+	 */
 	public abstract IntStream getInputStream();
 }
