@@ -109,6 +109,9 @@ public class ParserRuleContext extends RuleContext {
 
 	public ParserRuleContext() { }
 
+	/**
+	 * @sharpen.property
+	 */
 	public static ParserRuleContext emptyContext() {
 		return EMPTY;
 	}
@@ -284,7 +287,14 @@ public class ParserRuleContext extends RuleContext {
 		return Interval.of(start.getTokenIndex(), stop.getTokenIndex());
 	}
 
+	/**
+	 * @sharpen.property Start
+	 */
 	public Token getStart() { return start; }
+
+	/**
+	 * @sharpen.property Stop
+	 */
 	public Token getStop() { return stop; }
 
     /** Used for rule context info debugging during parse-time, not so much for ATN debugging */
