@@ -31,6 +31,9 @@
 package org.antlr.v4.runtime.atn;
 
 public final class StarLoopbackState extends ATNState {
+	/**
+	 * @sharpen.property LoopEntryState
+	 */
 	public final StarLoopEntryState getLoopEntryState() {
 		return (StarLoopEntryState)transition(0).target;
 	}

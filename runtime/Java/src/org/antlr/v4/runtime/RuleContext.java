@@ -175,7 +175,10 @@ public class RuleContext implements RuleNode {
 		return viewer.open();
 	}
 
-	/** Save this tree in a postscript file */
+	/** Save this tree in a postscript file.
+	 * 
+	 * @sharpen.ignore
+	 */
 	public void save(@Nullable Parser parser, String fileName)
 		throws IOException, PrintException
 	{
@@ -183,7 +186,10 @@ public class RuleContext implements RuleNode {
 		save(ruleNames, fileName);
 	}
 
-	/** Save this tree in a postscript file using a particular font name and size */
+	/** Save this tree in a postscript file using a particular font name and size.
+	 * 
+	 * @sharpen.ignore
+	 */
 	public void save(@Nullable Parser parser, String fileName,
 					 String fontName, int fontSize)
 		throws IOException
@@ -192,14 +198,20 @@ public class RuleContext implements RuleNode {
 		save(ruleNames, fileName, fontName, fontSize);
 	}
 
-	/** Save this tree in a postscript file */
+	/** Save this tree in a postscript file.
+	 * 
+	 * @sharpen.ignore
+	 */
 	public void save(@Nullable List<String> ruleNames, String fileName)
 		throws IOException, PrintException
 	{
 		Trees.writePS(this, ruleNames, fileName);
 	}
 
-	/** Save this tree in a postscript file using a particular font name and size */
+	/** Save this tree in a postscript file using a particular font name and size.
+	 * 
+	 * @sharpen.ignore
+	 */
 	public void save(@Nullable List<String> ruleNames, String fileName,
 					 String fontName, int fontSize)
 		throws IOException
