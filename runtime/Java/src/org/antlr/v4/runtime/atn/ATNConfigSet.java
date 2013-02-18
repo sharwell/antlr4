@@ -150,6 +150,9 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		return alts;
 	}
 
+	/**
+	 * @sharpen.property
+	 */
 	public final boolean isReadOnly() {
 		return mergedConfigs == null;
 	}
@@ -179,10 +182,16 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		}
 	}
 
+	/**
+	 * @sharpen.property
+	 */
 	public boolean isOutermostConfigSet() {
 		return outermostConfigSet;
 	}
 
+	/**
+	 * @sharpen.property IsOutermostConfigSet
+	 */
 	public void setOutermostConfigSet(boolean outermostConfigSet) {
 		if (this.outermostConfigSet && !outermostConfigSet) {
 			throw new IllegalStateException();
@@ -263,6 +272,9 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		return configs.toArray();
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	@Override
 	public <T> T[] toArray(T[] a) {
 		return configs.toArray(a);
@@ -495,10 +507,16 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		return buf.toString();
 	}
 
+	/**
+	 * @sharpen.property UniqueAlt
+	 */
 	public int getUniqueAlt() {
 		return uniqueAlt;
 	}
 
+	/**
+	 * @sharpen.property
+	 */
 	public boolean hasSemanticContext() {
 		return hasSemanticContext;
 	}
@@ -513,19 +531,31 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		hasSemanticContext = true;
 	}
 
+	/**
+	 * @sharpen.property ConflictingAlts
+	 */
 	public BitSet getConflictingAlts() {
 		return conflictingAlts;
 	}
 
+	/**
+	 * @sharpen.property ConflictingAlts
+	 */
 	public void setConflictingAlts(BitSet conflictingAlts) {
 		ensureWritable();
 		this.conflictingAlts = conflictingAlts;
 	}
 
+	/**
+	 * @sharpen.property DipsIntoOuterContext
+	 */
 	public boolean getDipsIntoOuterContext() {
 		return dipsIntoOuterContext;
 	}
 
+	/**
+	 * @sharpen.indexer
+	 */
 	public ATNConfig get(int index) {
 		return configs.get(index);
 	}
