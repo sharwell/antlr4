@@ -140,6 +140,9 @@ public class Utils {
 		}
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	public static <T> void removeAll(@NotNull Iterable<T> iterable, @NotNull Predicate<? super T> predicate) {
 		if (iterable instanceof List<?>) {
 			removeAll((List<T>)iterable, predicate);
