@@ -92,11 +92,16 @@ public class RecognitionException extends RuntimeException {
 	 *  For others, it is the state whose emanating edge we couldn't match.
 	 *  This will help us tie into the grammar and syntax diagrams in
 	 *  ANTLRWorks v2.
+	 * 
+	 * @sharpen.property OffendingState
 	 */
 	public int getOffendingState() {
 		return offendingState;
 	}
 
+	/**
+	 * @sharpen.property OffendingState
+	 */
 	protected final void setOffendingState(int offendingState) {
 		this.offendingState = offendingState;
 	}
@@ -109,22 +114,37 @@ public class RecognitionException extends RuntimeException {
 		return null;
 	}
 
+	/**
+	 * @sharpen.property Context
+	 */
 	public RuleContext getCtx() {
 		return ctx;
 	}
 
+	/**
+	 * @sharpen.property InputStream
+	 */
 	public IntStream getInputStream() {
 		return input;
 	}
 
+	/**
+	 * @sharpen.property OffendingToken
+	 */
 	public Token getOffendingToken() {
 		return offendingToken;
 	}
 
+	/**
+	 * @sharpen.property OffendingToken
+	 */
 	protected final void setOffendingToken(Token offendingToken) {
 		this.offendingToken = offendingToken;
 	}
 
+	/**
+	 * @sharpen.property Recognizer
+	 */
 	public Recognizer<?, ?> getRecognizer() {
 		return recognizer;
 	}
