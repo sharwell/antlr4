@@ -292,11 +292,17 @@ public class ParserATNSimulator extends ATNSimulator {
 		this.parser = parser;
 	}
 
+	/**
+	 * @sharpen.property PredictionMode
+	 */
 	@NotNull
 	public final PredictionMode getPredictionMode() {
 		return predictionMode;
 	}
 
+	/**
+	 * @sharpen.property PredictionMode
+	 */
 	public final void setPredictionMode(@NotNull PredictionMode predictionMode) {
 		this.predictionMode = predictionMode;
 	}
@@ -1825,7 +1831,7 @@ public class ParserATNSimulator extends ATNSimulator {
 											configs, outerContext);
 	}
 
-	public int getUniqueAlt(@NotNull Collection<ATNConfig> configs) {
+	public int getUniqueAlt(@NotNull Iterable<ATNConfig> configs) {
 		int alt = ATN.INVALID_ALT_NUMBER;
 		for (ATNConfig c : configs) {
 			if ( alt == ATN.INVALID_ALT_NUMBER ) {
@@ -1838,7 +1844,7 @@ public class ParserATNSimulator extends ATNSimulator {
 		return alt;
 	}
 
-	public boolean configWithAltAtStopState(@NotNull Collection<ATNConfig> configs, int alt) {
+	public boolean configWithAltAtStopState(@NotNull Iterable<ATNConfig> configs, int alt) {
 		for (ATNConfig c : configs) {
 			if ( c.getAlt() == alt ) {
 				if ( c.getState() instanceof RuleStopState ) {

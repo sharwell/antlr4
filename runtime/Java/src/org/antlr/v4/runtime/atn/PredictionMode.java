@@ -273,7 +273,7 @@ public enum PredictionMode {
 	 * @return {@code true} if any configuration in {@code configs} is in a
 	 * {@link RuleStopState}, otherwise {@code false}
 	 */
-	public static boolean hasConfigInRuleStopState(ATNConfigSet configs) {
+	public static boolean hasConfigInRuleStopState(Iterable<ATNConfig> configs) {
 		for (ATNConfig c : configs) {
 			if (c.getState() instanceof RuleStopState) {
 				return true;
@@ -293,7 +293,7 @@ public enum PredictionMode {
 	 * @return {@code true} if all configurations in {@code configs} are in a
 	 * {@link RuleStopState}, otherwise {@code false}
 	 */
-	public static boolean allConfigsInRuleStopStates(@NotNull ATNConfigSet configs) {
+	public static boolean allConfigsInRuleStopStates(@NotNull Iterable<ATNConfig> configs) {
 		for (ATNConfig config : configs) {
 			if (!(config.getState() instanceof RuleStopState)) {
 				return false;
@@ -484,7 +484,7 @@ public enum PredictionMode {
 	 * we need exact ambiguity detection when the sets look like
 	 * {@code A={{1,2}}} or {@code {{1,2},{1,2}}}, etc...
 	 */
-	public static int resolvesToJustOneViableAlt(@NotNull Collection<BitSet> altsets) {
+	public static int resolvesToJustOneViableAlt(@NotNull Iterable<BitSet> altsets) {
 		return getSingleViableAlt(altsets);
 	}
 
@@ -496,7 +496,7 @@ public enum PredictionMode {
 	 * @return {@code true} if every {@link BitSet} in {@code altsets} has
 	 * {@link BitSet#cardinality cardinality} &gt; 1, otherwise {@code false}
 	 */
-	public static boolean allSubsetsConflict(@NotNull Collection<BitSet> altsets) {
+	public static boolean allSubsetsConflict(@NotNull Iterable<BitSet> altsets) {
 		return !hasNonConflictingAltSet(altsets);
 	}
 
@@ -508,7 +508,7 @@ public enum PredictionMode {
 	 * @return {@code true} if {@code altsets} contains a {@link BitSet} with
 	 * {@link BitSet#cardinality cardinality} 1, otherwise {@code false}
 	 */
-	public static boolean hasNonConflictingAltSet(@NotNull Collection<BitSet> altsets) {
+	public static boolean hasNonConflictingAltSet(@NotNull Iterable<BitSet> altsets) {
 		for (BitSet alts : altsets) {
 			if ( alts.cardinality()==1 ) {
 				return true;
@@ -525,7 +525,7 @@ public enum PredictionMode {
 	 * @return {@code true} if {@code altsets} contains a {@link BitSet} with
 	 * {@link BitSet#cardinality cardinality} &gt; 1, otherwise {@code false}
 	 */
-	public static boolean hasConflictingAltSet(@NotNull Collection<BitSet> altsets) {
+	public static boolean hasConflictingAltSet(@NotNull Iterable<BitSet> altsets) {
 		for (BitSet alts : altsets) {
 			if ( alts.cardinality()>1 ) {
 				return true;
@@ -541,7 +541,7 @@ public enum PredictionMode {
 	 * @return {@code true} if every member of {@code altsets} is equal to the
 	 * others, otherwise {@code false}
 	 */
-	public static boolean allSubsetsEqual(@NotNull Collection<BitSet> altsets) {
+	public static boolean allSubsetsEqual(@NotNull Iterable<BitSet> altsets) {
 		Iterator<BitSet> it = altsets.iterator();
 		BitSet first = it.next();
 		while ( it.hasNext() ) {
@@ -558,7 +558,7 @@ public enum PredictionMode {
 	 *
 	 * @param altsets a collection of alternative subsets
 	 */
-	public static int getUniqueAlt(@NotNull Collection<BitSet> altsets) {
+	public static int getUniqueAlt(@NotNull Iterable<BitSet> altsets) {
 		BitSet all = getAlts(altsets);
 		if ( all.cardinality()==1 ) return all.nextSetBit(0);
 		return ATN.INVALID_ALT_NUMBER;
@@ -572,7 +572,7 @@ public enum PredictionMode {
 	 * @param altsets a collection of alternative subsets
 	 * @return the set of represented alternatives in {@code altsets}
 	 */
-	public static BitSet getAlts(@NotNull Collection<BitSet> altsets) {
+	public static BitSet getAlts(@NotNull Iterable<BitSet> altsets) {
 		BitSet all = new BitSet();
 		for (BitSet alts : altsets) {
 			all.or(alts);
@@ -590,7 +590,7 @@ public enum PredictionMode {
 	 * </pre>
 	 */
 	@NotNull
-	public static Collection<BitSet> getConflictingAltSubsets(ATNConfigSet configs) {
+	public static Collection<BitSet> getConflictingAltSubsets(Iterable<ATNConfig> configs) {
 		AltAndContextMap configToAlts = new AltAndContextMap();
 		for (ATNConfig c : configs) {
 			BitSet alts = configToAlts.get(c);
@@ -612,7 +612,7 @@ public enum PredictionMode {
 	 * </pre>
 	 */
 	@NotNull
-	public static Map<ATNState, BitSet> getStateToAltMap(@NotNull ATNConfigSet configs) {
+	public static Map<ATNState, BitSet> getStateToAltMap(@NotNull Iterable<ATNConfig> configs) {
 		Map<ATNState, BitSet> m = new HashMap<ATNState, BitSet>();
 		for (ATNConfig c : configs) {
 			BitSet alts = m.get(c.getState());
@@ -625,7 +625,7 @@ public enum PredictionMode {
 		return m;
 	}
 
-	public static boolean hasStateAssociatedWithOneAlt(@NotNull ATNConfigSet configs) {
+	public static boolean hasStateAssociatedWithOneAlt(@NotNull Iterable<ATNConfig> configs) {
 		Map<ATNState, BitSet> x = getStateToAltMap(configs);
 		for (BitSet alts : x.values()) {
 			if ( alts.cardinality()==1 ) return true;
@@ -633,7 +633,7 @@ public enum PredictionMode {
 		return false;
 	}
 
-	public static int getSingleViableAlt(@NotNull Collection<BitSet> altsets) {
+	public static int getSingleViableAlt(@NotNull Iterable<BitSet> altsets) {
 		BitSet viableAlts = new BitSet();
 		for (BitSet alts : altsets) {
 			int minAlt = alts.nextSetBit(0);
