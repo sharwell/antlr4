@@ -136,11 +136,17 @@ public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 		return Collections.singletonMap(key, value);
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	@Override
 	public Set<Map.Entry<Integer, T>> entrySet() {
 		return new EntrySet();
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	private class EntrySet extends AbstractEntrySet {
 		@Override
 		public Iterator<Map.Entry<Integer, T>> iterator() {
@@ -148,6 +154,9 @@ public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 		}
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	private class EntryIterator implements Iterator<Map.Entry<Integer, T>> {
 		private int current;
 

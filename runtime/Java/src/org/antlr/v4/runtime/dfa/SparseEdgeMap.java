@@ -196,11 +196,17 @@ public class SparseEdgeMap<T> extends AbstractEdgeMap<T> {
 		return result;
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	@Override
 	public Set<Map.Entry<Integer, T>> entrySet() {
 		return new EntrySet();
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	private class EntrySet extends AbstractEntrySet {
 		@Override
 		public Iterator<Map.Entry<Integer, T>> iterator() {
@@ -208,6 +214,9 @@ public class SparseEdgeMap<T> extends AbstractEdgeMap<T> {
 		}
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	private class EntryIterator implements Iterator<Map.Entry<Integer, T>> {
 		private int current;
 

@@ -583,6 +583,9 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		}
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	private final class ATNConfigSetIterator implements Iterator<ATNConfig> {
 
 		int index = -1;
