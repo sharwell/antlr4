@@ -46,7 +46,9 @@ import org.antlr.v4.runtime.atn.RangeTransition;
 import org.antlr.v4.runtime.atn.RuleStartState;
 import org.antlr.v4.runtime.atn.RuleTransition;
 import org.antlr.v4.runtime.atn.SetTransition;
+import org.antlr.v4.runtime.atn.StateType;
 import org.antlr.v4.runtime.atn.Transition;
+import org.antlr.v4.runtime.atn.TransitionType;
 import org.antlr.v4.runtime.misc.IntegerList;
 import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.IntervalSet;
@@ -117,11 +119,11 @@ public class ATNSerializer {
 		data.add(atn.states.size());
 		for (ATNState s : atn.states) {
 			if ( s==null ) { // might be optimized away
-				data.add(ATNState.INVALID_TYPE);
+				data.add(StateType.INVALID_TYPE.ordinal());
 				continue;
 			}
 
-			int stateType = s.getStateType();
+			StateType stateType = s.getStateType();
 			if (s instanceof DecisionState) {
 				DecisionState decisionState = (DecisionState)s;
 				if (decisionState.nonGreedy) {
@@ -137,24 +139,24 @@ public class ATNSerializer {
 				precedenceStates.add(s.stateNumber);
 			}
 
-			data.add(stateType);
+			data.add(stateType.ordinal());
 			data.add(s.ruleIndex);
-			if ( s.getStateType() == ATNState.LOOP_END ) {
+			if ( s.getStateType() == StateType.LOOP_END ) {
 				data.add(((LoopEndState)s).loopBackState.stateNumber);
 			}
 			else if ( s instanceof BlockStartState ) {
 				data.add(((BlockStartState)s).endState.stateNumber);
 			}
 
-			if (s.getStateType() != ATNState.RULE_STOP) {
+			if (s.getStateType() != StateType.RULE_STOP) {
 				// the deserializer can trivially derive these edges, so there's no need to serialize them
 				nedges += s.getNumberOfTransitions();
 			}
 
 			for (int i=0; i<s.getNumberOfTransitions(); i++) {
 				Transition t = s.transition(i);
-				int edgeType = Transition.serializationTypes.get(t.getClass());
-				if ( edgeType == Transition.SET || edgeType == Transition.NOT_SET ) {
+				TransitionType edgeType = Transition.serializationTypes.get(t.getClass());
+				if ( edgeType == TransitionType.SET || edgeType == TransitionType.NOT_SET ) {
 					SetTransition st = (SetTransition)t;
 					sets.add(st.set);
 				}
@@ -220,7 +222,7 @@ public class ATNSerializer {
 				continue;
 			}
 
-			if (s.getStateType() == ATNState.RULE_STOP) {
+			if (s.getStateType() == StateType.RULE_STOP) {
 				continue;
 			}
 
@@ -233,52 +235,52 @@ public class ATNSerializer {
 
 				int src = s.stateNumber;
 				int trg = t.target.stateNumber;
-				int edgeType = Transition.serializationTypes.get(t.getClass());
+				TransitionType edgeType = Transition.serializationTypes.get(t.getClass());
 				int arg1 = 0;
 				int arg2 = 0;
 				int arg3 = 0;
 				switch ( edgeType ) {
-					case Transition.RULE :
+					case RULE :
 						trg = ((RuleTransition)t).followState.stateNumber;
 						arg1 = ((RuleTransition)t).target.stateNumber;
 						arg2 = ((RuleTransition)t).ruleIndex;
 						arg3 = ((RuleTransition)t).precedence;
 						break;
-					case Transition.PRECEDENCE:
+					case PRECEDENCE:
 						PrecedencePredicateTransition ppt = (PrecedencePredicateTransition)t;
 						arg1 = ppt.precedence;
 						break;
-					case Transition.PREDICATE :
+					case PREDICATE :
 						PredicateTransition pt = (PredicateTransition)t;
 						arg1 = pt.ruleIndex;
 						arg2 = pt.predIndex;
 						arg3 = pt.isCtxDependent ? 1 : 0 ;
 						break;
-					case Transition.RANGE :
+					case RANGE :
 						arg1 = ((RangeTransition)t).from;
 						arg2 = ((RangeTransition)t).to;
 						break;
-					case Transition.ATOM :
+					case ATOM :
 						arg1 = ((AtomTransition)t).label;
 						break;
-					case Transition.ACTION :
+					case ACTION :
 						ActionTransition at = (ActionTransition)t;
 						arg1 = at.ruleIndex;
 						arg2 = at.actionIndex;
 						arg3 = at.isCtxDependent ? 1 : 0 ;
 						break;
-					case Transition.SET :
+					case SET :
 						arg1 = setIndex++;
 						break;
-					case Transition.NOT_SET :
+					case NOT_SET :
 						arg1 = setIndex++;
 						break;
-					case Transition.WILDCARD :
+					case WILDCARD :
 						break;
 				}
 				data.add(src);
 				data.add(trg);
-				data.add(edgeType);
+				data.add(edgeType.ordinal());
 				data.add(arg1);
 				data.add(arg2);
 				data.add(arg3);
@@ -324,20 +326,20 @@ public class ATNSerializer {
 		buf.append("max type ").append(maxType).append("\n");
 		int nstates = ATNSimulator.toInt(data[p++]);
 		for (int i=1; i<=nstates; i++) {
-			int stype = ATNSimulator.toInt(data[p++]);
-            if ( stype==ATNState.INVALID_TYPE ) continue; // ignore bad type of states
+			StateType stype = StateType.values()[ATNSimulator.toInt(data[p++])];
+            if ( stype==StateType.INVALID_TYPE ) continue; // ignore bad type of states
 			int ruleIndex = ATNSimulator.toInt(data[p++]);
 			String arg = "";
-			if ( stype == ATNState.LOOP_END ) {
+			if ( stype == StateType.LOOP_END ) {
 				int loopBackStateNumber = ATNSimulator.toInt(data[p++]);
 				arg = " "+loopBackStateNumber;
 			}
-			else if ( stype == ATNState.PLUS_BLOCK_START || stype == ATNState.STAR_BLOCK_START || stype == ATNState.BLOCK_START ) {
+			else if ( stype == StateType.PLUS_BLOCK_START || stype == StateType.STAR_BLOCK_START || stype == StateType.BLOCK_START ) {
 				int endStateNumber = ATNSimulator.toInt(data[p++]);
 				arg = " "+endStateNumber;
 			}
 			buf.append(i - 1).append(":")
-				.append(ATNState.serializationNames.get(stype)).append(" ")
+				.append(ATNState.serializationNames.get(stype.ordinal())).append(" ")
 				.append(ruleIndex).append(arg).append("\n");
 		}
 
