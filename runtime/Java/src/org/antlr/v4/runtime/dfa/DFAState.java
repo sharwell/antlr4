@@ -160,7 +160,7 @@ public class DFAState {
 		contextEdges = new SingletonEdgeMap<DFAState>(-1, atn.states.size() - 1);
 	}
 
-	public DFAState getTarget(int symbol) {
+	public synchronized DFAState getTarget(int symbol) {
 		if (edges == null) {
 			return null;
 		}
@@ -187,7 +187,7 @@ public class DFAState {
 		return edges.toMap();
 	}
 
-	public DFAState getContextTarget(int invokingState) {
+	public synchronized DFAState getContextTarget(int invokingState) {
 		if (contextEdges == null) {
 			return null;
 		}
