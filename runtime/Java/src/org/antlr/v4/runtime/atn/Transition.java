@@ -69,6 +69,9 @@ public abstract class Transition {
 			"PRECEDENCE"
 		));
 
+	/**
+	 * @sharpen.ignore
+	 */
 	@SuppressWarnings("serial")
 	public static final Map<Class<? extends Transition>, TransitionType> serializationTypes =
 		Collections.unmodifiableMap(new HashMap<Class<? extends Transition>, TransitionType>() {{
