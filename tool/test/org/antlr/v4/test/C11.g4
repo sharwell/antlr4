@@ -151,11 +151,19 @@ declaration
     ;
 
 declarationSpecifiers
-    :   storageClassSpecifier declarationSpecifiers?
-    |   typeSpecifier declarationSpecifiers?
-    |   typeQualifier declarationSpecifiers?
-    |   functionSpecifier declarationSpecifiers?
-    |   alignmentSpecifier declarationSpecifiers?
+    :   declarationSpecifier+
+    ;
+
+declarationSpecifiers2
+    :   declarationSpecifier+
+    ;
+
+declarationSpecifier
+    :   storageClassSpecifier
+    |   typeSpecifier
+    |   typeQualifier
+    |   functionSpecifier
+    |   alignmentSpecifier
     ;
 
 initDeclaratorList
@@ -345,7 +353,7 @@ parameterList
 
 parameterDeclaration
     :   declarationSpecifiers declarator
-    |   declarationSpecifiers abstractDeclarator?
+    |   declarationSpecifiers2 abstractDeclarator?
     ;
 
 identifierList
