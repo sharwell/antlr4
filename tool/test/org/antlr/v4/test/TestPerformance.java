@@ -111,7 +111,7 @@ public class TestPerformance extends BaseTest {
      * Parse all java files under this package within the JDK_SOURCE_ROOT
      * (environment variable or property defined on the Java command line).
      */
-    private static final String TOP_PACKAGE = "java.lang";
+    private static final String TOP_PACKAGE = "";
     /**
      * {@code true} to load java files from sub-packages of
      * {@link #TOP_PACKAGE}.
@@ -399,13 +399,13 @@ public class TestPerformance extends BaseTest {
     @Test
     //@org.junit.Ignore
     public void compileJdk() throws IOException, InterruptedException, ExecutionException {
-        String jdkSourceRoot = getSourceRoot("JDK");
-		assertTrue("The JDK_SOURCE_ROOT environment variable must be set for performance testing.", jdkSourceRoot != null && !jdkSourceRoot.isEmpty());
+        String jdkSourceRoot = getSourceRoot("CSRC");
+		assertTrue("The CSRC_SOURCE_ROOT environment variable must be set for performance testing.", jdkSourceRoot != null && !jdkSourceRoot.isEmpty());
 
         compileJavaParser(USE_LR_GRAMMAR);
-		final String lexerName = "JavaLexer";
-		final String parserName = "JavaParser";
-		final String listenerName = "JavaBaseListener";
+		final String lexerName = "C11Lexer";
+		final String parserName = "C11Parser";
+		final String listenerName = "C11BaseListener";
 		final String entryPoint = "compilationUnit";
         final ParserFactory factory = getParserFactory(lexerName, parserName, listenerName, entryPoint);
 
@@ -416,7 +416,7 @@ public class TestPerformance extends BaseTest {
         File directory = new File(jdkSourceRoot);
         assertTrue(directory.isDirectory());
 
-		FilenameFilter filesFilter = FilenameFilters.extension(".java", false);
+		FilenameFilter filesFilter = FilenameFilters.extension(".c", false);
 		FilenameFilter directoriesFilter = FilenameFilters.ALL_FILES;
 		final List<InputDescriptor> sources = loadSources(directory, filesFilter, directoriesFilter, RECURSIVE);
 
@@ -1097,8 +1097,8 @@ public class TestPerformance extends BaseTest {
 	}
 
     protected void compileJavaParser(boolean leftRecursive) throws IOException {
-        String grammarFileName = "Java.g4";
-        String sourceName = leftRecursive ? "Java-LR.g4" : "Java.g4";
+        String grammarFileName = "C11.g4";
+        String sourceName = "C11.g4";
         String body = load(sourceName, null);
         List<String> extraOptions = new ArrayList<String>();
 		extraOptions.add("-Werror");
@@ -1116,7 +1116,7 @@ public class TestPerformance extends BaseTest {
 		}
 		extraOptions.add("-visitor");
         String[] extraOptionsArray = extraOptions.toArray(new String[extraOptions.size()]);
-        boolean success = rawGenerateAndBuildRecognizer(grammarFileName, body, "JavaParser", "JavaLexer", true, extraOptionsArray);
+        boolean success = rawGenerateAndBuildRecognizer(grammarFileName, body, "C11Parser", "C11Lexer", true, extraOptionsArray);
         assertTrue(success);
     }
 
@@ -1913,7 +1913,7 @@ public class TestPerformance extends BaseTest {
 				}
 			}
 
-			return new JavaUnicodeInputStream(stream.createCopy());
+			return stream.createCopy();
 		}
 	}
 
