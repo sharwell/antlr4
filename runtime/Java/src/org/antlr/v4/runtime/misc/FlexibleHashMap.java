@@ -65,7 +65,7 @@ public class FlexibleHashMap<K,V> implements Map<K, V> {
 	/** How many elements in set */
 	protected int n = 0;
 
-	protected int threshold = (int)(INITAL_CAPACITY * LOAD_FACTOR); // when to expand
+	protected int threshold; // when to expand
 
 	protected int initialBucketCapacity = INITAL_BUCKET_CAPACITY;
 
@@ -85,6 +85,7 @@ public class FlexibleHashMap<K,V> implements Map<K, V> {
 		this.comparator = comparator;
 		this.buckets = createEntryListArray(initialBucketCapacity);
 		this.initialBucketCapacity = initialBucketCapacity;
+		this.threshold = (int)(initialCapacity * LOAD_FACTOR);
 	}
 
 	private static <K, V> LinkedList<Entry<K, V>>[] createEntryListArray(int length) {

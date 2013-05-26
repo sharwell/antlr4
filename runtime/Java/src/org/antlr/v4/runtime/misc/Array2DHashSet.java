@@ -50,9 +50,9 @@ public class Array2DHashSet<T> implements Set<T> {
 	/** How many elements in set */
 	protected int n = 0;
 
-	protected int threshold = (int)(INITAL_CAPACITY * LOAD_FACTOR); // when to expand
+	protected int threshold; // when to expand
 
-	protected int initialBucketCapacity = INITAL_BUCKET_CAPACITY;
+	protected int initialBucketCapacity;
 
 	public Array2DHashSet() {
 		this(null, INITAL_CAPACITY, INITAL_BUCKET_CAPACITY);
@@ -70,6 +70,7 @@ public class Array2DHashSet<T> implements Set<T> {
 		this.comparator = comparator;
 		this.buckets = createBuckets(initialCapacity);
 		this.initialBucketCapacity = initialBucketCapacity;
+		this.threshold = (int)(initialCapacity * LOAD_FACTOR);
 	}
 
 	/**
