@@ -52,7 +52,6 @@ public class Array2DHashSet<T> implements Set<T> {
 
 	protected int threshold = (int)(INITAL_CAPACITY * LOAD_FACTOR); // when to expand
 
-	protected int currentPrime = 1; // jump by 4 primes each expand or whatever
 	protected int initialBucketCapacity = INITAL_BUCKET_CAPACITY;
 
 	public Array2DHashSet() {
@@ -161,7 +160,6 @@ public class Array2DHashSet<T> implements Set<T> {
 
 	protected void expand() {
 		T[][] old = buckets;
-		currentPrime += 4;
 		int newCapacity = buckets.length * 2;
 		T[][] newTable = createBuckets(newCapacity);
 		int[] newBucketLengths = new int[newTable.length];

@@ -67,7 +67,6 @@ public class FlexibleHashMap<K,V> implements Map<K, V> {
 
 	protected int threshold = (int)(INITAL_CAPACITY * LOAD_FACTOR); // when to expand
 
-	protected int currentPrime = 1; // jump by 4 primes each expand or whatever
 	protected int initialBucketCapacity = INITAL_BUCKET_CAPACITY;
 
 	public FlexibleHashMap() {
@@ -203,7 +202,6 @@ public class FlexibleHashMap<K,V> implements Map<K, V> {
 
 	protected void expand() {
 		LinkedList<Entry<K, V>>[] old = buckets;
-		currentPrime += 4;
 		int newCapacity = buckets.length * 2;
 		LinkedList<Entry<K, V>>[] newTable = createEntryListArray(newCapacity);
 		buckets = newTable;
