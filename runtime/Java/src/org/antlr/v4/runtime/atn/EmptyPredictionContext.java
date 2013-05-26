@@ -39,18 +39,23 @@ public class EmptyPredictionContext extends SingletonPredictionContext {
 	public boolean isEmpty() { return true; }
 
 	@Override
+	public boolean hasEmptyPath() {
+		return true;
+	}
+
+	@Override
 	public int size() {
-		return 1;
+		return 0;
 	}
 
 	@Override
 	public PredictionContext getParent(int index) {
-		return null;
+		throw new IllegalArgumentException();
 	}
 
 	@Override
 	public int getReturnState(int index) {
-		return returnState;
+		throw new IllegalArgumentException();
 	}
 
 	@Override
