@@ -45,13 +45,20 @@ import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
+import org.antlr.v4.runtime.misc.Pair;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -256,6 +263,8 @@ public class ParserATNSimulator extends ATNSimulator {
 	public static final boolean debug_list_atn_decisions = false;
 	public static final boolean dfa_debug = false;
 	public static final boolean retry_debug = false;
+
+	private static final boolean OPTIMIZED_CLOSURE = true;
 
 	@Nullable
 	protected final Parser parser;
@@ -841,10 +850,254 @@ public class ParserATNSimulator extends ATNSimulator {
 
 	@NotNull
 	protected ATNConfigSet closure(@NotNull ATNConfigSet configs, boolean fullCtx) {
+		if (OPTIMIZED_CLOSURE) {
+			try {
+				// group the configs by their alternative and semantic context
+				Map<Pair<Integer, SemanticContext>, List<ATNConfig>> groups =
+					new HashMap<Pair<Integer, SemanticContext>, List<ATNConfig>>();
+				for (ATNConfig c : configs) {
+					List<ATNConfig> group = groups.get(new Pair<Integer, SemanticContext>(c.alt, c.semanticContext));
+					if (group == null) {
+						group = new ArrayList<ATNConfig>();
+						groups.put(new Pair<Integer, SemanticContext>(c.alt, c.semanticContext), group);
+					}
+
+					group.add(c);
+				}
+
+				ATNConfigSet result = new ATNConfigSet(fullCtx);
+				for (Map.Entry<Pair<Integer, SemanticContext>, List<ATNConfig>> pairs : groups.entrySet()) {
+					if (pairs.getValue().size() > 1) {
+						Collections.sort(pairs.getValue(), new Comparator<ATNConfig>() {
+							@Override
+							public int compare(ATNConfig o1, ATNConfig o2) {
+								return o1.state.stateNumber - o2.state.stateNumber;
+							}
+						});
+					}
+
+					PredictionContext[] parents = new PredictionContext[pairs.getValue().size()];
+					int[] returnStates = new int[pairs.getValue().size()];
+					for (int i = 0; i < parents.length; i++) {
+						returnStates[i] = pairs.getValue().get(i).state.stateNumber;
+						parents[i] = pairs.getValue().get(i).context;
+					}
+
+					ArrayPredictionContext merged = new ArrayPredictionContext(parents, returnStates);
+					PredictionContext closureResult = fastClosure(merged, fullCtx);
+					for (int i = 0; i < closureResult.size(); i++) {
+						ATNState state = atn.states.get(closureResult.getReturnState(i));
+						assert !(state instanceof RuleStopState);
+						int alt = pairs.getKey().a;
+						PredictionContext context = closureResult.getParent(i);
+						result.add(new ATNConfig(state, alt, context, pairs.getKey().b), mergeCache);
+					}
+				}
+
+				return result;
+			}
+			catch (UnsupportedOperationException ex) {
+				// continue with the unoptimized version
+			}
+		}
+
 		ATNConfigSet result = new ATNConfigSet(fullCtx);
 		Set<ATNConfig> closureBusy = new HashSet<ATNConfig>();
 		for (ATNConfig c : configs) {
 			closure(c, result, closureBusy, false, fullCtx);
+		}
+
+		return result;
+	}
+
+	protected PredictionContext fastClosure(PredictionContext merged, boolean fullCtx) {
+		// First, analyze the structure of the input.
+		Map<Integer, PredictionContext> localClosures =
+			analyzeClosureStructure(merged, fullCtx);
+
+		// Then we perform the individual local closure operations.
+		Map<PredictionContext, PredictionContext> localResults =
+			localClosure(localClosures, fullCtx);
+
+		// the complete closure is constructed from the merged local results
+		PredictionContext result = mergeLocalClosures(localResults, fullCtx);
+		return result;
+	}
+
+	protected Map<Integer, PredictionContext> analyzeClosureStructure(PredictionContext merged, boolean fullCtx) {
+		Map<Integer, PredictionContext> result = new HashMap<Integer, PredictionContext>();
+		ArrayDeque<PredictionContext> workList = new ArrayDeque<PredictionContext>();
+		workList.push(merged);
+		while (!workList.isEmpty()) {
+			PredictionContext current = workList.pop();
+			for (int i = 0; i < current.size(); i++) {
+				int stateNumber = current.getReturnState(i);
+				PredictionContext context = current.getParent(i);
+				PredictionContext existing = result.get(stateNumber);
+				if (existing != null) {
+					context = PredictionContext.merge(context, existing, !fullCtx, mergeCache);
+				}
+
+				result.put(stateNumber, context);
+				ATNState state = atn.states.get(stateNumber);
+				IntervalSet look = atn.nextTokens(state);
+				if (look.contains(Token.EPSILON)) {
+					if (current.getParent(i).isEmpty()) {
+						throw new UnsupportedOperationException("Not supported yet.");
+					}
+
+					workList.push(current.getParent(i));
+				}
+			}
+		}
+
+		return result;
+	}
+
+	protected PredictionContext mergeLocalClosures(Map<PredictionContext, PredictionContext> localClosures, boolean fullCtx) {
+		PredictionContext result = null;
+		for (Map.Entry<PredictionContext, PredictionContext> entry : localClosures.entrySet()) {
+			PredictionContext linked = linkContexts(entry.getKey(), entry.getValue(), fullCtx);
+			if (result != null) {
+				linked = PredictionContext.merge(linked, result, !fullCtx, mergeCache);
+			}
+
+			result = linked;
+		}
+
+		return result;
+	}
+
+	protected PredictionContext linkContexts(PredictionContext a, PredictionContext b, boolean fullCtx) {
+		if (!fullCtx && b.isEmpty()) {
+			return a;
+		}
+
+		if (a.size() == 1) {
+			if (a.getParent(0).isEmpty()) {
+				return new SingletonPredictionContext(b, a.getReturnState(0));
+			}
+			else {
+				return new SingletonPredictionContext(linkContexts(a.getParent(0), b, fullCtx), a.getReturnState(0));
+			}
+		}
+
+		IdentityHashMap<PredictionContext, PredictionContext> subresults = new IdentityHashMap<PredictionContext, PredictionContext>();
+		return linkContexts(a, b, fullCtx, subresults);
+	}
+
+	protected PredictionContext linkContexts(PredictionContext a, PredictionContext b, boolean fullCtx, IdentityHashMap<PredictionContext, PredictionContext> subresults) {
+		if (a.isEmpty()) {
+			return b;
+		}
+
+		PredictionContext existing = subresults.get(a);
+		if (existing != null) {
+			return existing;
+		}
+
+		if (a.size() == 1) {
+			if (a.getParent(0).isEmpty()) {
+				PredictionContext result = new SingletonPredictionContext(b, a.getReturnState(0));
+				subresults.put(a, result);
+				return result;
+			}
+			else {
+				PredictionContext result = new SingletonPredictionContext(linkContexts(a.getParent(0), b, fullCtx, subresults), a.getReturnState(0));
+				subresults.put(a, result);
+				return result;
+			}
+		}
+
+		boolean needsDirectMerge = a.hasEmptyPath();
+
+		int[] returnStates = ((ArrayPredictionContext)a).returnStates;
+		if (needsDirectMerge) {
+			returnStates = Arrays.copyOf(returnStates, returnStates.length - 1);
+		}
+
+		PredictionContext[] parents = new PredictionContext[returnStates.length];
+		for (int i = 0; i < parents.length; i++) {
+			parents[i] = linkContexts(a.getParent(i), b, fullCtx, subresults);
+		}
+
+		PredictionContext result = new ArrayPredictionContext(parents, returnStates);
+		if (needsDirectMerge) {
+			result = PredictionContext.merge(result, b, !fullCtx, mergeCache);
+		}
+
+		subresults.put(a, result);
+		return result;
+	}
+
+	protected Map<PredictionContext, PredictionContext> localClosure(Map<Integer, PredictionContext> operations, boolean fullCtx) {
+		Map<PredictionContext, PredictionContext> result = new HashMap<PredictionContext, PredictionContext>();
+		for (Map.Entry<Integer, PredictionContext> entry : operations.entrySet()) {
+			PredictionContext localResult = localClosure(entry.getKey());
+			if (localResult == PredictionContext.EMPTY) {
+				continue;
+			}
+
+			PredictionContext existing = result.get(localResult);
+			if (existing == null) {
+				result.put(localResult, entry.getValue());
+			}
+			else {
+				PredictionContext merged = PredictionContext.merge(entry.getValue(), existing, !fullCtx, mergeCache);
+				result.put(localResult, merged);
+			}
+		}
+
+		return result;
+	}
+
+	protected PredictionContext localClosure(int stateNumber) {
+		ATNState state = atn.states.get(stateNumber);
+		PredictionContext result;
+		synchronized (atn.localClosures) {
+			result = atn.localClosures.get(state);
+		}
+
+		if (result == null) {
+			mergeCache = new DoubleKeyMap<PredictionContext, PredictionContext, PredictionContext>();
+			ATNConfigSet configset = new ATNConfigSet(true);
+			closure(new ATNConfig(state, 1, PredictionContext.EMPTY), configset, new HashSet<ATNConfig>(), false, true);
+
+			ArrayList<ATNConfig> configs = new ArrayList<ATNConfig>(configset);
+			Collections.sort(configs, new Comparator<ATNConfig>() {
+				@Override
+				public int compare(ATNConfig o1, ATNConfig o2) {
+					return o1.state.stateNumber - o2.state.stateNumber;
+				}
+			});
+
+			for (int i = 0; i < configs.size(); i++) {
+				if (configs.get(i).state instanceof RuleStopState) {
+					configs.remove(i);
+					i--;
+				}
+			}
+
+			if (configs.isEmpty()) {
+				result = PredictionContext.EMPTY;
+			}
+			else if (configs.size() == 1) {
+				result = new SingletonPredictionContext(configs.get(0).context, configs.get(0).state.stateNumber);
+			}
+			else {
+				PredictionContext[] parents = new PredictionContext[configs.size()];
+				int[] returnStates = new int[configs.size()];
+				for (int i = 0; i < parents.length; i++) {
+					parents[i] = configs.get(i).context;
+					returnStates[i] = configs.get(i).state.stateNumber;
+				}
+
+				result = new ArrayPredictionContext(parents, returnStates);
+			}
+
+			synchronized (atn.localClosures) {
+				atn.localClosures.put(state, result);
+			}
 		}
 
 		return result;
