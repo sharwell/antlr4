@@ -38,7 +38,7 @@ import java.util.Set;
 
 /** {@link Set} implementation with closed hashing (open addressing). */
 public class Array2DHashSet<T> implements Set<T> {
-	public static final int INITAL_CAPACITY = 16; // must be power of 2
+	public static final int INITAL_CAPACITY = 16;
 	public static final int INITAL_BUCKET_CAPACITY = 8;
 	public static final double LOAD_FACTOR = 0.75;
 
@@ -129,8 +129,8 @@ public class Array2DHashSet<T> implements Set<T> {
 	}
 
 	protected final int getBucket(T o) {
-		int hash = comparator.hashCode(o);
-		int b = hash & (buckets.length-1); // assumes len is power of 2
+		int hash = comparator.hashCode(o) & 0x7FFFFFFF;
+		int b = hash % buckets.length; // assumes len is power of 2
 		return b;
 	}
 

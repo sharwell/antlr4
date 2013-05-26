@@ -41,7 +41,7 @@ import java.util.Set;
  *  varying hashCode/equals.
  */
 public class FlexibleHashMap<K,V> implements Map<K, V> {
-	public static final int INITAL_CAPACITY = 16; // must be power of 2
+	public static final int INITAL_CAPACITY = 16;
 	public static final int INITAL_BUCKET_CAPACITY = 8;
 	public static final double LOAD_FACTOR = 0.75;
 
@@ -95,8 +95,8 @@ public class FlexibleHashMap<K,V> implements Map<K, V> {
 	}
 
 	protected int getBucket(K key) {
-		int hash = comparator.hashCode(key);
-		int b = hash & (buckets.length-1); // assumes len is power of 2
+		int hash = comparator.hashCode(key) & 0x7FFFFFFF;
+		int b = hash % buckets.length;
 		return b;
 	}
 
