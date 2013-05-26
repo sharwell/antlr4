@@ -101,10 +101,33 @@ public class ATN {
 
 	public final Map<ATNState, PredictionContext> localClosures = new HashMap<ATNState, PredictionContext>();
 
+	private int matchStates;
+
 	/** Used for runtime deserialization of ATNs from strings */
 	public ATN(@NotNull ATNType grammarType, int maxTokenType) {
 		this.grammarType = grammarType;
 		this.maxTokenType = maxTokenType;
+	}
+
+	public int getNumberOfStatesWithNonEpsilonTransitions() {
+		if (matchStates == 0) {
+			int count = 0;
+			for (ATNState state : states) {
+				if (state == null) {
+					continue;
+				}
+
+				if (state.onlyHasEpsilonTransitions() || state.getNumberOfTransitions() == 0) {
+					continue;
+				}
+
+				count++;
+			}
+
+			matchStates = count;
+		}
+
+		return matchStates;
 	}
 
 	/** Compute the set of valid tokens that can occur starting in state {@code s}.

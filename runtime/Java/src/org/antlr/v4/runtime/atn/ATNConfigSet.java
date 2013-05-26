@@ -244,6 +244,10 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		public ConfigHashSet() {
 			super(ConfigEqualityComparator.INSTANCE);
 		}
+
+		public ConfigHashSet(int initialCapacity, int initialBucketCapacity) {
+			super(ConfigEqualityComparator.INSTANCE, initialCapacity, initialBucketCapacity);
+		}
 	}
 
 	public static final class ConfigEqualityComparator extends AbstractEqualityComparator<ATNConfig> {
@@ -285,7 +289,7 @@ public class ATNConfigSet implements Set<ATNConfig> {
 	public AbstractConfigHashSet configLookup;
 
 	/** Track the elements as they are added to the set; supports get(i) */
-	public final ArrayList<ATNConfig> configs = new ArrayList<ATNConfig>(7);
+	public final ArrayList<ATNConfig> configs;
 
 	// TODO: these fields make me pretty uncomfortable but nice to pack up info together, saves recomputation
 	// TODO: can we track conflicts as they are added to save scanning configs later?
@@ -308,8 +312,15 @@ public class ATNConfigSet implements Set<ATNConfig> {
 	public ATNConfigSet(boolean fullCtx) {
 		configLookup = new ConfigHashSet();
 		this.fullCtx = fullCtx;
+		this.configs = new ArrayList<ATNConfig>(7);
 	}
 	public ATNConfigSet() { this(true); }
+
+	public ATNConfigSet(boolean fullCtx, int initialCapacity, int initialBucketCapacity) {
+		configLookup = new ConfigHashSet(initialCapacity, initialBucketCapacity);
+		this.fullCtx = fullCtx;
+		this.configs = new ArrayList<ATNConfig>(initialCapacity);
+	}
 
 	public ATNConfigSet(ATNConfigSet old) {
 		this(old.fullCtx);

@@ -865,7 +865,7 @@ public class ParserATNSimulator extends ATNSimulator {
 					group.add(c);
 				}
 
-				ATNConfigSet result = new ATNConfigSet(fullCtx);
+				ATNConfigSet result = new ATNConfigSet(fullCtx, atn.getNumberOfStatesWithNonEpsilonTransitions(), 1);
 				for (Map.Entry<Pair<Integer, SemanticContext>, List<ATNConfig>> pairs : groups.entrySet()) {
 					if (pairs.getValue().size() > 1) {
 						Collections.sort(pairs.getValue(), new Comparator<ATNConfig>() {
