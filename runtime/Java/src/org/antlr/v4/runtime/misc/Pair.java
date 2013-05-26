@@ -38,4 +38,26 @@ public class Pair<A,B> {
 		this.a = a;
 		this.b = b;
 	}
+
+	@Override
+	public int hashCode() {
+		int hashCode = MurmurHash.initialize();
+		hashCode = MurmurHash.update(hashCode, a);
+		hashCode = MurmurHash.update(hashCode, b);
+		return MurmurHash.finish(hashCode, 2);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (obj == this) {
+			return true;
+		}
+		else if (!(obj instanceof Pair<?, ?>)) {
+			return false;
+		}
+
+		Pair<?, ?> other = (Pair<?, ?>)obj;
+		return ObjectEqualityComparator.INSTANCE.equals(a, other.a)
+			&& ObjectEqualityComparator.INSTANCE.equals(b, other.b);
+	}
 }
