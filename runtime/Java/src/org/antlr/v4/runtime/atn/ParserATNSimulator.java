@@ -796,11 +796,7 @@ public class ParserATNSimulator extends ATNSimulator {
 		 * operation on the intermediate set to compute its initial value.
 		 */
 		if (reach == null) {
-			reach = new ATNConfigSet(fullCtx);
-			Set<ATNConfig> closureBusy = new HashSet<ATNConfig>();
-			for (ATNConfig c : intermediate) {
-				closure(c, reach, closureBusy, false, fullCtx);
-			}
+			reach = closure(intermediate, fullCtx);
 		}
 
 		if (t == IntStream.EOF) {
@@ -841,6 +837,17 @@ public class ParserATNSimulator extends ATNSimulator {
 
 		if ( reach.isEmpty() ) return null;
 		return reach;
+	}
+
+	@NotNull
+	protected ATNConfigSet closure(@NotNull ATNConfigSet configs, boolean fullCtx) {
+		ATNConfigSet result = new ATNConfigSet(fullCtx);
+		Set<ATNConfig> closureBusy = new HashSet<ATNConfig>();
+		for (ATNConfig c : configs) {
+			closure(c, result, closureBusy, false, fullCtx);
+		}
+
+		return result;
 	}
 
 	/**
