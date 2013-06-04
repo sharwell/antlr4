@@ -244,7 +244,7 @@ public class TestExpressionPerformance extends BaseTest {
 	 * If {@code true}, after each pass a summary of the time required to parse
 	 * each file will be printed.
 	 */
-	private static final boolean COMPUTE_TIMING_STATS = false;
+	private static final boolean COMPUTE_TIMING_STATS = true;
 	/**
 	 * If {@code true}, timing statistics will be displayed after each pass,
 	 * otherwise {@code false} to only show a summary after all passes complete.
@@ -303,11 +303,11 @@ public class TestExpressionPerformance extends BaseTest {
      * but it will not distinguish bytecode load/JIT time from warm-up time
      * during the first pass.
      */
-    private static final boolean CLEAR_DFA = false;
+    private static final boolean CLEAR_DFA = true;
     /**
      * Total number of passes to make over the inputs.
      */
-    private static final int PASSES = 4;
+    private static final int PASSES = 1;
 
 	/**
 	 * This option controls the granularity of multi-threaded parse operations.
