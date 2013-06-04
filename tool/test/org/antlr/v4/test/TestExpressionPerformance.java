@@ -257,6 +257,13 @@ public class TestExpressionPerformance extends BaseTest {
 	 */
 	private static final boolean TIMING_CUMULATIVE = false;
 	/**
+	 * If {@link #COMPUTE_TIMING_STATS} is {@code true}, the first
+	 * {@link #TIMING_WARMUP_PASSES} will be ignored when computing the timing
+	 * statistics summary. If {@link #TIMING_WARMUP_PASSES} is less than or
+	 * equal to {@link #PASSES}, no summary will be displayed.
+	 */
+	private static final int TIMING_WARMUP_PASSES = 0;
+	/**
 	 * If {@code true}, the timing statistics will include the parser only. This
 	 * flag allows for targeted measurements, and helps eliminate variance when
 	 * {@link #PRELOAD_SOURCES} is {@code false}.
@@ -474,7 +481,7 @@ public class TestExpressionPerformance extends BaseTest {
 			computeTransitionStatistics();
 		}
 
-		if (COMPUTE_TIMING_STATS) {
+		if (COMPUTE_TIMING_STATS && PASSES > TIMING_WARMUP_PASSES) {
 			computeTimingStatistics();
 		}
 
@@ -583,7 +590,7 @@ public class TestExpressionPerformance extends BaseTest {
 	 */
 	private void computeTimingStatistics() {
 		if (TIMING_CUMULATIVE) {
-			for (int i = 0; i < PASSES; i++) {
+			for (int i = TIMING_WARMUP_PASSES; i < PASSES; i++) {
 				long[] data = timePerFile[i];
 				for (int j = 0; j < data.length - 1; j++) {
 					data[j + 1] += data[j];
@@ -593,7 +600,7 @@ public class TestExpressionPerformance extends BaseTest {
 
 		final int fileCount = timePerFile[0].length;
 		double[] sum = new double[fileCount];
-		for (int i = 0; i < PASSES; i++) {
+		for (int i = TIMING_WARMUP_PASSES; i < PASSES; i++) {
 			long[] data = timePerFile[i];
 			for (int j = 0; j < data.length; j++) {
 				sum[j] += (double)data[j];
@@ -602,7 +609,7 @@ public class TestExpressionPerformance extends BaseTest {
 
 		double[] average = new double[fileCount];
 		for (int i = 0; i < average.length; i++) {
-			average[i] = sum[i] / PASSES;
+			average[i] = sum[i] / (PASSES - TIMING_WARMUP_PASSES);
 		}
 
 		double[] low95 = new double[fileCount];
@@ -611,27 +618,27 @@ public class TestExpressionPerformance extends BaseTest {
 		double[] high67 = new double[fileCount];
 		double[] stddev = new double[fileCount];
 		for (int i = 0; i < stddev.length; i++) {
-			double[] points = new double[PASSES];
-			for (int j = 0; j < PASSES; j++) {
-				points[j] = (double)timePerFile[j][i];
+			double[] points = new double[PASSES - TIMING_WARMUP_PASSES];
+			for (int j = TIMING_WARMUP_PASSES; j < PASSES; j++) {
+				points[j - TIMING_WARMUP_PASSES] = (double)timePerFile[j][i];
 			}
 
 			Arrays.sort(points);
 
 			final double averageValue = average[i];
 			double value = 0;
-			for (int j = 0; j < PASSES; j++) {
+			for (int j = 0; j < PASSES - TIMING_WARMUP_PASSES; j++) {
 				double diff = points[j] - averageValue;
 				value += diff * diff;
 			}
 
-			int ignoreCount95 = (int)Math.round(PASSES * (1 - 0.95) / 2.0);
-			int ignoreCount67 = (int)Math.round(PASSES * (1 - 0.667) / 2.0);
+			int ignoreCount95 = (int)Math.round((PASSES - TIMING_WARMUP_PASSES) * (1 - 0.95) / 2.0);
+			int ignoreCount67 = (int)Math.round((PASSES - TIMING_WARMUP_PASSES) * (1 - 0.667) / 2.0);
 			low95[i] = points[ignoreCount95];
 			high95[i] = points[points.length - 1 - ignoreCount95];
 			low67[i] = points[ignoreCount67];
 			high67[i] = points[points.length - 1 - ignoreCount67];
-			stddev[i] = Math.sqrt(value / PASSES);
+			stddev[i] = Math.sqrt(value / (PASSES - TIMING_WARMUP_PASSES));
 		}
 
 		System.out.format("File\tAverage\tStd. Dev.\t95%% Low\t95%% High\t66.7%% Low\t66.7%% High%n");
