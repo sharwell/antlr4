@@ -246,6 +246,11 @@ public class TestExpressionPerformance extends BaseTest {
 	 */
 	private static final boolean COMPUTE_TIMING_STATS = false;
 	/**
+	 * If {@code true}, timing statistics will be displayed after each pass,
+	 * otherwise {@code false} to only show a summary after all passes complete.
+	 */
+	private static final boolean TIMING_STATS_PER_PASS = false;
+	/**
 	 * If {@code true}, the timing statistics for {@link #COMPUTE_TIMING_STATS}
 	 * will be cumulative (i.e. the time reported for the <em>n</em>th file will
 	 * be the total time required to parse the first <em>n</em> files).
@@ -1003,7 +1008,7 @@ public class TestExpressionPerformance extends BaseTest {
             }
         }
 
-		if (COMPUTE_TIMING_STATS) {
+		if (COMPUTE_TIMING_STATS && TIMING_STATS_PER_PASS) {
 			System.out.format("File\tTokens\tTime%n");
 			for (int i = 0; i< timePerFile[currentPass].length; i++) {
 				System.out.format("%d\t%d\t%d%n", i + 1, tokensPerFile[currentPass][i], timePerFile[currentPass][i]);
