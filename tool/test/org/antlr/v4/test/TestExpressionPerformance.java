@@ -583,11 +583,6 @@ public class TestExpressionPerformance extends BaseTest {
 				for (int j = 0; j < data.length - 1; j++) {
 					data[j + 1] += data[j];
 				}
-
-				int[] data2 = tokensPerFile[i];
-				for (int j = 0; j < data2.length - 1; j++) {
-					data2[j + 1] += data2[j];
-				}
 			}
 		}
 
@@ -595,9 +590,8 @@ public class TestExpressionPerformance extends BaseTest {
 		double[] sum = new double[fileCount];
 		for (int i = 0; i < PASSES; i++) {
 			long[] data = timePerFile[i];
-			int[] tokenData = tokensPerFile[i];
 			for (int j = 0; j < data.length; j++) {
-				sum[j] += (double)data[j] / (double)tokenData[j];
+				sum[j] += (double)data[j];
 			}
 		}
 
@@ -614,7 +608,7 @@ public class TestExpressionPerformance extends BaseTest {
 		for (int i = 0; i < stddev.length; i++) {
 			double[] points = new double[PASSES];
 			for (int j = 0; j < PASSES; j++) {
-				points[j] = (double)timePerFile[j][i] / (double)tokensPerFile[j][i];
+				points[j] = (double)timePerFile[j][i];
 			}
 
 			Arrays.sort(points);
