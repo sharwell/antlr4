@@ -30,7 +30,6 @@
 
 package org.antlr.v4.test;
 
-import org.antlr.v4.runtime.ANTLRFileStream;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.BaseErrorListener;
@@ -70,8 +69,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
@@ -84,10 +81,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -107,16 +102,22 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
 public class TestExpressionPerformance extends BaseTest {
-    /**
-     * Parse all java files under this package within the JDK_SOURCE_ROOT
-     * (environment variable or property defined on the Java command line).
-     */
-    private static final String TOP_PACKAGE = "java.lang";
-    /**
-     * {@code true} to load java files from sub-packages of
-     * {@link #TOP_PACKAGE}.
-     */
-    private static final boolean RECURSIVE = true;
+	/**
+	 * The minimum number of primary components in the generated test
+	 * expressions.
+	 */
+	private static final int MIN_INPUT_SIZE = 1;
+	/**
+	 * The step size in the number of primary components in the generated test
+	 * expressions.
+	 */
+	private static final int INPUT_STEP_SIZE = 1;
+	/**
+	 * The maximum number of primary components in the generated test
+	 * expressions.
+	 */
+	private static final int MAX_INPUT_SIZE = 20;
+
 	/**
 	 * {@code true} to read all source files from disk into memory before
 	 * starting the parse. The default value is {@code true} to help prevent
@@ -125,41 +126,16 @@ public class TestExpressionPerformance extends BaseTest {
 	 * otherwise fit into memory.
 	 */
 	private static final boolean PRELOAD_SOURCES = true;
-	/**
-	 * The encoding to use when reading source files.
-	 */
-	private static final String ENCODING = "UTF-8";
-	/**
-	 * The maximum number of files to parse in a single iteration.
-	 */
-	private static final int MAX_FILES_PER_PARSE_ITERATION = Integer.MAX_VALUE;
-
-	/**
-	 * {@code true} to call {@link Collections#shuffle} on the list of input
-	 * files before the first parse iteration.
-	 */
-	private static final boolean SHUFFLE_FILES_AT_START = false;
-	/**
-	 * {@code true} to call {@link Collections#shuffle} before each parse
-	 * iteration <em>after</em> the first.
-	 */
-	private static final boolean SHUFFLE_FILES_AFTER_ITERATIONS = false;
-	/**
-	 * The instance of {@link Random} passed when calling
-	 * {@link Collections#shuffle}.
-	 */
-	private static final Random RANDOM = new Random();
 
     /**
-     * {@code true} to use the Java grammar with expressions in the v4
-     * left-recursive syntax (Java-LR.g4). {@code false} to use the standard
-     * grammar (Java.g4). In either case, the grammar is renamed in the
-     * temporary directory to Java.g4 before compiling.
+     * {@code true} to use the grammar with expressions in the v4
+     * left-recursive syntax. {@code false} to use the standard
+     * grammar.
      */
     private static final boolean USE_LR_GRAMMAR = true;
     /**
      * {@code true} to specify the {@code -Xforce-atn} option when generating
-     * the grammar, forcing all decisions in {@code JavaParser} to be handled by
+     * the grammar, forcing all decisions in {@code ExprParser} to be handled by
      * {@link ParserATNSimulator#adaptivePredict}.
      */
     private static final boolean FORCE_ATN = false;
@@ -193,7 +169,7 @@ public class TestExpressionPerformance extends BaseTest {
     private static final boolean PAUSE_FOR_HEAP_DUMP = false;
 
     /**
-     * Parse each file with {@code JavaParser.compilationUnit}.
+     * Parse each input with {@code ExprParser.program}.
      */
     private static final boolean RUN_PARSER = true;
     /**
@@ -213,7 +189,7 @@ public class TestExpressionPerformance extends BaseTest {
     /**
      * Use
      * {@link ParseTreeWalker#DEFAULT}{@code .}{@link ParseTreeWalker#walk walk}
-     * with the {@code JavaParserBaseListener} to show parse tree walking
+     * with the {@code ExprParserBaseListener} to show parse tree walking
      * overhead. If {@link #BUILD_PARSE_TREES} is {@code false}, the listener
      * will instead be called during the parsing process via
      * {@link Parser#addParseListener}.
@@ -290,7 +266,7 @@ public class TestExpressionPerformance extends BaseTest {
 	private static final boolean REPORT_CONTEXT_SENSITIVITY = REPORT_FULL_CONTEXT;
 
     /**
-     * If {@code true}, a single {@code JavaLexer} will be used, and
+     * If {@code true}, a single {@code ExprLexer} will be used, and
      * {@link Lexer#setInputStream} will be called to initialize it for each
      * source file. Otherwise, a new instance will be created for each file.
      */
@@ -303,7 +279,7 @@ public class TestExpressionPerformance extends BaseTest {
 	 */
 	private static final boolean REUSE_LEXER_DFA = true;
     /**
-     * If {@code true}, a single {@code JavaParser} will be used, and
+     * If {@code true}, a single {@code ExprParser} will be used, and
      * {@link Parser#setInputStream} will be called to initialize it for each
      * source file. Otherwise, a new instance will be created for each file.
      */
@@ -324,16 +300,17 @@ public class TestExpressionPerformance extends BaseTest {
      */
     private static final boolean CLEAR_DFA = false;
     /**
-     * Total number of passes to make over the source.
+     * Total number of passes to make over the inputs.
      */
     private static final int PASSES = 4;
 
 	/**
 	 * This option controls the granularity of multi-threaded parse operations.
-	 * If {@code true}, the parsing operation will be parallelized across files;
-	 * otherwise the parsing will be parallelized across multiple iterations.
+	 * If {@code true}, the parsing operation will be parallelized across
+	 * inputs; otherwise the parsing will be parallelized across multiple
+	 * iterations.
 	 */
-	private static final boolean FILE_GRANULARITY = true;
+	private static final boolean INPUT_GRANULARITY = true;
 
 	/**
 	 * Number of parser threads to use.
@@ -399,47 +376,47 @@ public class TestExpressionPerformance extends BaseTest {
     @Test
     //@org.junit.Ignore
     public void compileExpressions() throws IOException, InterruptedException, ExecutionException {
-        compileJavaParser(USE_LR_GRAMMAR);
+        compileExprParser(USE_LR_GRAMMAR);
 		final String lexerName = "ExprLexer";
 		final String parserName = "ExprParser";
 		final String listenerName = "ExprBaseListener";
 		final String entryPoint = "program";
         final ParserFactory factory = getParserFactory(lexerName, parserName, listenerName, entryPoint);
 
-		final List<InputDescriptor> sources = loadSources(0, 1, 300);
+		final List<InputDescriptor> sources = loadSources(MIN_INPUT_SIZE, INPUT_STEP_SIZE, MAX_INPUT_SIZE);
 
 		for (int i = 0; i < PASSES; i++) {
 			if (COMPUTE_TRANSITION_STATS) {
-				totalTransitionsPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)];
-				computedTransitionsPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)];
+				totalTransitionsPerFile[i] = new long[sources.size()];
+				computedTransitionsPerFile[i] = new long[sources.size()];
 
 				if (DETAILED_DFA_STATE_STATS) {
-					decisionInvocationsPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)][];
-					fullContextFallbackPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)][];
-					nonSllPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)][];
-					totalTransitionsPerDecisionPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)][];
-					computedTransitionsPerDecisionPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)][];
-					fullContextTransitionsPerDecisionPerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)][];
+					decisionInvocationsPerFile[i] = new long[sources.size()][];
+					fullContextFallbackPerFile[i] = new long[sources.size()][];
+					nonSllPerFile[i] = new long[sources.size()][];
+					totalTransitionsPerDecisionPerFile[i] = new long[sources.size()][];
+					computedTransitionsPerDecisionPerFile[i] = new long[sources.size()][];
+					fullContextTransitionsPerDecisionPerFile[i] = new long[sources.size()][];
 				}
 			}
 
 			if (COMPUTE_TIMING_STATS) {
-				timePerFile[i] = new long[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)];
-				tokensPerFile[i] = new int[Math.min(sources.size(), MAX_FILES_PER_PARSE_ITERATION)];
+				timePerFile[i] = new long[sources.size()];
+				tokensPerFile[i] = new int[sources.size()];
 			}
 		}
 
 		System.out.format("Located %d source files.%n", sources.size());
-		System.out.print(getOptionsDescription(TOP_PACKAGE));
+		System.out.print(getOptionsDescription());
 
-		ExecutorService executorService = Executors.newFixedThreadPool(FILE_GRANULARITY ? 1 : NUMBER_OF_THREADS, new NumberedThreadFactory());
+		ExecutorService executorService = Executors.newFixedThreadPool(INPUT_GRANULARITY ? 1 : NUMBER_OF_THREADS, new NumberedThreadFactory());
 
 		List<Future<?>> passResults = new ArrayList<Future<?>>();
 		passResults.add(executorService.submit(new Runnable() {
 			@Override
 			public void run() {
 				try {
-					parse1(0, factory, sources, SHUFFLE_FILES_AT_START);
+					parse1(0, factory, sources);
 				} catch (InterruptedException ex) {
 					Logger.getLogger(TestPerformance.class.getName()).log(Level.SEVERE, null, ex);
 				}
@@ -451,7 +428,7 @@ public class TestExpressionPerformance extends BaseTest {
 				@Override
 				public void run() {
 					if (CLEAR_DFA) {
-						int index = FILE_GRANULARITY ? 0 : ((NumberedThread)Thread.currentThread()).getThreadNumber();
+						int index = INPUT_GRANULARITY ? 0 : ((NumberedThread)Thread.currentThread()).getThreadNumber();
 						if (sharedLexers.length > 0 && sharedLexers[index] != null) {
 							ATN atn = sharedLexers[index].getATN();
 							for (int j = 0; j < sharedLexers[index].getInterpreter().decisionToDFA.length; j++) {
@@ -466,14 +443,14 @@ public class TestExpressionPerformance extends BaseTest {
 							}
 						}
 
-						if (FILE_GRANULARITY) {
+						if (INPUT_GRANULARITY) {
 							Arrays.fill(sharedLexers, null);
 							Arrays.fill(sharedParsers, null);
 						}
 					}
 
 					try {
-						parse2(currentPass, factory, sources, SHUFFLE_FILES_AFTER_ITERATIONS);
+						parse2(currentPass, factory, sources);
 					} catch (InterruptedException ex) {
 						Logger.getLogger(TestPerformance.class.getName()).log(Level.SEVERE, null, ex);
 					}
@@ -672,15 +649,8 @@ public class TestExpressionPerformance extends BaseTest {
         }
     }
 
-    public static String getOptionsDescription(String topPackage) {
+    public static String getOptionsDescription() {
         StringBuilder builder = new StringBuilder();
-        builder.append("Input=");
-        if (topPackage.isEmpty()) {
-            builder.append("*");
-        }
-        else {
-            builder.append(topPackage).append(".*");
-        }
 
         builder.append(", Grammar=").append(USE_LR_GRAMMAR ? "LR" : "Standard");
         builder.append(", ForceAtn=").append(FORCE_ATN);
@@ -707,24 +677,24 @@ public class TestExpressionPerformance extends BaseTest {
      *  This method is separate from {@link #parse2} so the first pass can be distinguished when analyzing
      *  profiler results.
      */
-    protected void parse1(int currentPass, ParserFactory factory, Collection<InputDescriptor> sources, boolean shuffleSources) throws InterruptedException {
-		if (FILE_GRANULARITY) {
+    protected void parse1(int currentPass, ParserFactory factory, Collection<InputDescriptor> sources) throws InterruptedException {
+		if (INPUT_GRANULARITY) {
 			System.gc();
 		}
 
-        parseSources(currentPass, factory, sources, shuffleSources);
+        parseSources(currentPass, factory, sources);
     }
 
     /**
      *  This method is separate from {@link #parse1} so the first pass can be distinguished when analyzing
      *  profiler results.
      */
-    protected void parse2(int currentPass, ParserFactory factory, Collection<InputDescriptor> sources, boolean shuffleSources) throws InterruptedException {
-		if (FILE_GRANULARITY) {
+    protected void parse2(int currentPass, ParserFactory factory, Collection<InputDescriptor> sources) throws InterruptedException {
+		if (INPUT_GRANULARITY) {
 			System.gc();
 		}
 
-        parseSources(currentPass, factory, sources, shuffleSources);
+        parseSources(currentPass, factory, sources);
     }
 
     protected List<InputDescriptor> loadSources(int minSize, int skip, int sizeLimit) {
@@ -732,7 +702,8 @@ public class TestExpressionPerformance extends BaseTest {
 
 		StringBuilder builder = new StringBuilder();
 		builder.append("X");
-		for (int i = 0; i <= sizeLimit; i++) {
+		// builder already contains 1 primary component, so i starts at 1
+		for (int i = 1; i <= sizeLimit; i++) {
 			if (i >= minSize && ((i - minSize) % skip) == 0) {
 				result.add(new InputDescriptor(String.valueOf(i) + ".in", builder.toString()));
 			}
@@ -751,16 +722,7 @@ public class TestExpressionPerformance extends BaseTest {
     int configOutputSize = 0;
 
     @SuppressWarnings("unused")
-	protected void parseSources(final int currentPass, final ParserFactory factory, Collection<InputDescriptor> sources, boolean shuffleSources) throws InterruptedException {
-		if (shuffleSources) {
-			List<InputDescriptor> sourcesList = new ArrayList<InputDescriptor>(sources);
-			synchronized (RANDOM) {
-				Collections.shuffle(sourcesList, RANDOM);
-			}
-
-			sources = sourcesList;
-		}
-
+	protected void parseSources(final int currentPass, final ParserFactory factory, Collection<InputDescriptor> sources) throws InterruptedException {
 		long startTime = System.nanoTime();
         tokenCount.set(currentPass, 0);
         int inputSize = 0;
@@ -768,17 +730,13 @@ public class TestExpressionPerformance extends BaseTest {
 
 		Collection<Future<FileParseResult>> results = new ArrayList<Future<FileParseResult>>();
 		ExecutorService executorService;
-		if (FILE_GRANULARITY) {
-			executorService = Executors.newFixedThreadPool(FILE_GRANULARITY ? NUMBER_OF_THREADS : 1, new NumberedThreadFactory());
+		if (INPUT_GRANULARITY) {
+			executorService = Executors.newFixedThreadPool(INPUT_GRANULARITY ? NUMBER_OF_THREADS : 1, new NumberedThreadFactory());
 		} else {
 			executorService = Executors.newSingleThreadExecutor(new FixedThreadNumberFactory(((NumberedThread)Thread.currentThread()).getThreadNumber()));
 		}
 
 		for (InputDescriptor inputDescriptor : sources) {
-			if (inputCount >= MAX_FILES_PER_PARSE_ITERATION) {
-				break;
-			}
-
 			final CharStream input = inputDescriptor.getInputStream();
             input.seek(0);
             inputSize += input.size();
@@ -851,7 +809,7 @@ public class TestExpressionPerformance extends BaseTest {
                           (double)(System.nanoTime() - startTime) / 1000000.0);
 
 		if (sharedLexers.length > 0) {
-			int index = FILE_GRANULARITY ? 0 : ((NumberedThread)Thread.currentThread()).getThreadNumber();
+			int index = INPUT_GRANULARITY ? 0 : ((NumberedThread)Thread.currentThread()).getThreadNumber();
 			Lexer lexer = sharedLexers[index];
 			final LexerATNSimulator lexerInterpreter = lexer.getInterpreter();
 			final DFA[] modeToDFA = lexerInterpreter.decisionToDFA;
@@ -896,7 +854,7 @@ public class TestExpressionPerformance extends BaseTest {
 		}
 
 		if (RUN_PARSER && sharedParsers.length > 0) {
-			int index = FILE_GRANULARITY ? 0 : ((NumberedThread)Thread.currentThread()).getThreadNumber();
+			int index = INPUT_GRANULARITY ? 0 : ((NumberedThread)Thread.currentThread()).getThreadNumber();
 			Parser parser = sharedParsers[index];
             // make sure the individual DFAState objects actually have unique ATNConfig arrays
             final ParserATNSimulator interpreter = parser.getInterpreter();
@@ -1068,7 +1026,7 @@ public class TestExpressionPerformance extends BaseTest {
 		return result;
 	}
 
-    protected void compileJavaParser(boolean leftRecursive) throws IOException {
+    protected void compileExprParser(boolean leftRecursive) throws IOException {
 		String expandedExpression =
 			"expr : orExpr;\n" +
 			"orExpr : andExpr ('or' andExpr)*;\n" +
@@ -1170,8 +1128,8 @@ public class TestExpressionPerformance extends BaseTest {
                         } else {
 							Lexer previousLexer = lexer;
                             lexer = lexerCtor.newInstance(input);
-							DFA[] decisionToDFA = (FILE_GRANULARITY || previousLexer == null ? lexer : previousLexer).getInterpreter().decisionToDFA;
-							if (!REUSE_LEXER_DFA || (!FILE_GRANULARITY && previousLexer == null)) {
+							DFA[] decisionToDFA = (INPUT_GRANULARITY || previousLexer == null ? lexer : previousLexer).getInterpreter().decisionToDFA;
+							if (!REUSE_LEXER_DFA || (!INPUT_GRANULARITY && previousLexer == null)) {
 								decisionToDFA = new DFA[decisionToDFA.length];
 							}
 
@@ -1215,8 +1173,8 @@ public class TestExpressionPerformance extends BaseTest {
                         } else {
 							Parser previousParser = parser;
                             parser = parserCtor.newInstance(tokens);
-							DFA[] decisionToDFA = (FILE_GRANULARITY || previousParser == null ? parser : previousParser).getInterpreter().decisionToDFA;
-							if (!REUSE_PARSER_DFA || (!FILE_GRANULARITY && previousParser == null)) {
+							DFA[] decisionToDFA = (INPUT_GRANULARITY || previousParser == null ? parser : previousParser).getInterpreter().decisionToDFA;
+							if (!REUSE_PARSER_DFA || (!INPUT_GRANULARITY && previousParser == null)) {
 								decisionToDFA = new DFA[decisionToDFA.length];
 							}
 
