@@ -176,12 +176,12 @@ public class TestExpressionPerformance extends BaseTest {
      * {@code true} to use {@link BailErrorStrategy}, {@code false} to use
      * {@link DefaultErrorStrategy}.
      */
-    private static final boolean BAIL_ON_ERROR = false;
+    private static final boolean BAIL_ON_ERROR = true;
 	/**
 	 * {@code true} to compute a checksum for verifying consistency across
 	 * optimizations and multiple passes.
 	 */
-	private static final boolean COMPUTE_CHECKSUM = true;
+	private static final boolean COMPUTE_CHECKSUM = false;
     /**
      * This value is passed to {@link Parser#setBuildParseTree}.
      */
@@ -203,12 +203,12 @@ public class TestExpressionPerformance extends BaseTest {
 	 * will only apply to one file (the last file if {@link #NUMBER_OF_THREADS}
 	 * is 0, otherwise the last file which was parsed on the first thread).
 	 */
-    private static final boolean SHOW_DFA_STATE_STATS = true;
+    private static final boolean SHOW_DFA_STATE_STATS = false;
 	/**
 	 * If {@code true}, the DFA state statistics report includes a breakdown of
 	 * the number of DFA states contained in each decision (with rule names).
 	 */
-	private static final boolean DETAILED_DFA_STATE_STATS = true;
+	private static final boolean DETAILED_DFA_STATE_STATS = false;
 
 	/**
 	 * Specify the {@link PredictionMode} used by the
@@ -218,7 +218,7 @@ public class TestExpressionPerformance extends BaseTest {
 	 */
 	private static final PredictionMode PREDICTION_MODE = PredictionMode.LL;
 
-	private static final boolean TWO_STAGE_PARSING = true;
+	private static final boolean TWO_STAGE_PARSING = false;
 
     private static final boolean SHOW_CONFIG_STATS = false;
 
@@ -258,7 +258,7 @@ public class TestExpressionPerformance extends BaseTest {
 	 * <p/>
 	 * This flag has no impact when {@link #RUN_PARSER} is {@code false}.
 	 */
-	private static final boolean TIME_PARSE_ONLY = false;
+	private static final boolean TIME_PARSE_ONLY = true;
 
 	private static final boolean REPORT_SYNTAX_ERRORS = true;
 	private static final boolean REPORT_AMBIGUITIES = false;
