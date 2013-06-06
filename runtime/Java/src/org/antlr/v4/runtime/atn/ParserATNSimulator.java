@@ -927,9 +927,14 @@ public class ParserATNSimulator extends ATNSimulator {
 	protected Map<Integer, PredictionContext> analyzeClosureStructure(PredictionContext merged, boolean fullCtx) {
 		Map<Integer, PredictionContext> result = new HashMap<Integer, PredictionContext>();
 		ArrayDeque<PredictionContext> workList = new ArrayDeque<PredictionContext>();
+		IdentityHashMap<PredictionContext, PredictionContext> visited = new IdentityHashMap<PredictionContext, PredictionContext>();
 		workList.push(merged);
 		while (!workList.isEmpty()) {
 			PredictionContext current = workList.pop();
+			if (visited.put(current, current) != null) {
+				continue;
+			}
+
 			for (int i = 0; i < current.size(); i++) {
 				int stateNumber = current.getReturnState(i);
 				PredictionContext context = current.getParent(i);
