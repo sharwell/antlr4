@@ -77,6 +77,30 @@ public class TestSemPredEvalParser extends BaseTest {
 		assertEquals(expecting, stderrDuringParse);
 	}
 
+	/**
+	 * This is a regression test for antlr/antlr4#196
+	 * "element+ in expression grammar doesn't parse properly"
+	 * https://github.com/antlr/antlr4/issues/196
+	 */
+	@Test public void testAtomWithClosureInTranslatedLRRule() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"start : e[0] EOF;\n" +
+			"e[int _p]\n" +
+			"    :   ( 'a'\n" +
+			"        | 'b'+\n" +
+			"        )\n" +
+			"        ( {3 >= $_p}? '+' e[4]\n" +
+			"        )*\n" +
+			"    ;\n";
+
+		String found = execParser("T.g4", grammar, "TParser", "TLexer", "start",
+								  "a+b+a", false);
+		String expecting = "";
+		assertEquals(expecting, found);
+		assertNull(stderrDuringParse);
+	}
+
 	@Test public void testValidateInDFA() throws Exception {
 		String grammar =
 			"grammar T;\n" +
@@ -172,10 +196,10 @@ public class TestSemPredEvalParser extends BaseTest {
 			"alt 1\n" +
 			"alt 1\n";
 		assertEquals(expecting, found);
-		assertEquals("line 1:0 reportAttemptingFullContext d=0, input='x'\n" +
-					 "line 1:0 reportAmbiguity d=0: ambigAlts={1, 2}, input='x'\n" +
-					 "line 1:3 reportAttemptingFullContext d=0, input='y'\n" +
-					 "line 1:3 reportAmbiguity d=0: ambigAlts={1, 2}, input='y'\n",
+		assertEquals("line 1:0 reportAttemptingFullContext d=0 (a), input='x'\n" +
+					 "line 1:0 reportAmbiguity d=0 (a): ambigAlts={1, 2}, input='x'\n" +
+					 "line 1:3 reportAttemptingFullContext d=0 (a), input='y'\n" +
+					 "line 1:3 reportAmbiguity d=0 (a): ambigAlts={1, 2}, input='y'\n",
                      this.stderrDuringParse);
 	}
 
@@ -203,10 +227,10 @@ public class TestSemPredEvalParser extends BaseTest {
 			"alt 2\n" +
 			"alt 2\n";
 		assertEquals(expecting, found);
-		assertEquals("line 1:4 reportAttemptingFullContext d=0, input='x'\n" +
-					 "line 1:4 reportAmbiguity d=0: ambigAlts={2, 3}, input='x'\n" +
-					 "line 1:7 reportAttemptingFullContext d=0, input='y'\n" +
-					 "line 1:7 reportAmbiguity d=0: ambigAlts={2, 3}, input='y'\n",
+		assertEquals("line 1:4 reportAttemptingFullContext d=0 (a), input='x'\n" +
+					 "line 1:4 reportAmbiguity d=0 (a): ambigAlts={2, 3}, input='x'\n" +
+					 "line 1:7 reportAttemptingFullContext d=0 (a), input='y'\n" +
+					 "line 1:7 reportAmbiguity d=0 (a): ambigAlts={2, 3}, input='y'\n",
 					 this.stderrDuringParse);
 	}
 
@@ -548,4 +572,26 @@ public class TestSemPredEvalParser extends BaseTest {
 		assertEquals("line 1:0 no viable alternative at input 'enum'\n", stderrDuringParse);
 	}
 
+	/**
+	 * This is a regression test for antlr/antlr4#218 "ANTLR4 EOF Related Bug".
+	 * https://github.com/antlr/antlr4/issues/218
+	 */
+	@Test public void testDisabledAlternative() {
+		String grammar =
+			"grammar AnnotProcessor;\n" +
+			"\n" +
+			"cppCompilationUnit : content+ EOF;\n" +
+			"\n" +
+			"content: anything | {false}? .;\n" +
+			"\n" +
+			"anything: ANY_CHAR;\n" +
+			"\n" +
+			"ANY_CHAR: [_a-zA-Z0-9];\n";
+
+		String input = "hello";
+		String found = execParser("AnnotProcessor.g4", grammar, "AnnotProcessorParser", "AnnotProcessorLexer", "cppCompilationUnit",
+								  input, false);
+		assertEquals("", found);
+		assertNull(stderrDuringParse);
+	}
 }

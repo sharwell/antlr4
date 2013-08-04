@@ -64,6 +64,36 @@ public class TestLeftRecursion extends BaseTest {
 		assertEquals(expecting, found);
 	}
 
+	/**
+	 * This is a regression test for "Support direct calls to left-recursive
+	 * rules".
+	 * https://github.com/antlr/antlr4/issues/161
+	 */
+	@Test public void testDirectCallToLeftRecursiveRule() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"@parser::members{public AContext a() { return a(0); }}\n" +
+			"a @after {System.out.println($ctx.toStringTree(this));} : a ID\n" +
+			"  | ID" +
+			"  ;\n" +
+			"ID : 'a'..'z'+ ;\n" +
+			"WS : (' '|'\\n') -> skip ;\n";
+		String found = execParser("T.g4", grammar, "TParser", "TLexer",
+								  "a", "x", debug);
+		String expecting = "(a x)\n";
+		assertEquals(expecting, found);
+
+		found = execParser("T.g4", grammar, "TParser", "TLexer",
+						   "a", "x y", debug);
+		expecting = "(a (a x) y)\n";
+		assertEquals(expecting, found);
+
+		found = execParser("T.g4", grammar, "TParser", "TLexer",
+						   "a", "x y z", debug);
+		expecting = "(a (a (a x) y) z)\n";
+		assertEquals(expecting, found);
+	}
+
 	@Test public void testSemPred() throws Exception {
 		String grammar =
 			"grammar T;\n" +
@@ -361,16 +391,16 @@ public class TestLeftRecursion extends BaseTest {
 		assertNull(stderrDuringParse);
 
 		result = execParser("Expr.g4", grammar, "ExprParser", "ExprLexer", "prog", "a+b*2\n", true);
-		assertEquals("line 1:1 reportAttemptingFullContext d=3, input='+'\n" +
-					 "line 1:1 reportContextSensitivity d=3, input='+'\n" +
-					 "line 1:3 reportAttemptingFullContext d=3, input='*'\n",
+		assertEquals("line 1:1 reportAttemptingFullContext d=3 (expr), input='+'\n" +
+					 "line 1:1 reportContextSensitivity d=3 (expr), input='+'\n" +
+					 "line 1:3 reportAttemptingFullContext d=3 (expr), input='*'\n",
 					 stderrDuringParse);
 
 		result = execParser("Expr.g4", grammar, "ExprParser", "ExprLexer", "prog", "(1+2)*3\n", true);
-		assertEquals("line 1:2 reportAttemptingFullContext d=3, input='+'\n" +
-					 "line 1:2 reportContextSensitivity d=3, input='+'\n" +
-					 "line 1:5 reportAttemptingFullContext d=3, input='*'\n" +
-					 "line 1:5 reportContextSensitivity d=3, input='*'\n",
+		assertEquals("line 1:2 reportAttemptingFullContext d=3 (expr), input='+'\n" +
+					 "line 1:2 reportContextSensitivity d=3 (expr), input='+'\n" +
+					 "line 1:5 reportAttemptingFullContext d=3 (expr), input='*'\n" +
+					 "line 1:5 reportContextSensitivity d=3 (expr), input='*'\n",
 					 stderrDuringParse);
 	}
 
@@ -399,6 +429,76 @@ public class TestLeftRecursion extends BaseTest {
 		String expected =
 			"error(" + ErrorType.EPSILON_LR_FOLLOW.code + "): T.g4:3:0: left recursive rule 'a' contains a left recursive alternative which can be followed by the empty string\n";
 		testErrors(new String[] { grammar, expected }, false);
+	}
+
+	/**
+	 * This is a regression test for #239 "recoursive parser using implicit
+	 * tokens ignore white space lexer rule".
+	 * https://github.com/antlr/antlr4/issues/239
+	 */
+	@Test public void testWhitespaceInfluence() {
+		String grammar =
+			"grammar Expr;\n" +
+			"prog : expression EOF;\n" +
+			"expression\n" +
+			"    : ID '(' expression (',' expression)* ')'               # doFunction\n" +
+			"    | '(' expression ')'                                    # doParenthesis\n" +
+			"    | '!' expression                                        # doNot\n" +
+			"    | '-' expression                                        # doNegate\n" +
+			"    | '+' expression                                        # doPositiv\n" +
+			"    | expression '^' expression                             # doPower\n" +
+			"    | expression '*' expression                             # doMultipy\n" +
+			"    | expression '/' expression                             # doDivide\n" +
+			"    | expression '%' expression                             # doModulo\n" +
+			"    | expression '-' expression                             # doMinus\n" +
+			"    | expression '+' expression                             # doPlus\n" +
+			"    | expression '=' expression                             # doEqual\n" +
+			"    | expression '!=' expression                            # doNotEqual\n" +
+			"    | expression '>' expression                             # doGreather\n" +
+			"    | expression '>=' expression                            # doGreatherEqual\n" +
+			"    | expression '<' expression                             # doLesser\n" +
+			"    | expression '<=' expression                            # doLesserEqual\n" +
+			"    | expression K_IN '(' expression (',' expression)* ')'  # doIn\n" +
+			"    | expression ( '&' | K_AND) expression                  # doAnd\n" +
+			"    | expression ( '|' | K_OR) expression                   # doOr\n" +
+			"    | '[' expression (',' expression)* ']'                  # newArray\n" +
+			"    | K_TRUE                                                # newTrueBoolean\n" +
+			"    | K_FALSE                                               # newFalseBoolean\n" +
+			"    | NUMBER                                                # newNumber\n" +
+			"    | DATE                                                  # newDateTime\n" +
+			"    | ID                                                    # newIdentifier\n" +
+			"    | SQ_STRING                                             # newString\n" +
+			"    | K_NULL                                                # newNull\n" +
+			"    ;\n" +
+			"\n" +
+			"// Fragments\n" +
+			"fragment DIGIT    : '0' .. '9';  \n" +
+			"fragment UPPER    : 'A' .. 'Z';\n" +
+			"fragment LOWER    : 'a' .. 'z';\n" +
+			"fragment LETTER   : LOWER | UPPER;\n" +
+			"fragment WORD     : LETTER | '_' | '$' | '#' | '.';\n" +
+			"fragment ALPHANUM : WORD | DIGIT;  \n" +
+			"\n" +
+			"// Tokens\n" +
+			"ID              : LETTER ALPHANUM*;\n" +
+			"NUMBER          : DIGIT+ ('.' DIGIT+)? (('e'|'E')('+'|'-')? DIGIT+)?;\n" +
+			"DATE            : '\\'' DIGIT DIGIT DIGIT DIGIT '-' DIGIT DIGIT '-' DIGIT DIGIT (' ' DIGIT DIGIT ':' DIGIT DIGIT ':' DIGIT DIGIT ('.' DIGIT+)?)? '\\'';\n" +
+			"SQ_STRING       : '\\'' ('\\'\\'' | ~'\\'')* '\\'';\n" +
+			"DQ_STRING       : '\"' ('\\\\\"' | ~'\"')* '\"';\n" +
+			"WS              : [ \\t\\n\\r]+ -> skip ;\n" +
+			"COMMENTS        : ('/*' .*? '*/' | '//' ~'\\n'* '\\n' ) -> skip;\n";
+
+		String expected =
+			"";
+		String result = execParser("Expr.g4", grammar, "ExprParser", "ExprLexer", "prog", "Test(1,3)", false);
+		assertEquals(expected, result);
+		assertNull(stderrDuringParse);
+
+		expected =
+			"";
+		result = execParser("Expr.g4", grammar, "ExprParser", "ExprLexer", "prog", "Test(1, 3)", false);
+		assertEquals(expected, result);
+		assertNull(stderrDuringParse);
 	}
 
 	public void runTests(String grammar, String[] tests, String startRule) {

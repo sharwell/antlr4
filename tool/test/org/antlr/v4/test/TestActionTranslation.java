@@ -74,6 +74,20 @@ public class TestActionTranslation extends BaseTest {
 		testActions(attributeTemplate, "inline2", action, expected);
     }
 
+	/**
+	 * Regression test for "in antlr v4 lexer, $ translation issue in action".
+	 * https://github.com/antlr/antlr4/issues/176
+	 */
+	@Test public void testUnescaped$InAction() throws Exception {
+		String action = "\\$string$";
+		String expected = "$string$";
+		testActions(attributeTemplate, "members", action, expected);
+		testActions(attributeTemplate, "init", action, expected);
+		testActions(attributeTemplate, "inline", action, expected);
+		testActions(attributeTemplate, "finally", action, expected);
+		testActions(attributeTemplate, "inline2", action, expected);
+	}
+
 	@Test public void testEscapedSlash() throws Exception {
 		String action   = "x = '\\n';";  // x = '\n'; -> x = '\n';
 		String expected = "x = '\\n';";
@@ -130,8 +144,8 @@ public class TestActionTranslation extends BaseTest {
 	}
 
 	@Test public void testReturnValues() throws Exception {
-		String action = "$lab.e; $b.e;";
-		String expected = "_localctx.lab.e; _localctx.b.e;";
+		String action = "$lab.e; $b.e; $y.e = \"\";";
+		String expected = "_localctx.lab.e; _localctx.b.e; _localctx.y.e = \"\";";
 		testActions(attributeTemplate, "inline", action, expected);
 	}
 

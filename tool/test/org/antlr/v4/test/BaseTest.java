@@ -147,6 +147,10 @@ public abstract class BaseTest {
 //		tmpdir = "/tmp";
     }
 
+	protected boolean testInSameProcess() {
+		return TEST_IN_SAME_PROCESS;
+	}
+
     protected org.antlr.v4.Tool newTool(String[] args) {
 		Tool tool = new Tool(args);
 		return tool;
@@ -446,14 +450,11 @@ public abstract class BaseTest {
 		return null;
 	}
 
-
 	/** Return true if all is ok, no errors */
-	protected boolean antlr(String fileName, String grammarFileName, String grammarStr, boolean defaultListener, String... extraOptions) {
-		boolean allIsWell = true;
+	protected ErrorQueue antlr(String fileName, String grammarFileName, String grammarStr, boolean defaultListener, String... extraOptions) {
 		System.out.println("dir "+tmpdir);
 		mkdir(tmpdir);
 		writeFile(tmpdir, fileName, grammarStr);
-		ErrorQueue equeue = new ErrorQueue();
 		final List<String> options = new ArrayList<String>();
 		Collections.addAll(options, extraOptions);
 		options.add("-o");
@@ -461,23 +462,17 @@ public abstract class BaseTest {
 		options.add("-lib");
 		options.add(tmpdir);
 		options.add(new File(tmpdir,grammarFileName).toString());
-		try {
-			final String[] optionsA = new String[options.size()];
-			options.toArray(optionsA);
-			Tool antlr = newTool(optionsA);
-			antlr.addListener(equeue);
-			if (defaultListener) {
-				antlr.addListener(new DefaultToolListener(antlr));
-			}
-			antlr.processGrammarsOnCommandLine();
-		}
-		catch (Exception e) {
-			allIsWell = false;
-			System.err.println("problems building grammar: "+e);
-			e.printStackTrace(System.err);
-		}
 
-		allIsWell = equeue.errors.isEmpty();
+		final String[] optionsA = new String[options.size()];
+		options.toArray(optionsA);
+		Tool antlr = newTool(optionsA);
+		ErrorQueue equeue = new ErrorQueue(antlr);
+		antlr.addListener(equeue);
+		if (defaultListener) {
+			antlr.addListener(new DefaultToolListener(antlr));
+		}
+		antlr.processGrammarsOnCommandLine();
+
 		if ( !defaultListener && !equeue.errors.isEmpty() ) {
 			System.err.println("antlr reports errors from "+options);
 			for (int i = 0; i < equeue.errors.size(); i++) {
@@ -504,7 +499,7 @@ public abstract class BaseTest {
 			}
 		}
 
-		return allIsWell;
+		return equeue;
 	}
 
 	protected String execLexer(String grammarFileName,
@@ -574,9 +569,9 @@ public abstract class BaseTest {
 													boolean defaultListener,
 													String... extraOptions)
 	{
-		boolean allIsWell =
+		ErrorQueue equeue =
 			antlr(grammarFileName, grammarFileName, grammarStr, defaultListener, extraOptions);
-		if (!allIsWell) {
+		if (!equeue.errors.isEmpty()) {
 			return false;
 		}
 
@@ -596,7 +591,7 @@ public abstract class BaseTest {
 				files.add(grammarFileName.substring(0, grammarFileName.lastIndexOf('.'))+"Visitor.java");
 			}
 		}
-		allIsWell = compile(files.toArray(new String[files.size()]));
+		boolean allIsWell = compile(files.toArray(new String[files.size()]));
 		return allIsWell;
 	}
 
@@ -625,7 +620,7 @@ public abstract class BaseTest {
 	}
 
 	public String execClass(String className) {
-		if (TEST_IN_SAME_PROCESS) {
+		if (testInSameProcess()) {
 			try {
 				ClassLoader loader = new URLClassLoader(new URL[] { new File(tmpdir).toURI().toURL() }, ClassLoader.getSystemClassLoader());
                 final Class<?> mainClass = (Class<?>)loader.loadClass(className);
@@ -667,22 +662,31 @@ public abstract class BaseTest {
 				return output;
 			} catch (MalformedURLException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (IOException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (InterruptedException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (IllegalAccessException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (IllegalArgumentException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (InvocationTargetException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (NoSuchMethodException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (SecurityException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			} catch (ClassNotFoundException ex) {
 				LOGGER.log(Level.SEVERE, null, ex);
+				throw new RuntimeException(ex);
 			}
 		}
 
@@ -720,23 +724,13 @@ public abstract class BaseTest {
         for (int i = 0; i < pairs.length; i+=2) {
             String input = pairs[i];
             String expect = pairs[i+1];
-            ErrorQueue equeue = new ErrorQueue();
-			Grammar g = null;
-            try {
-                String[] lines = input.split("\n");
-				String fileName = getFilenameFromFirstLineOfGrammar(lines[0]);
-				if (input.startsWith("lexer ")) {
-					g = new LexerGrammar(fileName, input, equeue);
-				} else {
-					g = new Grammar(fileName, input, equeue);
-				}
-            }
-			catch (UnsupportedOperationException ex) {
-			}
-            catch (org.antlr.runtime.RecognitionException re) {
-                re.printStackTrace(System.err);
-            }
-            String actual = equeue.toString(g != null ? g.tool : new Tool());
+
+			String[] lines = input.split("\n");
+			String fileName = getFilenameFromFirstLineOfGrammar(lines[0]);
+			ErrorQueue equeue = antlr(fileName, fileName, input, false);
+
+			String actual = equeue.toString(true);
+			actual = actual.replace(tmpdir + File.separator, "");
 			System.err.println(actual);
 			String msg = input;
 			msg = msg.replace("\n","\\n");
@@ -748,14 +742,14 @@ public abstract class BaseTest {
     }
 
 	public String getFilenameFromFirstLineOfGrammar(String line) {
-		String fileName = "<string>";
+		String fileName = "A" + Tool.GRAMMAR_EXTENSION;
 		int grIndex = line.lastIndexOf("grammar");
 		int semi = line.lastIndexOf(';');
 		if ( grIndex>=0 && semi>=0 ) {
 			int space = line.indexOf(' ', grIndex);
 			fileName = line.substring(space+1, semi)+Tool.GRAMMAR_EXTENSION;
 		}
-		if ( fileName.length()==Tool.GRAMMAR_EXTENSION.length() ) fileName = "<string>";
+		if ( fileName.length()==Tool.GRAMMAR_EXTENSION.length() ) fileName = "A" + Tool.GRAMMAR_EXTENSION;
 		return fileName;
 	}
 
@@ -826,7 +820,7 @@ public abstract class BaseTest {
 		st.add(actionName, action);
 		String grammar = st.render();
 		ErrorQueue equeue = new ErrorQueue();
-		Grammar g = new Grammar(grammar);
+		Grammar g = new Grammar(grammar, equeue);
 		if ( g.ast!=null && !g.ast.hasErrors ) {
 			SemanticPipeline sem = new SemanticPipeline(g);
 			sem.process();
@@ -847,7 +841,7 @@ public abstract class BaseTest {
 			assertEquals(expected, snippet);
 		}
 		if ( equeue.size()>0 ) {
-			System.err.println(equeue.toString(g.tool));
+			System.err.println(equeue.toString());
 		}
 	}
 

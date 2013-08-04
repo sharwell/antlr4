@@ -75,6 +75,7 @@ public class TerminalNodeImpl implements TerminalNode {
 		if (symbol != null) {
 			return symbol.getText();
 		}
+
 		return null;
 	}
 
@@ -86,11 +87,14 @@ public class TerminalNodeImpl implements TerminalNode {
 	@Override
 	public String toString() {
 		if (symbol != null) {
-			if ( symbol.getType() == Token.EOF ) return "<EOF>";
+			if ( symbol.getType() == Token.EOF ) {
+				return "<EOF>";
+			}
+
 			return symbol.getText();
 		}
 		else {
-			return symbol != null ? symbol.toString() : "<null>";
+			return "<null>";
 		}
 	}
 

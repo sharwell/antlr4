@@ -95,8 +95,7 @@ public class UnbufferedTokenStream implements TokenStream {
 
 	public UnbufferedTokenStream(TokenSource tokenSource, int bufferSize) {
 		this.tokenSource = tokenSource;
-		Token[] tokens = new Token[bufferSize];
-		this.tokens = tokens;
+		this.tokens = new Token[bufferSize];
 		n = 0;
 		fill(1); // prime the pump
 	}

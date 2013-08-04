@@ -34,7 +34,7 @@ import org.antlr.v4.runtime.misc.ParseCancellationException;
 
 /** Bail out of parser at first syntax error. Do this to use it:
  *  <p/>
- *  {@code myparser.setErrorHandler(new BailErrorStrategy<Token>());}
+ *  {@code myparser.setErrorHandler(new BailErrorStrategy());}
  */
 public class BailErrorStrategy extends DefaultErrorStrategy {
     /** Instead of recovering from exception {@code e}, re-throw it wrapped

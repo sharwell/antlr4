@@ -44,6 +44,8 @@ import org.antlr.v4.runtime.misc.IntegerList;
 import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
+import org.antlr.v4.runtime.misc.Tuple;
+import org.antlr.v4.runtime.misc.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -247,6 +249,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	public static final boolean dfa_debug = false;
 	public static final boolean retry_debug = false;
 
+	@NotNull
 	private PredictionMode predictionMode = PredictionMode.LL;
 	public boolean force_global_context = false;
 	public boolean always_try_local_context = true;
@@ -257,8 +260,6 @@ public class ParserATNSimulator extends ATNSimulator {
 	public boolean optimize_tail_calls = true;
 	public boolean tail_call_preserves_sll = true;
 	public boolean treat_sllk1_conflict_as_ambiguity = false;
-
-	public static boolean optimize_closure_busy = true;
 
 	@Nullable
 	protected final Parser parser;
@@ -339,7 +340,7 @@ public class ParserATNSimulator extends ATNSimulator {
 			useContext = true;
 		}
 		else if (!always_try_local_context) {
-			useContext |= dfa != null && dfa.isContextSensitive();
+			useContext |= dfa.isContextSensitive();
 		}
 
 		userWantsCtxSensitive = useContext || (predictionMode != PredictionMode.SLL && outerContext != null && !atn.decisionToState.get(decision).sll);
@@ -353,25 +354,28 @@ public class ParserATNSimulator extends ATNSimulator {
 		}
 
 		if ( state==null ) {
-			return predictATN(dfa, input, outerContext, useContext);
+			if ( outerContext==null ) outerContext = ParserRuleContext.emptyContext();
+			if ( debug ) System.out.println("ATN decision "+dfa.decision+
+											" exec LA(1)=="+ getLookaheadName(input) +
+											", outerContext="+outerContext.toString(parser));
+
+			state = computeStartState(dfa, outerContext, useContext);
 		}
-		else {
-			//dump(dfa);
-			// start with the DFA
-			int m = input.mark();
-			int index = input.index();
-			try {
-				int alt = execDFA(dfa, input, index, state);
-				return alt;
-			}
-			finally {
-				input.seek(index);
-				input.release(m);
-			}
+
+		int m = input.mark();
+		int index = input.index();
+		try {
+			int alt = execDFA(dfa, input, index, state);
+			if ( debug ) System.out.println("DFA after predictATN: "+dfa.toString(parser.getTokenNames(), parser.getRuleNames()));
+			return alt;
+		}
+		finally {
+			input.seek(index);
+			input.release(m);
 		}
 	}
 
-	public SimulatorState getStartState(@NotNull DFA dfa,
+	protected SimulatorState getStartState(@NotNull DFA dfa,
 										@NotNull TokenStream input,
 										@NotNull ParserRuleContext outerContext,
 										boolean useContext) {
@@ -405,40 +409,7 @@ public class ParserATNSimulator extends ATNSimulator {
 		return new SimulatorState(outerContext, s0, useContext, remainingContext);
 	}
 
-	public int predictATN(@NotNull DFA dfa, @NotNull TokenStream input,
-						  @Nullable ParserRuleContext outerContext,
-						  boolean useContext)
-	{
-		if ( outerContext==null ) outerContext = ParserRuleContext.emptyContext();
-		if ( debug ) System.out.println("ATN decision "+dfa.decision+
-										" exec LA(1)=="+ getLookaheadName(input) +
-										", outerContext="+outerContext.toString(parser));
-
-		int alt = 0;
-		int m = input.mark();
-		int index = input.index();
-		try {
-			SimulatorState state = computeStartState(dfa, outerContext, useContext);
-			if (state.s0.isAcceptState) {
-				return execDFA(dfa, input, index, state);
-			}
-			else {
-				alt = execATN(dfa, input, index, state);
-			}
-		}
-		catch (NoViableAltException nvae) {
-			if ( debug ) dumpDeadEndConfigs(nvae);
-			throw nvae;
-		}
-		finally {
-			input.seek(index);
-			input.release(m);
-		}
-		if ( debug ) System.out.println("DFA after predictATN: "+dfa.toString(parser.getTokenNames(), parser.getRuleNames()));
-		return alt;
-	}
-
-	public int execDFA(@NotNull DFA dfa,
+	protected int execDFA(@NotNull DFA dfa,
 					   @NotNull TokenStream input, int startIndex,
 					   @NotNull SimulatorState state)
     {
@@ -525,7 +496,8 @@ public class ParserATNSimulator extends ATNSimulator {
 				return alt; // we've updated DFA, exec'd action, and have our deepest answer
 			}
 			else if ( target == ERROR ) {
-				throw noViableAlt(input, outerContext, s.configs, startIndex);
+				SimulatorState errorState = new SimulatorState(outerContext, s, state.useContext, remainingOuterContext);
+				return handleNoViableAlt(input, startIndex, errorState);
 			}
 			s = target;
 			if (!s.isAcceptState && t != IntStream.EOF) {
@@ -555,15 +527,16 @@ public class ParserATNSimulator extends ATNSimulator {
 					// Before attempting full context prediction, check to see if there are
 					// disambiguating or validating predicates to evaluate which allow an
 					// immediate decision
+					BitSet conflictingAlts = null;
 					if ( acceptState.predicates!=null ) {
 						int conflictIndex = input.index();
 						if (conflictIndex != startIndex) {
 							input.seek(startIndex);
 						}
 
-						BitSet predictions = evalSemanticContext(s.predicates, outerContext, true);
-						if ( predictions.cardinality() == 1 ) {
-							return predictions.nextSetBit(0);
+						conflictingAlts = evalSemanticContext(s.predicates, outerContext, true);
+						if ( conflictingAlts.cardinality() == 1 ) {
+							return conflictingAlts.nextSetBit(0);
 						}
 
 						if (conflictIndex != startIndex) {
@@ -574,8 +547,8 @@ public class ParserATNSimulator extends ATNSimulator {
 					}
 
 					if (reportAmbiguities) {
-						SimulatorState fullContextState = computeStartState(dfa, outerContext, true);
-						reportAttemptingFullContext(dfa, fullContextState, startIndex, input.index());
+						SimulatorState conflictState = new SimulatorState(outerContext, acceptState, state.useContext, remainingOuterContext);
+						reportAttemptingFullContext(dfa, conflictingAlts, conflictState, startIndex, input.index());
 					}
 
 					input.seek(startIndex);
@@ -607,7 +580,7 @@ public class ParserATNSimulator extends ATNSimulator {
 					input.seek(stopIndex);
 				}
 
-				reportAmbiguity(dfa, s, startIndex, stopIndex, alts, s.configs);
+				reportAmbiguity(dfa, s, startIndex, stopIndex, predictionMode == PredictionMode.LL_EXACT_AMBIG_DETECTION, alts, s.configs);
 				return alts.nextSetBit(0);
 			}
 		}
@@ -660,7 +633,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	 TODO: greedy + those
 
 	 */
-	public int execATN(@NotNull DFA dfa,
+	protected int execATN(@NotNull DFA dfa,
 					   @NotNull TokenStream input, int startIndex,
 					   @NotNull SimulatorState initialState)
 	{
@@ -671,26 +644,26 @@ public class ParserATNSimulator extends ATNSimulator {
 
 		int t = input.LA(1);
 
-        DecisionState decState = atn.getDecisionState(dfa.decision);
 		SimulatorState previous = initialState;
 
 		PredictionContextCache contextCache = new PredictionContextCache();
 		while (true) { // while more work
 			SimulatorState nextState = computeReachSet(dfa, previous, t, contextCache);
 			if (nextState == null) {
+				addDFAEdge(previous.s0, input.LA(1), ERROR);
 				return handleNoViableAlt(input, startIndex, previous);
 			}
 
 			DFAState D = nextState.s0;
-			ATNConfigSet reach = D.configs;
 
 			// predicted alt => accept state
-			assert D.isAcceptState || getUniqueAlt(reach) == ATN.INVALID_ALT_NUMBER;
+			assert D.isAcceptState || getUniqueAlt(D.configs) == ATN.INVALID_ALT_NUMBER;
 			// conflicted => accept state
 			assert D.isAcceptState || D.configs.getConflictingAlts() == null;
 
 			if (D.isAcceptState) {
-				int predictedAlt = reach.getConflictingAlts() == null ? getUniqueAlt(reach) : ATN.INVALID_ALT_NUMBER;
+				BitSet conflictingAlts = D.configs.getConflictingAlts();
+				int predictedAlt = conflictingAlts == null ? getUniqueAlt(D.configs) : ATN.INVALID_ALT_NUMBER;
 				if ( predictedAlt!=ATN.INVALID_ALT_NUMBER ) {
 					if (optimize_ll1
 						&& input.index() == startIndex
@@ -705,87 +678,79 @@ public class ParserATNSimulator extends ATNSimulator {
 					}
 
 					if (useContext && always_try_local_context) {
-						reportContextSensitivity(dfa, nextState, startIndex, input.index());
+						reportContextSensitivity(dfa, predictedAlt, nextState, startIndex, input.index());
 					}
 				}
-				else if ( D.configs.getConflictingAlts()!=null ) {
-					predictedAlt = D.prediction;
-//						int k = input.index() - startIndex + 1; // how much input we used
-//						System.out.println("used k="+k);
-						if ( !userWantsCtxSensitive ||
-							 !D.configs.getDipsIntoOuterContext() ||
-							 (treat_sllk1_conflict_as_ambiguity && input.index() == startIndex))
-						{
-							if ( reportAmbiguities && !D.configs.hasSemanticContext() ) {
-								reportAmbiguity(dfa, D, startIndex, input.index(), D.configs.getConflictingAlts(), D.configs);
-							}
-						}
-						else {
-							assert !useContext;
-							assert D.isAcceptState;
 
-							if ( D.configs.hasSemanticContext() ) {
-								int nalts = decState.getNumberOfTransitions();
-								DFAState.PredPrediction[] predPredictions = D.predicates;
-								if (predPredictions != null) {
-									int conflictIndex = input.index();
-									if (conflictIndex != startIndex) {
-										input.seek(startIndex);
-									}
+				predictedAlt = D.prediction;
+//				int k = input.index() - startIndex + 1; // how much input we used
+//				System.out.println("used k="+k);
+				boolean attemptFullContext = conflictingAlts != null && userWantsCtxSensitive;
+				if (attemptFullContext) {
+					if (predictionMode == PredictionMode.LL_EXACT_AMBIG_DETECTION) {
+						attemptFullContext = !useContext
+							&& (D.configs.getDipsIntoOuterContext() || D.configs.getConflictingAlts().cardinality() > 2)
+							&& (!treat_sllk1_conflict_as_ambiguity || input.index() != startIndex);
+					}
+					else {
+						attemptFullContext = D.configs.getDipsIntoOuterContext()
+							&& (!treat_sllk1_conflict_as_ambiguity || input.index() != startIndex);
+					}
+				}
 
-									// always use complete evaluation here since we'll want to retry with full context if still ambiguous
-									BitSet alts = evalSemanticContext(predPredictions, outerContext, true);
-									if (alts.cardinality() == 1) {
-										return alts.nextSetBit(0);
-									}
-
-									if (conflictIndex != startIndex) {
-										// restore the index so reporting the fallback to full
-										// context occurs with the index at the correct spot
-										input.seek(conflictIndex);
-									}
-								}
-							}
-
-							if ( debug ) System.out.println("RETRY with outerContext="+outerContext);
-							SimulatorState fullContextState = computeStartState(dfa, outerContext, true);
-							if (reportAmbiguities) {
-								reportAttemptingFullContext(dfa, fullContextState, startIndex, input.index());
-							}
-
+				if ( D.configs.hasSemanticContext() ) {
+					DFAState.PredPrediction[] predPredictions = D.predicates;
+					if (predPredictions != null) {
+						int conflictIndex = input.index();
+						if (conflictIndex != startIndex) {
 							input.seek(startIndex);
-							return execATN(dfa, input, startIndex, fullContextState);
-						}
-				}
-
-				if ( D.predicates != null ) {
-					int stopIndex = input.index();
-					if (startIndex != stopIndex) {
-						input.seek(startIndex);
-					}
-
-					BitSet alts = evalSemanticContext(D.predicates, outerContext, reportAmbiguities && predictionMode == PredictionMode.LL_EXACT_AMBIG_DETECTION);
-					D.prediction = ATN.INVALID_ALT_NUMBER;
-					switch (alts.cardinality()) {
-					case 0:
-						throw noViableAlt(input, outerContext, D.configs, startIndex);
-
-					case 1:
-						return alts.nextSetBit(0);
-
-					default:
-						// report ambiguity after predicate evaluation to make sure the correct
-						// set of ambig alts is reported.
-						if (startIndex != stopIndex) {
-							input.seek(stopIndex);
 						}
 
-						reportAmbiguity(dfa, D, startIndex, stopIndex, alts, D.configs);
-						return alts.nextSetBit(0);
+						// use complete evaluation here if we'll want to retry with full context if still ambiguous
+						conflictingAlts = evalSemanticContext(predPredictions, outerContext, attemptFullContext || reportAmbiguities);
+						switch (conflictingAlts.cardinality()) {
+						case 0:
+							throw noViableAlt(input, outerContext, D.configs, startIndex);
+
+						case 1:
+							return conflictingAlts.nextSetBit(0);
+
+						default:
+							break;
+						}
+
+						if (conflictIndex != startIndex) {
+							// restore the index so reporting the fallback to full
+							// context occurs with the index at the correct spot
+							input.seek(conflictIndex);
+						}
 					}
 				}
 
-				return predictedAlt;
+				if (!attemptFullContext) {
+					if (conflictingAlts != null) {
+						if (reportAmbiguities && conflictingAlts.cardinality() > 1) {
+							reportAmbiguity(dfa, D, startIndex, input.index(), predictionMode == PredictionMode.LL_EXACT_AMBIG_DETECTION, conflictingAlts, D.configs);
+						}
+
+						predictedAlt = conflictingAlts.nextSetBit(0);
+					}
+
+					return predictedAlt;
+				}
+				else {
+					assert !useContext;
+					assert D.isAcceptState;
+
+					if ( debug ) System.out.println("RETRY with outerContext="+outerContext);
+					SimulatorState fullContextState = computeStartState(dfa, outerContext, true);
+					if (reportAmbiguities) {
+						reportAttemptingFullContext(dfa, conflictingAlts, nextState, startIndex, input.index());
+					}
+
+					input.seek(startIndex);
+					return execATN(dfa, input, startIndex, fullContextState);
+				}
 			}
 
 			previous = nextState;
@@ -843,12 +808,55 @@ public class ParserATNSimulator extends ATNSimulator {
 
 		final DFAState s0 = s;
 
-		DFAState existingTarget = s0 != null ? s0.getTarget(t) : null;
-		if (existingTarget != null) {
-			return new SimulatorState(previous.outerContext, existingTarget, useContext, remainingGlobalContext);
+		DFAState target = getExistingTargetState(s0, t);
+		if (target == null) {
+			Tuple2<DFAState, ParserRuleContext> result = computeTargetState(dfa, s0, remainingGlobalContext, t, useContext, contextCache);
+			target = result.getItem1();
+			remainingGlobalContext = result.getItem2();
 		}
 
-		List<ATNConfig> closureConfigs = new ArrayList<ATNConfig>(s0.configs);
+		if (target == ERROR) {
+			return null;
+		}
+
+		assert !useContext || !target.configs.getDipsIntoOuterContext();
+		return new SimulatorState(previous.outerContext, target, useContext, remainingGlobalContext);
+	}
+
+	/**
+	 * Get an existing target state for an edge in the DFA. If the target state
+	 * for the edge has not yet been computed or is otherwise not available,
+	 * this method returns {@code null}.
+	 *
+	 * @param s The current DFA state
+	 * @param t The next input symbol
+	 * @return The existing target DFA state for the given input symbol
+	 * {@code t}, or {@code null} if the target state for this edge is not
+	 * already cached
+	 */
+	@Nullable
+	protected DFAState getExistingTargetState(@NotNull DFAState s, int t) {
+		return s.getTarget(t);
+	}
+
+	/**
+	 * Compute a target state for an edge in the DFA, and attempt to add the
+	 * computed state and corresponding edge to the DFA.
+	 *
+	 * @param dfa
+	 * @param s The current DFA state
+	 * @param remainingGlobalContext
+	 * @param t The next input symbol
+	 * @param useContext
+	 * @param contextCache
+	 *
+	 * @return The computed target DFA state for the given input symbol
+	 * {@code t}. If {@code t} does not lead to a valid DFA state, this method
+	 * returns {@link #ERROR}.
+	 */
+	@NotNull
+	protected Tuple2<DFAState, ParserRuleContext> computeTargetState(@NotNull DFA dfa, @NotNull DFAState s, ParserRuleContext remainingGlobalContext, int t, boolean useContext, PredictionContextCache contextCache) {
+		List<ATNConfig> closureConfigs = new ArrayList<ATNConfig>(s.configs);
 		IntegerList contextElements = null;
 		ATNConfigSet reach = new ATNConfigSet();
 		boolean stepIntoGlobal;
@@ -977,16 +985,12 @@ public class ParserATNSimulator extends ATNSimulator {
 		} while (useContext && stepIntoGlobal);
 
 		if (reach.isEmpty()) {
-			return null;
+			addDFAEdge(s, t, ERROR);
+			return Tuple.create(ERROR, remainingGlobalContext);
 		}
 
-		DFAState dfaState = null;
-		if (s0 != null) {
-			dfaState = addDFAEdge(dfa, s0, t, contextElements, reach, contextCache);
-		}
-
-		assert !useContext || !dfaState.configs.getDipsIntoOuterContext();
-		return new SimulatorState(previous.outerContext, dfaState, useContext, remainingGlobalContext);
+		DFAState result = addDFAEdge(dfa, s, t, contextElements, reach, contextCache);
+		return Tuple.create(result, remainingGlobalContext);
 	}
 
 	/**
@@ -997,6 +1001,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	 *
 	 * @param configs the configuration set to update
 	 * @param contextCache the {@link PredictionContext} cache
+	 *
 	 * @return {@code configs} if all configurations in {@code configs} are in a
 	 * rule stop state, otherwise return a new configuration set containing only
 	 * the configurations from {@code configs} which are in a rule stop state
@@ -1020,7 +1025,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@NotNull
-	public SimulatorState computeStartState(DFA dfa,
+	protected SimulatorState computeStartState(DFA dfa,
 											ParserRuleContext globalContext,
 											boolean useContext)
 	{
@@ -1128,7 +1133,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@Nullable
-	public ATNState getReachableTarget(@NotNull ATNConfig source, @NotNull Transition trans, int ttype) {
+	protected ATNState getReachableTarget(@NotNull ATNConfig source, @NotNull Transition trans, int ttype) {
 		if (trans.matches(ttype, 0, atn.maxTokenType)) {
 			return trans.target;
 		}
@@ -1137,7 +1142,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	/** collect and set D's semantic context */
-	public DFAState.PredPrediction[] predicateDFAState(DFAState D,
+	protected DFAState.PredPrediction[] predicateDFAState(DFAState D,
 													   ATNConfigSet configs,
 													   int nalts)
 	{
@@ -1156,7 +1161,7 @@ public class ParserATNSimulator extends ATNSimulator {
 		return predPredictions;
 	}
 
-	public SemanticContext[] getPredsForAmbigAlts(@NotNull BitSet ambigAlts,
+	protected SemanticContext[] getPredsForAmbigAlts(@NotNull BitSet ambigAlts,
 												  @NotNull ATNConfigSet configs,
 												  int nalts)
 	{
@@ -1197,7 +1202,7 @@ public class ParserATNSimulator extends ATNSimulator {
 		return altToPred;
 	}
 
-	public DFAState.PredPrediction[] getPredicatePredictions(BitSet ambigAlts, SemanticContext[] altToPred) {
+	protected DFAState.PredPrediction[] getPredicatePredictions(BitSet ambigAlts, SemanticContext[] altToPred) {
 		List<DFAState.PredPrediction> pairs = new ArrayList<DFAState.PredPrediction>();
 		boolean containsPredicate = false;
 		for (int i = 1; i < altToPred.length; i++) {
@@ -1232,7 +1237,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	 *  pairs that win. A {@code null} predicate indicates an alt containing an
 	 *  unpredicated config which behaves as "always true."
 	 */
-	public BitSet evalSemanticContext(@NotNull DFAState.PredPrediction[] predPredictions,
+	protected BitSet evalSemanticContext(@NotNull DFAState.PredPrediction[] predPredictions,
 										   ParserRuleContext outerContext,
 										   boolean complete)
 	{
@@ -1287,10 +1292,6 @@ public class ParserATNSimulator extends ATNSimulator {
 		while (currentConfigs.size() > 0) {
 			ATNConfigSet intermediate = new ATNConfigSet();
 			for (ATNConfig config : currentConfigs) {
-				if (optimize_closure_busy && !closureBusy.add(config)) {
-					continue;
-				}
-
 				closure(config, configs, intermediate, closureBusy, collectPredicates, hasMoreContext, contextCache, 0);
 			}
 
@@ -1309,10 +1310,6 @@ public class ParserATNSimulator extends ATNSimulator {
 	{
 		if ( debug ) System.out.println("closure("+config.toString(parser,true)+")");
 
-		if ( !optimize_closure_busy && !closureBusy.add(config) ) {
-			return; // avoid infinite recursion
-		}
-
 		if ( config.getState() instanceof RuleStopState ) {
 			// We hit rule end. If we have context info, use it
 			if ( !config.getContext().isEmpty() ) {
@@ -1327,10 +1324,6 @@ public class ParserATNSimulator extends ATNSimulator {
 					// Make sure we track that we are now out of context.
 					c.setOuterContextDepth(config.getOuterContextDepth());
 					assert depth > Integer.MIN_VALUE;
-					if (optimize_closure_busy && c.getContext().isEmpty() && !closureBusy.add(c)) {
-						continue;
-					}
-
 					closure(c, configs, intermediate, closureBusy, collectPredicates, hasMoreContexts, contextCache, depth - 1);
 				}
 
@@ -1376,32 +1369,6 @@ public class ParserATNSimulator extends ATNSimulator {
 					}
 				}
 
-				if (optimize_closure_busy) {
-					boolean checkClosure = false;
-					switch (c.getState().getStateType()) {
-					case STAR_LOOP_ENTRY:
-					case BLOCK_END:
-					case LOOP_END:
-						checkClosure = true;
-						break;
-
-					case PLUS_BLOCK_START:
-						checkClosure = true;
-						break;
-
-					case RULE_STOP:
-						checkClosure = c.getContext().isEmpty();
-						break;
-
-					default:
-						break;
-					}
-
-					if (checkClosure && !closureBusy.add(c)) {
-						continue;
-					}
-				}
-
 				int newDepth = depth;
 				if ( config.getState() instanceof RuleStopState ) {
 					// target fell off end of rule; mark resulting c as having dipped into outer context
@@ -1409,6 +1376,12 @@ public class ParserATNSimulator extends ATNSimulator {
 					// track how far we dip into outer context.  Might
 					// come in handy and we avoid evaluating context dependent
 					// preds if this is > 0.
+
+					if (!closureBusy.add(c)) {
+						// avoid infinite recursion for right-recursive rules
+						continue;
+					}
+
 					c.setOuterContextDepth(c.getOuterContextDepth() + 1);
 
 					assert newDepth > Integer.MIN_VALUE;
@@ -1448,7 +1421,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@Nullable
-	public ATNConfig getEpsilonTarget(@NotNull ATNConfig config, @NotNull Transition t, boolean collectPredicates, boolean inContext, PredictionContextCache contextCache) {
+	protected ATNConfig getEpsilonTarget(@NotNull ATNConfig config, @NotNull Transition t, boolean collectPredicates, boolean inContext, PredictionContextCache contextCache) {
 		switch (t.getSerializationType()) {
 		case RULE:
 			return ruleTransition(config, (RuleTransition)t, contextCache);
@@ -1471,13 +1444,13 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@NotNull
-	public ATNConfig actionTransition(@NotNull ATNConfig config, @NotNull ActionTransition t) {
+	protected ATNConfig actionTransition(@NotNull ATNConfig config, @NotNull ActionTransition t) {
 		if ( debug ) System.out.println("ACTION edge "+t.ruleIndex+":"+t.actionIndex);
 		return config.transform(t.target);
 	}
 
 	@Nullable
-	public ATNConfig precedenceTransition(@NotNull ATNConfig config,
+	protected ATNConfig precedenceTransition(@NotNull ATNConfig config,
 									@NotNull PrecedencePredicateTransition pt,
 									boolean collectPredicates,
 									boolean inContext)
@@ -1506,7 +1479,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@Nullable
-	public ATNConfig predTransition(@NotNull ATNConfig config,
+	protected ATNConfig predTransition(@NotNull ATNConfig config,
 									@NotNull PredicateTransition pt,
 									boolean collectPredicates,
 									boolean inContext)
@@ -1537,7 +1510,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@NotNull
-	public ATNConfig ruleTransition(@NotNull ATNConfig config, @NotNull RuleTransition t, @Nullable PredictionContextCache contextCache) {
+	protected ATNConfig ruleTransition(@NotNull ATNConfig config, @NotNull RuleTransition t, @Nullable PredictionContextCache contextCache) {
 		if ( debug ) {
 			System.out.println("CALL rule "+getRuleName(t.target.ruleIndex)+
 							   ", ctx="+config.getContext());
@@ -1820,7 +1793,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@NotNull
-	public NoViableAltException noViableAlt(@NotNull TokenStream input,
+	protected NoViableAltException noViableAlt(@NotNull TokenStream input,
 											@NotNull ParserRuleContext outerContext,
 											@NotNull ATNConfigSet configs,
 											int startIndex)
@@ -1831,7 +1804,7 @@ public class ParserATNSimulator extends ATNSimulator {
 											configs, outerContext);
 	}
 
-	public int getUniqueAlt(@NotNull Iterable<ATNConfig> configs) {
+	protected int getUniqueAlt(@NotNull Iterable<ATNConfig> configs) {
 		int alt = ATN.INVALID_ALT_NUMBER;
 		for (ATNConfig c : configs) {
 			if ( alt == ATN.INVALID_ALT_NUMBER ) {
@@ -1844,7 +1817,7 @@ public class ParserATNSimulator extends ATNSimulator {
 		return alt;
 	}
 
-	public boolean configWithAltAtStopState(@NotNull Iterable<ATNConfig> configs, int alt) {
+	protected boolean configWithAltAtStopState(@NotNull Iterable<ATNConfig> configs, int alt) {
 		for (ATNConfig c : configs) {
 			if ( c.getAlt() == alt ) {
 				if ( c.getState() instanceof RuleStopState ) {
@@ -1973,39 +1946,29 @@ public class ParserATNSimulator extends ATNSimulator {
 		return new DFAState(configs, -1, atn.maxTokenType);
 	}
 
-//	public void reportConflict(int startIndex, int stopIndex,
-//							   @NotNull IntervalSet alts,
-//							   @NotNull ATNConfigSet configs)
-//	{
-//		if ( debug || retry_debug ) {
-//			System.out.println("reportConflict "+alts+":"+configs+
-//							   ", input="+parser.getInputString(startIndex, stopIndex));
-//		}
-//		if ( parser!=null ) parser.getErrorHandler().reportConflict(parser, startIndex, stopIndex, alts, configs);
-//	}
-
-	public void reportAttemptingFullContext(DFA dfa, SimulatorState initialState, int startIndex, int stopIndex) {
+	protected void reportAttemptingFullContext(DFA dfa, @Nullable BitSet conflictingAlts, SimulatorState conflictState, int startIndex, int stopIndex) {
         if ( debug || retry_debug ) {
 			Interval interval = Interval.of(startIndex, stopIndex);
-            System.out.println("reportAttemptingFullContext decision="+dfa.decision+":"+initialState.s0.configs+
+            System.out.println("reportAttemptingFullContext decision="+dfa.decision+":"+conflictState.s0.configs+
                                ", input="+parser.getInputStream().getText(interval));
         }
-        if ( parser!=null ) parser.getErrorListenerDispatch().reportAttemptingFullContext(parser, dfa, startIndex, stopIndex, initialState);
+        if ( parser!=null ) parser.getErrorListenerDispatch().reportAttemptingFullContext(parser, dfa, startIndex, stopIndex, conflictingAlts, conflictState);
     }
 
-	public void reportContextSensitivity(DFA dfa, SimulatorState acceptState, int startIndex, int stopIndex) {
+	protected void reportContextSensitivity(DFA dfa, int prediction, SimulatorState acceptState, int startIndex, int stopIndex) {
         if ( debug || retry_debug ) {
 			Interval interval = Interval.of(startIndex, stopIndex);
             System.out.println("reportContextSensitivity decision="+dfa.decision+":"+acceptState.s0.configs+
                                ", input="+parser.getInputStream().getText(interval));
         }
-        if ( parser!=null ) parser.getErrorListenerDispatch().reportContextSensitivity(parser, dfa, startIndex, stopIndex, acceptState);
+        if ( parser!=null ) parser.getErrorListenerDispatch().reportContextSensitivity(parser, dfa, startIndex, stopIndex, prediction, acceptState);
     }
 
     /** If context sensitive parsing, we know it's ambiguity not conflict */
-    public void reportAmbiguity(@NotNull DFA dfa, DFAState D, int startIndex, int stopIndex,
-								@NotNull BitSet ambigAlts,
-								@NotNull ATNConfigSet configs)
+    protected void reportAmbiguity(@NotNull DFA dfa, DFAState D, int startIndex, int stopIndex,
+								   boolean exact,
+								   @Nullable BitSet ambigAlts,
+								   @NotNull ATNConfigSet configs)
 	{
 		if ( debug || retry_debug ) {
 //			ParserATNPathFinder finder = new ParserATNPathFinder(parser, atn);
@@ -2030,7 +1993,7 @@ public class ParserATNSimulator extends ATNSimulator {
                                ", input="+parser.getInputStream().getText(interval));
         }
         if ( parser!=null ) parser.getErrorListenerDispatch().reportAmbiguity(parser, dfa, startIndex, stopIndex,
-                                                                     ambigAlts, configs);
+																			  exact, ambigAlts, configs);
     }
 
 	protected final int getReturnState(RuleContext context) {

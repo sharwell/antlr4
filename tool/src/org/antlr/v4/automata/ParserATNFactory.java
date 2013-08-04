@@ -42,6 +42,7 @@ import org.antlr.v4.parse.ATNBuilder;
 import org.antlr.v4.parse.GrammarASTAdaptor;
 import org.antlr.v4.runtime.atn.ATN;
 import org.antlr.v4.runtime.atn.ATNState;
+import org.antlr.v4.runtime.atn.ATNType;
 import org.antlr.v4.runtime.atn.AbstractPredicateTransition;
 import org.antlr.v4.runtime.atn.ActionTransition;
 import org.antlr.v4.runtime.atn.AtomTransition;
@@ -49,7 +50,6 @@ import org.antlr.v4.runtime.atn.BasicBlockStartState;
 import org.antlr.v4.runtime.atn.BasicState;
 import org.antlr.v4.runtime.atn.BlockEndState;
 import org.antlr.v4.runtime.atn.BlockStartState;
-import org.antlr.v4.runtime.atn.DecisionState;
 import org.antlr.v4.runtime.atn.EpsilonTransition;
 import org.antlr.v4.runtime.atn.LL1Analyzer;
 import org.antlr.v4.runtime.atn.LoopEndState;
@@ -73,12 +73,13 @@ import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 import org.antlr.v4.runtime.misc.Tuple;
-import org.antlr.v4.runtime.misc.Tuple2;
+import org.antlr.v4.runtime.misc.Tuple3;
 import org.antlr.v4.semantics.UseDefAnalyzer;
 import org.antlr.v4.tool.ErrorManager;
 import org.antlr.v4.tool.ErrorType;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.LeftRecursiveRule;
+import org.antlr.v4.tool.LexerGrammar;
 import org.antlr.v4.tool.Rule;
 import org.antlr.v4.tool.ast.ActionAST;
 import org.antlr.v4.tool.ast.AltAST;
@@ -97,7 +98,7 @@ import java.util.List;
 
 /** ATN construction routines triggered by ATNBuilder.g.
  *
- *  No side-effects. It builds an ATN object and returns it.
+ *  No side-effects. It builds an {@link ATN} object and returns it.
  */
 public class ParserATNFactory implements ATNFactory {
 	@NotNull
@@ -110,8 +111,11 @@ public class ParserATNFactory implements ATNFactory {
 
 	public int currentOuterAlt;
 
-	protected final List<Tuple2<? extends Rule, ? extends DecisionState>> preventEpsilonDecisions =
-		new ArrayList<Tuple2<? extends Rule, ? extends DecisionState>>();
+	protected final List<Tuple3<? extends Rule, ? extends ATNState, ? extends ATNState>> preventEpsilonClosureBlocks =
+		new ArrayList<Tuple3<? extends Rule, ? extends ATNState, ? extends ATNState>>();
+
+	protected final List<Tuple3<? extends Rule, ? extends ATNState, ? extends ATNState>> preventEpsilonOptionalBlocks =
+		new ArrayList<Tuple3<? extends Rule, ? extends ATNState, ? extends ATNState>>();
 
 	public ParserATNFactory(@NotNull Grammar g) {
 		if (g == null) {
@@ -119,21 +123,47 @@ public class ParserATNFactory implements ATNFactory {
 		}
 
 		this.g = g;
-		this.atn = new ATN();
+
+		ATNType atnType = g instanceof LexerGrammar ? ATNType.LEXER : ATNType.PARSER;
+		int maxTokenType = g.getMaxTokenType();
+		this.atn = new ATN(atnType, maxTokenType);
 	}
 
 	@Override
 	public ATN createATN() {
 		_createATN(g.rules.values());
-		atn.maxTokenType = g.getMaxTokenType();
+		assert atn.maxTokenType == g.getMaxTokenType();
         addRuleFollowLinks();
 		addEOFTransitionToStartRules();
 		ATNOptimizer.optimize(g, atn);
 
-		for (Tuple2<? extends Rule, ? extends DecisionState> pair : preventEpsilonDecisions) {
+		for (Tuple3<? extends Rule, ? extends ATNState, ? extends ATNState> pair : preventEpsilonClosureBlocks) {
 			LL1Analyzer analyzer = new LL1Analyzer(atn);
-			if (analyzer.LOOK(pair.getItem2(), PredictionContext.EMPTY_LOCAL).contains(org.antlr.v4.runtime.Token.EPSILON)) {
-				g.tool.errMgr.grammarError(ErrorType.EPSILON_LR_FOLLOW, g.fileName, ((GrammarAST)pair.getItem1().ast.getChild(0)).getToken(), pair.getItem1().name);
+			if (analyzer.LOOK(pair.getItem2(), pair.getItem3(), PredictionContext.EMPTY_LOCAL).contains(org.antlr.v4.runtime.Token.EPSILON)) {
+				ErrorType errorType = pair.getItem1() instanceof LeftRecursiveRule ? ErrorType.EPSILON_LR_FOLLOW : ErrorType.EPSILON_CLOSURE;
+				g.tool.errMgr.grammarError(errorType, g.fileName, ((GrammarAST)pair.getItem1().ast.getChild(0)).getToken(), pair.getItem1().name);
+			}
+		}
+
+		optionalCheck:
+		for (Tuple3<? extends Rule, ? extends ATNState, ? extends ATNState> pair : preventEpsilonOptionalBlocks) {
+			int bypassCount = 0;
+			for (int i = 0; i < pair.getItem2().getNumberOfTransitions(); i++) {
+				ATNState startState = pair.getItem2().transition(i).target;
+				if (startState == pair.getItem3()) {
+					bypassCount++;
+					continue;
+				}
+
+				LL1Analyzer analyzer = new LL1Analyzer(atn);
+				if (analyzer.LOOK(startState, pair.getItem3(), PredictionContext.EMPTY_LOCAL).contains(org.antlr.v4.runtime.Token.EPSILON)) {
+					g.tool.errMgr.grammarError(ErrorType.EPSILON_OPTIONAL, g.fileName, ((GrammarAST)pair.getItem1().ast.getChild(0)).getToken(), pair.getItem1().name);
+					continue optionalCheck;
+				}
+			}
+
+			if (bypassCount != 1) {
+				throw new UnsupportedOperationException("Expected optional block with exactly 1 bypass alternative.");
 			}
 		}
 
@@ -422,10 +452,6 @@ public class ParserATNFactory implements ATNFactory {
 //		System.out.println(blkAST.toStringTree()+":\n"+ser);
 		blkAST.atnState = start;
 
-		if (Boolean.valueOf(blkAST.getOptionString("preventepsilon"))) {
-			preventEpsilonDecisions.add(Tuple.create(currentRule, start));
-		}
-
 		return h;
 	}
 
@@ -447,7 +473,7 @@ public class ParserATNFactory implements ATNFactory {
             boolean isRuleTrans = tr instanceof RuleTransition;
             if ( el.left.getStateType() == StateType.BASIC &&
 				el.right.getStateType()== StateType.BASIC &&
-				tr!=null && (isRuleTrans || tr.target == el.right) )
+				tr!=null && (isRuleTrans && ((RuleTransition)tr).followState == el.right || tr.target == el.right) )
 			{
 				// we can avoid epsilon edge to next el
 				if ( isRuleTrans ) ((RuleTransition)tr).followState = els.get(i+1).left;
@@ -482,16 +508,13 @@ public class ParserATNFactory implements ATNFactory {
 	@Override
 	public Handle optional(@NotNull GrammarAST optAST, @NotNull Handle blk) {
 		BlockStartState blkStart = (BlockStartState)blk.left;
+		ATNState blkEnd = blk.right;
+		preventEpsilonOptionalBlocks.add(Tuple.create(currentRule, blkStart, blkEnd));
 
-		blkStart.nonGreedy = !((QuantifierAST)optAST).isGreedy();
+		boolean greedy = ((QuantifierAST)optAST).isGreedy();
 		blkStart.sll = false; // no way to express SLL restriction
-		if (((QuantifierAST)optAST).isGreedy()) {
-			epsilon(blkStart, blk.right);
-		} else {
-			Transition existing = blkStart.removeTransition(0);
-			epsilon(blkStart, blk.right);
-			blkStart.addTransition(existing);
-		}
+		blkStart.nonGreedy = !greedy;
+		epsilon(blkStart, blk.right, !greedy);
 
 		optAST.atnState = blk.left;
 		return blk;
@@ -514,6 +537,7 @@ public class ParserATNFactory implements ATNFactory {
 	public Handle plus(@NotNull GrammarAST plusAST, @NotNull Handle blk) {
 		PlusBlockStartState blkStart = (PlusBlockStartState)blk.left;
 		BlockEndState blkEnd = (BlockEndState)blk.right;
+		preventEpsilonClosureBlocks.add(Tuple.create(currentRule, blkStart, blkEnd));
 
 		PlusLoopbackState loop = newState(PlusLoopbackState.class, plusAST);
 		loop.nonGreedy = !((QuantifierAST)plusAST).isGreedy();
@@ -564,6 +588,7 @@ public class ParserATNFactory implements ATNFactory {
 	public Handle star(@NotNull GrammarAST starAST, @NotNull Handle elem) {
 		StarBlockStartState blkStart = (StarBlockStartState)elem.left;
 		BlockEndState blkEnd = (BlockEndState)elem.right;
+		preventEpsilonClosureBlocks.add(Tuple.create(currentRule, blkStart, blkEnd));
 
 		StarLoopEntryState entry = newState(StarLoopEntryState.class, starAST);
 		entry.nonGreedy = !((QuantifierAST)starAST).isGreedy();
@@ -606,8 +631,15 @@ public class ParserATNFactory implements ATNFactory {
 		return new Handle(left, right);
 	}
 
-	void epsilon(ATNState a, @NotNull ATNState b) {
-		if ( a!=null ) a.addTransition(new EpsilonTransition(b));
+	protected void epsilon(ATNState a, @NotNull ATNState b) {
+		epsilon(a, b, false);
+	}
+
+	protected void epsilon(ATNState a, @NotNull ATNState b, boolean prepend) {
+		if ( a!=null ) {
+			int index = prepend ? 0 : a.getNumberOfTransitions();
+			a.addTransition(index, new EpsilonTransition(b));
+		}
 	}
 
 	/** Define all the rule begin/end ATNStates to solve forward reference

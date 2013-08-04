@@ -38,22 +38,24 @@ import org.antlr.v4.runtime.atn.ATN;
 import org.antlr.v4.runtime.atn.ATNState;
 import org.antlr.v4.runtime.atn.DecisionState;
 import org.antlr.v4.runtime.atn.ParserATNSimulator;
-import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 import org.antlr.v4.tool.Grammar;
 
 public class ParserInterpreter {
 	public static class DummyParser extends Parser {
+		public final ATN atn;
+
 		public Grammar g;
-		public DummyParser(Grammar g, TokenStream input) {
+		public DummyParser(Grammar g, ATN atn, TokenStream input) {
 			super(input);
 			this.g = g;
+			this.atn = atn;
 		}
 
 		@Override
 		public String getGrammarFileName() {
-			return null;
+			throw new UnsupportedOperationException("not implemented");
 		}
 
 		@Override
@@ -68,7 +70,7 @@ public class ParserInterpreter {
 
 		@Override
 		public ATN getATN() {
-			return null;
+			return atn;
 		}
 	}
 
@@ -83,14 +85,7 @@ public class ParserInterpreter {
 	public ParserInterpreter(@NotNull Grammar g, @NotNull TokenStream input) {
 		Tool antlr = new Tool();
 		antlr.process(g,false);
-		atnSimulator = new ParserATNSimulator(new DummyParser(g, input), g.atn);
-	}
-
-	public int predictATN(@NotNull DFA dfa, @NotNull TokenStream input,
-						  @Nullable ParserRuleContext outerContext,
-						  boolean useContext)
-	{
-		return atnSimulator.predictATN(dfa, input, outerContext, useContext);
+		atnSimulator = new ParserATNSimulator(new DummyParser(g, g.atn, input), g.atn);
 	}
 
 	public int adaptivePredict(@NotNull TokenStream input, int decision,

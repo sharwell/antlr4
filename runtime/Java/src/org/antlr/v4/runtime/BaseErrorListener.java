@@ -54,6 +54,7 @@ public class BaseErrorListener implements ParserErrorListener {
 								DFA dfa,
 								int startIndex,
 								int stopIndex,
+								boolean exact,
 								BitSet ambigAlts,
 								ATNConfigSet configs)
 	{
@@ -64,7 +65,8 @@ public class BaseErrorListener implements ParserErrorListener {
 											DFA dfa,
 											int startIndex,
 											int stopIndex,
-											SimulatorState initialState)
+											BitSet conflictingAlts,
+											SimulatorState conflictState)
 	{
 	}
 
@@ -73,6 +75,7 @@ public class BaseErrorListener implements ParserErrorListener {
 										 DFA dfa,
 										 int startIndex,
 										 int stopIndex,
+										 int prediction,
 										 SimulatorState acceptState)
 	{
 	}

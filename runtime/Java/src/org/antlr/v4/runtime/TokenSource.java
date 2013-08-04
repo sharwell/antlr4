@@ -29,6 +29,8 @@
  */
 package org.antlr.v4.runtime;
 
+import org.antlr.v4.runtime.misc.NotNull;
+
 /** A source of tokens must provide a sequence of tokens via nextToken()
  *  and also must reveal it's source of characters; CommonToken's text is
  *  computed from a CharStream; it only store indices into the char stream.
@@ -86,5 +88,5 @@ public interface TokenSource {
 	 * 
 	 * @sharpen.property TokenFactory
 	 */
-	public void setTokenFactory(TokenFactory factory);
+	public void setTokenFactory(@NotNull TokenFactory factory);
 }

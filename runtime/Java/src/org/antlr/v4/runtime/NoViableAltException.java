@@ -63,11 +63,11 @@ public class NoViableAltException extends RecognitionException {
 	}
 
 	public NoViableAltException(@NotNull Recognizer<Token, ?> recognizer,
-													   @NotNull TokenStream input,
-													   @NotNull Token startToken,
-													   @NotNull Token offendingToken,
-													   @Nullable ATNConfigSet deadEndConfigs,
-													   @NotNull ParserRuleContext ctx)
+								@NotNull TokenStream input,
+								@NotNull Token startToken,
+								@NotNull Token offendingToken,
+								@Nullable ATNConfigSet deadEndConfigs,
+								@NotNull ParserRuleContext ctx)
 	{
 		super(recognizer, input, ctx);
 		this.deadEndConfigs = deadEndConfigs;

@@ -45,11 +45,24 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 public abstract class ATNSimulator {
 	public static final int SERIALIZED_VERSION;
 	static {
-		SERIALIZED_VERSION = 5;
+		/* This value should never change. Updates following this version are
+		 * reflected as change in the unique ID SERIALIZED_UUID.
+		 */
+		SERIALIZED_VERSION = 3;
+	}
+
+	public static final UUID SERIALIZED_UUID;
+	static {
+		/* WARNING: DO NOT MERGE THIS LINE. If UUIDs differ during a merge,
+		 * resolve the conflict by generating a new ID!
+		 */
+		SERIALIZED_UUID = UUID.fromString("E4178468-DF95-44D0-AD87-F22A5D5FB6D3");
 	}
 
 	public static final char RULE_VARIANT_DELIMITER = '$';
@@ -84,17 +97,23 @@ public abstract class ATNSimulator {
 			data[i] = (char)(data[i] - 2);
 		}
 
-		ATN atn = new ATN();
-		List<IntervalSet> sets = new ArrayList<IntervalSet>();
 		int p = 0;
 		int version = toInt(data[p++]);
 		if (version != SERIALIZED_VERSION) {
-			String reason = String.format("Could not deserialize ATN with version %d (expected %d).", version, SERIALIZED_VERSION);
+			String reason = String.format(Locale.getDefault(), "Could not deserialize ATN with version %d (expected %d).", version, SERIALIZED_VERSION);
 			throw new UnsupportedOperationException(new InvalidClassException(ATN.class.getName(), reason));
 		}
 
-		atn.grammarType = toInt(data[p++]);
-		atn.maxTokenType = toInt(data[p++]);
+		UUID uuid = toUUID(data, p);
+		p += 8;
+		if (!uuid.equals(SERIALIZED_UUID)) {
+			String reason = String.format(Locale.getDefault(), "Could not deserialize ATN with UUID %s (expected %s).", uuid, SERIALIZED_UUID);
+			throw new UnsupportedOperationException(new InvalidClassException(ATN.class.getName(), reason));
+		}
+
+		ATNType grammarType = ATNType.values()[toInt(data[p++])];
+		int maxTokenType = toInt(data[p++]);
+		ATN atn = new ATN(grammarType, maxTokenType);
 
 		//
 		// STATES
@@ -102,7 +121,7 @@ public abstract class ATNSimulator {
 		List<Tuple2<LoopEndState, Integer>> loopBackStateNumbers = new ArrayList<Tuple2<LoopEndState, Integer>>();
 		List<Tuple2<BlockStartState, Integer>> endStateNumbers = new ArrayList<Tuple2<BlockStartState, Integer>>();
 		int nstates = toInt(data[p++]);
-		for (int i=1; i<=nstates; i++) {
+		for (int i=0; i<nstates; i++) {
 			StateType stype = StateType.values()[toInt(data[p++])];
 			// ignore bad type of states
 			if ( stype==StateType.INVALID_TYPE ) {
@@ -111,6 +130,10 @@ public abstract class ATNSimulator {
 			}
 
 			int ruleIndex = toInt(data[p++]);
+			if (ruleIndex == Character.MAX_VALUE) {
+				ruleIndex = -1;
+			}
+
 			ATNState s = stateFactory(stype, ruleIndex);
 			if ( stype == StateType.LOOP_END ) { // special case
 				int loopBackStateNumber = toInt(data[p++]);
@@ -154,7 +177,7 @@ public abstract class ATNSimulator {
 		// RULES
 		//
 		int nrules = toInt(data[p++]);
-		if ( atn.grammarType == ATN.LEXER ) {
+		if ( atn.grammarType == ATNType.LEXER ) {
 			atn.ruleToTokenType = new int[nrules];
 			atn.ruleToActionIndex = new int[nrules];
 		}
@@ -164,10 +187,18 @@ public abstract class ATNSimulator {
 			RuleStartState startState = (RuleStartState)atn.states.get(s);
 			startState.leftFactored = toInt(data[p++]) != 0;
 			atn.ruleToStartState[i] = startState;
-			if ( atn.grammarType == ATN.LEXER ) {
+			if ( atn.grammarType == ATNType.LEXER ) {
 				int tokenType = toInt(data[p++]);
+				if (tokenType == 0xFFFF) {
+					tokenType = Token.EOF;
+				}
+
 				atn.ruleToTokenType[i] = tokenType;
 				int actionIndex = toInt(data[p++]);
+				if (actionIndex == 0xFFFF) {
+					actionIndex = -1;
+				}
+
 				atn.ruleToActionIndex[i] = actionIndex;
 			}
 		}
@@ -200,13 +231,20 @@ public abstract class ATNSimulator {
 		//
 		// SETS
 		//
+		List<IntervalSet> sets = new ArrayList<IntervalSet>();
 		int nsets = toInt(data[p++]);
-		for (int i=1; i<=nsets; i++) {
+		for (int i=0; i<nsets; i++) {
 			int nintervals = toInt(data[p]);
 			p++;
 			IntervalSet set = new IntervalSet();
 			sets.add(set);
-			for (int j=1; j<=nintervals; j++) {
+
+			boolean containsEof = toInt(data[p++]) != 0;
+			if (containsEof) {
+				set.add(-1);
+			}
+
+			for (int j=0; j<nintervals; j++) {
 				set.add(toInt(data[p]), toInt(data[p + 1]));
 				p += 2;
 			}
@@ -216,7 +254,7 @@ public abstract class ATNSimulator {
 		// EDGES
 		//
 		int nedges = toInt(data[p++]);
-		for (int i=1; i<=nedges; i++) {
+		for (int i=0; i<nedges; i++) {
 			int src = toInt(data[p]);
 			int trg = toInt(data[p+1]);
 			TransitionType ttype = TransitionType.values()[toInt(data[p+2])];
@@ -308,7 +346,7 @@ public abstract class ATNSimulator {
 				int optimizationCount = 0;
 				optimizationCount += inlineSetRules(atn);
 				optimizationCount += combineChainedEpsilons(atn);
-				boolean preserveOrder = atn.grammarType == ATN.LEXER;
+				boolean preserveOrder = atn.grammarType == ATNType.LEXER;
 				optimizationCount += optimizeSets(atn, preserveOrder);
 				if (optimizationCount == 0) {
 					break;
@@ -756,7 +794,22 @@ public abstract class ATNSimulator {
 	}
 
 	public static int toInt(char c) {
-		return c==65535 ? -1 : c;
+		return c;
+	}
+
+	public static int toInt32(char[] data, int offset) {
+		return (int)data[offset] | ((int)data[offset + 1] << 16);
+	}
+
+	public static long toLong(char[] data, int offset) {
+		long lowOrder = toInt32(data, offset) & 0x00000000FFFFFFFFL;
+		return lowOrder | ((long)toInt32(data, offset + 2) << 32);
+	}
+
+	public static UUID toUUID(char[] data, int offset) {
+		long leastSigBits = toLong(data, offset);
+		long mostSigBits = toLong(data, offset + 4);
+		return new UUID(mostSigBits, leastSigBits);
 	}
 
 	@NotNull
@@ -768,7 +821,13 @@ public abstract class ATNSimulator {
 		ATNState target = atn.states.get(trg);
 		switch (type) {
 			case EPSILON : return new EpsilonTransition(target);
-			case RANGE : return new RangeTransition(target, arg1, arg2);
+			case RANGE :
+				if (arg3 != 0) {
+					return new RangeTransition(target, Token.EOF, arg2);
+				}
+				else {
+					return new RangeTransition(target, arg1, arg2);
+				}
 			case RULE :
 				RuleTransition rt = new RuleTransition((RuleStartState)atn.states.get(arg1), arg2, arg3, target);
 				return rt;
@@ -777,7 +836,13 @@ public abstract class ATNSimulator {
 				return pt;
 			case PRECEDENCE:
 				return new PrecedencePredicateTransition(target, arg1);
-			case ATOM : return new AtomTransition(target, arg1);
+			case ATOM :
+				if (arg3 != 0) {
+					return new AtomTransition(target, Token.EOF);
+				}
+				else {
+					return new AtomTransition(target, arg1);
+				}
 			case ACTION :
 				ActionTransition a = new ActionTransition(target, arg1, arg2, arg3 != 0);
 				return a;
@@ -806,7 +871,7 @@ public abstract class ATNSimulator {
 			case PLUS_LOOP_BACK : s = new PlusLoopbackState(); break;
 			case LOOP_END : s = new LoopEndState(); break;
             default :
-				String message = String.format("The specified state type %d is not valid.", type);
+				String message = String.format(Locale.getDefault(), "The specified state type %d is not valid.", type);
 				throw new IllegalArgumentException(message);
 		}
 

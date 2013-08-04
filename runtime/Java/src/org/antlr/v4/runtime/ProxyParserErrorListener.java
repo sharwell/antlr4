@@ -45,38 +45,38 @@ public class ProxyParserErrorListener extends ProxyErrorListener<Token> implemen
 	}
 
 	@Override
-	public void reportAmbiguity(Parser recognizer, DFA dfa, int startIndex, int stopIndex, BitSet ambigAlts, ATNConfigSet configs) {
+	public void reportAmbiguity(Parser recognizer, DFA dfa, int startIndex, int stopIndex, boolean exact, BitSet ambigAlts, ATNConfigSet configs) {
 		for (ANTLRErrorListener<? super Token> listener : getDelegates()) {
 			if (!(listener instanceof ParserErrorListener)) {
 				continue;
 			}
 
 			ParserErrorListener parserErrorListener = (ParserErrorListener)listener;
-			parserErrorListener.reportAmbiguity(recognizer, dfa, startIndex, stopIndex, ambigAlts, configs);
+			parserErrorListener.reportAmbiguity(recognizer, dfa, startIndex, stopIndex, exact, ambigAlts, configs);
 		}
 	}
 
 	@Override
-	public void reportAttemptingFullContext(Parser recognizer, DFA dfa, int startIndex, int stopIndex, SimulatorState initialState) {
+	public void reportAttemptingFullContext(Parser recognizer, DFA dfa, int startIndex, int stopIndex, BitSet conflictingAlts, SimulatorState conflictState) {
 		for (ANTLRErrorListener<? super Token> listener : getDelegates()) {
 			if (!(listener instanceof ParserErrorListener)) {
 				continue;
 			}
 
 			ParserErrorListener parserErrorListener = (ParserErrorListener)listener;
-			parserErrorListener.reportAttemptingFullContext(recognizer, dfa, startIndex, stopIndex, initialState);
+			parserErrorListener.reportAttemptingFullContext(recognizer, dfa, startIndex, stopIndex, conflictingAlts, conflictState);
 		}
 	}
 
 	@Override
-	public void reportContextSensitivity(Parser recognizer, DFA dfa, int startIndex, int stopIndex, SimulatorState acceptState) {
+	public void reportContextSensitivity(Parser recognizer, DFA dfa, int startIndex, int stopIndex, int prediction, SimulatorState acceptState) {
 		for (ANTLRErrorListener<? super Token> listener : getDelegates()) {
 			if (!(listener instanceof ParserErrorListener)) {
 				continue;
 			}
 
 			ParserErrorListener parserErrorListener = (ParserErrorListener)listener;
-			parserErrorListener.reportContextSensitivity(recognizer, dfa, startIndex, stopIndex, acceptState);
+			parserErrorListener.reportContextSensitivity(recognizer, dfa, startIndex, stopIndex, prediction, acceptState);
 		}
 	}
 }

@@ -40,7 +40,7 @@ public abstract class AbstractParseTreeVisitor<Result> implements ParseTreeVisit
 	 * specified tree.
 	 */
 	@Override
-	public Result visit(ParseTree tree) {
+	public Result visit(@NotNull ParseTree tree) {
 		return tree.accept(this);
 	}
 
@@ -56,7 +56,7 @@ public abstract class AbstractParseTreeVisitor<Result> implements ParseTreeVisit
 	 * previous aggregate result and the result of visiting the child.
 	 */
 	@Override
-	public Result visitChildren(RuleNode node) {
+	public Result visitChildren(@NotNull RuleNode node) {
 		Result result = defaultResult();
 		int n = node.getChildCount();
 		for (int i=0; i<n; i++) {
@@ -79,7 +79,7 @@ public abstract class AbstractParseTreeVisitor<Result> implements ParseTreeVisit
 	 * {@link #defaultResult defaultResult}.
 	 */
 	@Override
-	public Result visitTerminal(TerminalNode node) {
+	public Result visitTerminal(@NotNull TerminalNode node) {
 		return defaultResult();
 	}
 
@@ -90,7 +90,7 @@ public abstract class AbstractParseTreeVisitor<Result> implements ParseTreeVisit
 	 * {@link #defaultResult defaultResult}.
 	 */
 	@Override
-	public Result visitErrorNode(ErrorNode node) {
+	public Result visitErrorNode(@NotNull ErrorNode node) {
 		return defaultResult();
 	}
 

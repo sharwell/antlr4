@@ -45,6 +45,7 @@ public class ParseTreeWalker {
 			listener.visitTerminal((TerminalNode)t);
 			return;
 		}
+
 		RuleNode r = (RuleNode)t;
         enterRule(listener, r);
         int n = r.getChildCount();

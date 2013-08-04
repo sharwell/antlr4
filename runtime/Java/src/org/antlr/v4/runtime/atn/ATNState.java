@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * The following images show the relation of states and
@@ -192,15 +193,19 @@ public abstract class ATNState {
 	}
 
 	public void addTransition(Transition e) {
+		addTransition(transitions.size(), e);
+	}
+
+	public void addTransition(int index, Transition e) {
 		if (transitions.isEmpty()) {
 			epsilonOnlyTransitions = e.isEpsilon();
 		}
 		else if (epsilonOnlyTransitions != e.isEpsilon()) {
-			System.err.format("ATN state %d has both epsilon and non-epsilon transitions.\n", stateNumber);
+			System.err.format(Locale.getDefault(), "ATN state %d has both epsilon and non-epsilon transitions.\n", stateNumber);
 			epsilonOnlyTransitions = false;
 		}
 
-		transitions.add(e);
+		transitions.add(index, e);
 	}
 
 	public Transition transition(int i) {

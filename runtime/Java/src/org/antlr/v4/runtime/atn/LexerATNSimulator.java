@@ -41,7 +41,7 @@ import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
 
-import java.io.OutputStream;
+import java.util.Locale;
 
 /** "dup" of ParserInterpreter */
 public class LexerATNSimulator extends ATNSimulator {
@@ -152,12 +152,11 @@ public class LexerATNSimulator extends ATNSimulator {
 		mode = Lexer.DEFAULT_MODE;
 	}
 
-	// only called from test code from outside
 	protected int matchATN(@NotNull CharStream input) {
 		ATNState startState = atn.modeToStartState.get(mode);
 
 		if ( debug ) {
-			System.out.format("matchATN mode %d start: %s\n", mode, startState);
+			System.out.format(Locale.getDefault(), "matchATN mode %d start: %s\n", mode, startState);
 		}
 
 		int old_mode = mode;
@@ -178,7 +177,7 @@ public class LexerATNSimulator extends ATNSimulator {
 		int predict = execATN(input, next);
 
 		if ( debug ) {
-			System.out.format("DFA after matchATN: %s\n", atn.modeToDFA[old_mode].toLexerString());
+			System.out.format(Locale.getDefault(), "DFA after matchATN: %s\n", atn.modeToDFA[old_mode].toLexerString());
 		}
 
 		return predict;
@@ -187,7 +186,7 @@ public class LexerATNSimulator extends ATNSimulator {
 	protected int execATN(@NotNull CharStream input, @NotNull DFAState ds0) {
 		//System.out.println("enter exec index "+input.index()+" from "+ds0.configs);
 		if ( debug ) {
-			System.out.format("start state closure=%s\n", ds0.configs);
+			System.out.format(Locale.getDefault(), "start state closure=%s\n", ds0.configs);
 		}
 
 		int t = input.LA(1);
@@ -196,7 +195,7 @@ public class LexerATNSimulator extends ATNSimulator {
 
 		while ( true ) { // while more work
 			if ( debug ) {
-				System.out.format("execATN loop starting closure: %s\n", s.configs);
+				System.out.format(Locale.getDefault(), "execATN loop starting closure: %s\n", s.configs);
 			}
 
 			// As we move src->trg, src->trg, we keep track of the previous trg to
@@ -216,39 +215,13 @@ public class LexerATNSimulator extends ATNSimulator {
 			// This optimization makes a lot of sense for loops within DFA.
 			// A character will take us back to an existing DFA state
 			// that already has lots of edges out of it. e.g., .* in comments.
-			ATNConfigSet closure = s.configs;
-			DFAState target = null;
-			target = s.getTarget(t);
+			DFAState target = getExistingTargetState(s, t);
+			if (target == null) {
+				target = computeTargetState(input, s, t);
+			}
+
 			if (target == ERROR) {
 				break;
-			}
-
-			if (debug && target != null) {
-				System.out.println("reuse state "+s.stateNumber+
-								   " edge to "+target.stateNumber);
-			}
-
-			if (target == null) {
-				ATNConfigSet reach = new OrderedATNConfigSet();
-
-				// if we don't find an existing DFA state
-				// Fill reach starting from closure, following t transitions
-				getReachableConfigSet(input, closure, reach, t);
-
-				if ( reach.isEmpty() ) { // we got nowhere on t from s
-					// we reached state associated with closure for sure, so
-					// make sure it's defined. worst case, we define s0 from
-					// start state configs.
-					@NotNull
-					DFAState from = s != null ? s : addDFAState(closure);
-					// we got nowhere on t, don't throw out this knowledge; it'd
-					// cause a failover from DFA later.
-					addDFAEdge(from, t, ERROR);
-					break; // stop when we can't match any more char
-				}
-
-				// Add an edge from s to target DFA found/created for reach
-				target = addDFAEdge(s, t, reach);
 			}
 
 			if (target.isAcceptState) {
@@ -267,6 +240,60 @@ public class LexerATNSimulator extends ATNSimulator {
 		}
 
 		return failOrAccept(prevAccept, input, s.configs, t);
+	}
+
+	/**
+	 * Get an existing target state for an edge in the DFA. If the target state
+	 * for the edge has not yet been computed or is otherwise not available,
+	 * this method returns {@code null}.
+	 *
+	 * @param s The current DFA state
+	 * @param t The next input symbol
+	 * @return The existing target DFA state for the given input symbol
+	 * {@code t}, or {@code null} if the target state for this edge is not
+	 * already cached
+	 */
+	@Nullable
+	protected DFAState getExistingTargetState(@NotNull DFAState s, int t) {
+		DFAState target = s.getTarget(t);
+		if (debug && target != null) {
+			System.out.println("reuse state "+s.stateNumber+
+							   " edge to "+target.stateNumber);
+		}
+
+		return target;
+	}
+
+	/**
+	 * Compute a target state for an edge in the DFA, and attempt to add the
+	 * computed state and corresponding edge to the DFA.
+	 *
+	 * @param input The input stream
+	 * @param s The current DFA state
+	 * @param t The next input symbol
+	 *
+	 * @return The computed target DFA state for the given input symbol
+	 * {@code t}. If {@code t} does not lead to a valid DFA state, this method
+	 * returns {@link #ERROR}.
+	 */
+	@NotNull
+	protected DFAState computeTargetState(@NotNull CharStream input, @NotNull DFAState s, int t) {
+		ATNConfigSet reach = new OrderedATNConfigSet();
+
+		// if we don't find an existing DFA state
+		// Fill reach starting from closure, following t transitions
+		getReachableConfigSet(input, s.configs, reach, t);
+
+		if ( reach.isEmpty() ) { // we got nowhere on t from s
+			// we got nowhere on t, don't throw out this knowledge; it'd
+			// cause a failover from DFA later.
+			addDFAEdge(s, t, ERROR);
+			// stop when we can't match any more char
+			return ERROR;
+		}
+
+		// Add an edge from s to target DFA found/created for reach
+		return addDFAEdge(s, t, reach);
 	}
 
 	protected int failOrAccept(SimState prevAccept, CharStream input,
@@ -303,7 +330,7 @@ public class LexerATNSimulator extends ATNSimulator {
 			}
 
 			if ( debug ) {
-				System.out.format("testing %s at %s\n", getTokenName(t), c.toString(recog, true));
+				System.out.format(Locale.getDefault(), "testing %s at %s\n", getTokenName(t), c.toString(recog, true));
 			}
 
 			int n = c.getState().getNumberOfOptimizedTransitions();
@@ -326,7 +353,7 @@ public class LexerATNSimulator extends ATNSimulator {
 						  int index, int line, int charPos)
 	{
 		if ( debug ) {
-			System.out.format("ACTION %s:%d\n", recog != null ? recog.getRuleNames()[ruleIndex] : ruleIndex, actionIndex);
+			System.out.format(Locale.getDefault(), "ACTION %s:%d\n", recog != null ? recog.getRuleNames()[ruleIndex] : ruleIndex, actionIndex);
 		}
 
 		if ( actionIndex>=0 && recog!=null ) recog.action(null, ruleIndex, actionIndex);
@@ -341,8 +368,8 @@ public class LexerATNSimulator extends ATNSimulator {
 	}
 
 	@Nullable
-	public ATNState getReachableTarget(Transition trans, int t) {
-		if (trans.matches(t, Lexer.MIN_CHAR_VALUE, Lexer.MAX_CHAR_VALUE)) {
+	protected ATNState getReachableTarget(Transition trans, int t) {
+		if (trans.matches(t, Character.MIN_VALUE, Character.MAX_VALUE)) {
 			return trans.target;
 		}
 
@@ -381,10 +408,10 @@ public class LexerATNSimulator extends ATNSimulator {
 		if ( config.getState() instanceof RuleStopState ) {
 			if ( debug ) {
 				if ( recog!=null ) {
-					System.out.format("closure at %s rule stop %s\n", recog.getRuleNames()[config.getState().ruleIndex], config);
+					System.out.format(Locale.getDefault(), "closure at %s rule stop %s\n", recog.getRuleNames()[config.getState().ruleIndex], config);
 				}
 				else {
-					System.out.format("closure at rule stop %s\n", config);
+					System.out.format(Locale.getDefault(), "closure at rule stop %s\n", config);
 				}
 			}
 
@@ -436,7 +463,7 @@ public class LexerATNSimulator extends ATNSimulator {
 
 	// side-effect: can alter configs.hasSemanticContext
 	@Nullable
-	public ATNConfig getEpsilonTarget(@NotNull CharStream input,
+	protected ATNConfig getEpsilonTarget(@NotNull CharStream input,
 									  @NotNull ATNConfig config,
 									  @NotNull Transition t,
 									  @NotNull ATNConfigSet configs,

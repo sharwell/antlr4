@@ -31,9 +31,12 @@
 package org.antlr.v4.codegen;
 
 import org.antlr.v4.tool.ast.GrammarAST;
+import org.stringtemplate.v4.STGroup;
+import org.stringtemplate.v4.StringRenderer;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -74,6 +77,18 @@ public class JavaTarget extends Target {
 		badWords.add("parserRule");
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p/>
+	 * For Java, this is the translation {@code 'a\n"'} &rarr; {@code "a\n\""}.
+	 * Expect single quotes around the incoming literal. Just flip the quotes
+	 * and replace double quotes with {@code \"}.
+	 * <p/>
+	 * Note that we have decided to allow people to use '\"' without penalty, so
+	 * we must build the target string in a loop as {@link String#replace}
+	 * cannot handle both {@code \"} and {@code "} without a lot of messing
+	 * around.
+	 */
 	@Override
 	public String getTargetStringLiteralFromANTLRStringLiteral(
 		CodeGenerator generator,
@@ -161,8 +176,35 @@ public class JavaTarget extends Target {
 	}
 
 	@Override
+	public int getSerializedATNSegmentLimit() {
+		// 65535 is the class file format byte limit for a UTF-8 encoded string literal
+		// 3 is the maximum number of bytes it takes to encode a value in the range 0-0xFFFF
+		return 65535 / 3;
+	}
+
+	@Override
 	protected boolean visibleGrammarSymbolCausesIssueInGeneratedCode(GrammarAST idNode) {
 		return getBadWords().contains(idNode.getText());
 	}
 
+	@Override
+	protected STGroup loadTemplates() {
+		STGroup result = super.loadTemplates();
+		result.registerRenderer(String.class, new JavaStringRenderer(), true);
+		return result;
+	}
+
+	protected static class JavaStringRenderer extends StringRenderer {
+
+		@Override
+		public String toString(Object o, String formatString, Locale locale) {
+			if ("java-escape".equals(formatString)) {
+				// 5C is the hex code for the \ itself
+				return ((String)o).replace("\\u", "\\u005Cu");
+			}
+
+			return super.toString(o, formatString, locale);
+		}
+
+	}
 }

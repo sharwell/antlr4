@@ -26,5 +26,8 @@ nbactions*.xml
 # Profiler results
 *.hprof
 
+# Playground
+/tool/playground/
+
 # Generated during the Sharpen conversion
 /bin/
