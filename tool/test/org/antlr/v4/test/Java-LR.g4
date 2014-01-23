@@ -322,27 +322,10 @@ fieldDeclaration
     ;
         
 interfaceBodyDeclaration
-    :   modifiers interfaceMemberDecl
+    :   modifiers memberDecl
     |   ';'
     ;
 
-interfaceMemberDecl
-    :   interfaceMethodOrFieldDecl
-    |   interfaceGenericMethodDecl
-    |   'void' Identifier voidInterfaceMethodDeclaratorRest
-    |   interfaceDeclaration
-    |   classDeclaration
-    ;
-    
-interfaceMethodOrFieldDecl
-    :   type Identifier interfaceMethodOrFieldRest
-    ;
-    
-interfaceMethodOrFieldRest
-    :   constantDeclaratorsRest ';'
-    |   interfaceMethodDeclaratorRest
-    ;
-    
 methodDeclaratorRest
     :   formalParameters ('[' ']')*
         ('throws' qualifiedNameList)?
@@ -360,15 +343,6 @@ voidMethodDeclaratorRest
     
 interfaceMethodDeclaratorRest
     :   formalParameters ('[' ']')* ('throws' qualifiedNameList)? ';'
-    ;
-    
-interfaceGenericMethodDecl
-    :   typeParameters (type | 'void') Identifier
-        interfaceMethodDeclaratorRest
-    ;
-    
-voidInterfaceMethodDeclaratorRest
-    :   formalParameters ('throws' qualifiedNameList)? ';'
     ;
     
 constructorDeclaratorRest
@@ -421,6 +395,7 @@ modifier
         |   'transient'
         |   'volatile'
         |   'strictfp'
+		|	'default'
         )
     ;
 
@@ -752,15 +727,27 @@ expression
     ;
 
 primary
-	:	'(' expression ')'
+	:	lambdaExpression
+	|	'(' expression ')'
     |   'this'
     |   'super'
     |   literal
     |   Identifier
     |   type '.' 'class'
+	|	type '::' Identifier
+	|	type '::' 'new'
     |   'void' '.' 'class'
 	|	nonWildcardTypeArguments (explicitGenericInvocationSuffix | 'this' arguments)
     ;
+
+lambdaExpression
+	:	('(' type ('&' type)* ')')?
+		(	'(' (Identifier (',' Identifier)*)? ')'
+		|	'(' type Identifier (',' type Identifier)* ')'
+		|	Identifier
+		)
+		'->' (expression | block)
+	;
 
 creator
     :   nonWildcardTypeArguments createdName classCreatorRest
@@ -1149,6 +1136,7 @@ NullLiteral
 
 // §3.11 Separators
 
+LAMBDA : '->';
 LPAREN : '(';
 RPAREN : ')';
 LBRACE : '{';
@@ -1158,6 +1146,7 @@ RBRACK : ']';
 SEMI : ';';
 COMMA : ',';
 DOT : '.';
+METHOD_RESOLUTION : '::';
 
 // §3.12 Operators
 
