@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.tunnelvisionlabs</groupId>
+        <groupId>com.tunnelvisionlabs.sharpen</groupId>
         <artifactId>antlr4-master</artifactId>
         <version>4.2</version>
     </parent>
@@ -21,7 +21,7 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.tunnelvisionlabs</groupId>
+            <groupId>com.tunnelvisionlabs.sharpen</groupId>
             <artifactId>antlr4-runtime</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
