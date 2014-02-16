@@ -29,6 +29,9 @@
  */
 package org.antlr.v4.runtime;
 
+import org.antlr.v4.runtime.misc.NotNull;
+import org.antlr.v4.runtime.misc.Nullable;
+
 /**
  * This implementation of {@link ANTLRErrorListener} dispatches all calls to a
  * collection of delegate listeners. This reduces the effort required to support multiple
@@ -55,12 +58,12 @@ public class ProxyErrorListener<Symbol> implements ANTLRErrorListener<Symbol> {
 	}
 
 	@Override
-	public <T extends Symbol> void syntaxError(Recognizer<T, ?> recognizer,
-											   T offendingSymbol,
+	public <T extends Symbol> void syntaxError(@NotNull Recognizer<T, ?> recognizer,
+											   @Nullable T offendingSymbol,
 											   int line,
 											   int charPositionInLine,
-											   String msg,
-											   RecognitionException e)
+											   @NotNull String msg,
+											   @Nullable RecognitionException e)
 	{
 		for (ANTLRErrorListener<? super Symbol> listener : delegates) {
 			listener.syntaxError(recognizer, offendingSymbol, line, charPositionInLine, msg, e);

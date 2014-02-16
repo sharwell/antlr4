@@ -40,7 +40,7 @@ import java.util.NoSuchElementException;
  * 
  * @sharpen.ignore
  */
-class TreeLayoutAdaptor implements TreeForTreeLayout<Tree> {
+public class TreeLayoutAdaptor implements TreeForTreeLayout<Tree> {
 	private static class AntlrTreeChildrenIterable implements Iterable<Tree> {
 		private final Tree tree;
 

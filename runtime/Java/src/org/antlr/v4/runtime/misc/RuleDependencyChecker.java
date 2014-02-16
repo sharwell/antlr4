@@ -35,7 +35,7 @@ import org.antlr.v4.runtime.RuleDependencies;
 import org.antlr.v4.runtime.RuleDependency;
 import org.antlr.v4.runtime.RuleVersion;
 import org.antlr.v4.runtime.atn.ATN;
-import org.antlr.v4.runtime.atn.ATNSimulator;
+import org.antlr.v4.runtime.atn.ATNDeserializer;
 import org.antlr.v4.runtime.atn.ATNState;
 import org.antlr.v4.runtime.atn.RuleTransition;
 import org.antlr.v4.runtime.atn.Transition;
@@ -413,7 +413,7 @@ public class RuleDependencyChecker {
 			return null;
 		}
 
-		ATN atn = ATNSimulator.deserialize(serializedATN.toCharArray());
+		ATN atn = new ATNDeserializer().deserialize(serializedATN.toCharArray());
 		RuleRelations relations = new RuleRelations(atn.ruleToStartState.length);
 		for (ATNState state : atn.states) {
 			if (!state.epsilonOnlyTransitions) {

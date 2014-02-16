@@ -27,7 +27,7 @@ nbactions*.xml
 *.hprof
 
 # Playground
-/tool/playground/
+#/tool/playground/
 
 # Generated during the Sharpen conversion
 /bin/

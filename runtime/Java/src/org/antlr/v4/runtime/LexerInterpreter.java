@@ -28,10 +28,59 @@
  *  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.antlr.v4.runtime.misc;
+package org.antlr.v4.runtime;
 
-@java.lang.annotation.Documented
-@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.CLASS)
-@java.lang.annotation.Target({java.lang.annotation.ElementType.FIELD, java.lang.annotation.ElementType.METHOD, java.lang.annotation.ElementType.PARAMETER, java.lang.annotation.ElementType.LOCAL_VARIABLE})
-public @interface Nullable {
+import org.antlr.v4.runtime.atn.ATN;
+import org.antlr.v4.runtime.atn.ATNType;
+import org.antlr.v4.runtime.atn.LexerATNSimulator;
+
+import java.util.Collection;
+
+public class LexerInterpreter extends Lexer {
+	protected final String grammarFileName;
+	protected final ATN atn;
+
+	protected final String[] tokenNames;
+	protected final String[] ruleNames;
+	protected final String[] modeNames;
+
+	public LexerInterpreter(String grammarFileName, Collection<String> tokenNames, Collection<String> ruleNames, Collection<String> modeNames, ATN atn, CharStream input) {
+		super(input);
+
+		if (atn.grammarType != ATNType.LEXER) {
+			throw new IllegalArgumentException("The ATN must be a lexer ATN.");
+		}
+
+		this.grammarFileName = grammarFileName;
+		this.atn = atn;
+		this.tokenNames = tokenNames.toArray(new String[tokenNames.size()]);
+		this.ruleNames = ruleNames.toArray(new String[ruleNames.size()]);
+		this.modeNames = modeNames.toArray(new String[modeNames.size()]);
+		this._interp = new LexerATNSimulator(this,atn);
+	}
+
+	@Override
+	public ATN getATN() {
+		return atn;
+	}
+
+	@Override
+	public String getGrammarFileName() {
+		return grammarFileName;
+	}
+
+	@Override
+	public String[] getTokenNames() {
+		return tokenNames;
+	}
+
+	@Override
+	public String[] getRuleNames() {
+		return ruleNames;
+	}
+
+	@Override
+	public String[] getModeNames() {
+		return modeNames;
+	}
 }
