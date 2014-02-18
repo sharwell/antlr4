@@ -1307,7 +1307,7 @@ public abstract class BaseTest {
 
 		@NotNull
 		@Override
-		public String getText(Token start, Token stop) {
+		public String getText(Object start, Object stop) {
 			throw new UnsupportedOperationException("can't give strings");
 		}
 	}
