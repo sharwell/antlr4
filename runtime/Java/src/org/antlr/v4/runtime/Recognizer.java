@@ -134,6 +134,8 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	 *
 	 * <p>For interpreters, we don't know their serialized ATN despite having
 	 * created the interpreter from it.</p>
+	 *
+	 * @sharpen.property SerializedAtn
 	 */
 	@NotNull
 	public String getSerializedATN() {
