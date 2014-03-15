@@ -138,6 +138,30 @@ public class TestRuleDependencies extends BaseTest {
 	}
 
 	/**
+	 * This test verifies that the dependency analysis properly locates the type
+	 * associated with a {@link RuleDependency#rule} constant when the
+	 * {@link RuleDependency} annotation is wrapped inside a
+	 * {@link RuleDependencies} annotation.
+	 */
+	@Test
+	public void testMultipleDependencies() throws IOException {
+		String grammarFileName = "Simple.g4";
+		String body = load(grammarFileName, null);
+		String[] extraOptionsArray = { "-Werror", "-rule-versioning" };
+		boolean success = rawGenerateAndBuildRecognizer(grammarFileName, body, "SimpleParser", "SimpleLexer", true, extraOptionsArray);
+		Assert.assertTrue(success);
+
+		String sourceFile = load("TestMultipleDependencies.java.test", null);
+		assertNotNullOrEmpty(sourceFile);
+
+		writeFile(tmpdir, "TestMultipleDependencies.java", sourceFile);
+		StringWriter writer = new StringWriter();
+		success = compile(writer, "TestMultipleDependencies.java");
+		Assert.assertEquals("Note: ANTLR 4: Validating 2 dependencies on rules in SimpleParser." + newline, writer.getBuffer().toString());
+		Assert.assertTrue(success);
+	}
+
+	/**
 	 * This test verifies that a rule dependency version number which is too low
 	 * results in a compile-time validation error.
 	 */
@@ -159,7 +183,7 @@ public class TestRuleDependencies extends BaseTest {
 		Assert.assertEquals(
 			"Note: ANTLR 4: Validating 1 dependencies on rules in SimpleParser." + newline +
 			tmpdir + File.separator + "TestVersionTooLow.java:4: error: Rule dependency version mismatch: sourceFile has version 0 (expected <= -1) in SimpleParser" + newline +
-			"    @RuleDependency(recognizer = SimpleParser.class, rule = SimpleParser.RULE_sourceFile, version = -1)" + newline +
+			"    @RuleDependency(rule = SimpleParser.RULE_sourceFile, version = -1)" + newline +
 			"    ^" + newline +
 			"1 error" + newline,
 			writer.getBuffer().toString());
@@ -187,9 +211,34 @@ public class TestRuleDependencies extends BaseTest {
 		Assert.assertEquals(
 			"Note: ANTLR 4: Validating 1 dependencies on rules in SimpleParser." + newline +
 			tmpdir + File.separator + "TestVersionTooHigh.java:4: error: Rule dependency version mismatch: sourceFile has maximum dependency version 0 (expected 1) in SimpleParser" + newline +
-			"    @RuleDependency(recognizer = SimpleParser.class, rule = SimpleParser.RULE_sourceFile, version = 1)" + newline +
+			"    @RuleDependency(rule = SimpleParser.RULE_sourceFile, version = 1)" + newline +
 			"    ^" + newline +
 			"1 error" + newline,
+			writer.getBuffer().toString());
+	}
+
+	/**
+	 * This test verifies that a rule dependency that uses an integer literal
+	 * instead of a reference to a constant declared in the parser must specify
+	 * the {@link RuleDependency#recognizer} property.
+	 */
+	@Test
+	public void testRecognizerMustBeSpecifiedIfRuleNotReference() throws IOException {
+		String grammarFileName = "Simple.g4";
+		String body = load(grammarFileName, null);
+		String[] extraOptionsArray = { "-Werror", "-rule-versioning" };
+		boolean success = rawGenerateAndBuildRecognizer(grammarFileName, body, "SimpleParser", "SimpleLexer", true, extraOptionsArray);
+		Assert.assertTrue(success);
+
+		String sourceFile = load("TestRecognizerMustBeSpecifiedIfRuleNotReference.java.test", null);
+		assertNotNullOrEmpty(sourceFile);
+
+		writeFile(tmpdir, "TestRecognizerMustBeSpecifiedIfRuleNotReference.java", sourceFile);
+		StringWriter writer = new StringWriter();
+		success = compile(writer, "TestRecognizerMustBeSpecifiedIfRuleNotReference.java");
+		Assert.assertTrue(success);
+		Assert.assertEquals(
+			"Note: ANTLR 4: Validating 1 dependencies on rules in SimpleParser." + newline,
 			writer.getBuffer().toString());
 	}
 

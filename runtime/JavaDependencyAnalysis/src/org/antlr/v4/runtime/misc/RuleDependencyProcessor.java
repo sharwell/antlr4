@@ -29,6 +29,14 @@
  */
 package org.antlr.v4.runtime.misc;
 
+import com.sun.source.tree.AnnotationTree;
+import com.sun.source.tree.AssignmentTree;
+import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.MemberSelectTree;
+import com.sun.source.util.TreePath;
+import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.Trees;
 import org.antlr.v4.runtime.Dependents;
 import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.RuleDependencies;
@@ -41,6 +49,7 @@ import org.antlr.v4.runtime.atn.RuleTransition;
 import org.antlr.v4.runtime.atn.Transition;
 
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
@@ -139,7 +148,51 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 	public static final String RuleDependenciesClassName = "org.antlr.v4.runtime.RuleDependencies";
 	public static final String RuleVersionClassName = "org.antlr.v4.runtime.RuleVersion";
 
+	private Trees trees;
+
 	public RuleDependencyProcessor() {
+	}
+
+	@Override
+	public void init(ProcessingEnvironment processingEnv) {
+		super.init(processingEnv);
+		this.trees = Trees.instance(processingEnv);
+	}
+
+	private class AnnotationVisitor extends TreePathScanner<TypeMirror, Void> {
+		@Override
+		public TypeMirror visitAnnotation(AnnotationTree node, Void p) {
+			for (ExpressionTree expressionTree : node.getArguments()) {
+				if (!(expressionTree instanceof AssignmentTree)) {
+					continue;
+				}
+
+				AssignmentTree assignmentTree = (AssignmentTree)expressionTree;
+				ExpressionTree variable = assignmentTree.getVariable();
+				if (!(variable instanceof IdentifierTree) || !((IdentifierTree)variable).getName().contentEquals("rule")) {
+					continue;
+				}
+
+				return scan(expressionTree, p);
+			}
+
+			return null;
+		}
+
+		@Override
+		public TypeMirror visitAssignment(AssignmentTree at, Void p) {
+			return scan(at.getExpression(), p);
+		}
+
+		@Override
+		public TypeMirror visitMemberSelect(MemberSelectTree mst, Void p) {
+			return scan(mst.getExpression(), p);
+		}
+
+		@Override
+		public TypeMirror visitIdentifier(IdentifierTree it, Void p) {
+			return trees.getTypeMirror(this.getCurrentPath());
+		}
 	}
 
 	@Override
@@ -148,21 +201,21 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 			return true;
 		}
 
-		List<Pair<RuleDependency, Element>> dependencies = getDependencies(roundEnv);
-		Map<TypeMirror, List<Pair<RuleDependency, Element>>> recognizerDependencies
-			= new HashMap<TypeMirror, List<Pair<RuleDependency, Element>>>();
-		for (Pair<RuleDependency, Element> dependency : dependencies) {
-			TypeMirror recognizerType = getRecognizerType(dependency.a);
-			List<Pair<RuleDependency, Element>> list = recognizerDependencies.get(recognizerType);
+		List<Triple<RuleDependency, TypeMirror, Element>> dependencies = getDependencies(roundEnv);
+		Map<TypeMirror, List<Triple<RuleDependency, TypeMirror, Element>>> recognizerDependencies
+			= new HashMap<TypeMirror, List<Triple<RuleDependency, TypeMirror, Element>>>();
+		for (Triple<RuleDependency, TypeMirror, Element> dependency : dependencies) {
+			TypeMirror recognizerType = dependency.b;
+			List<Triple<RuleDependency, TypeMirror, Element>> list = recognizerDependencies.get(recognizerType);
 			if (list == null) {
-				list = new ArrayList<Pair<RuleDependency, Element>>();
+				list = new ArrayList<Triple<RuleDependency, TypeMirror, Element>>();
 				recognizerDependencies.put(recognizerType, list);
 			}
 
 			list.add(dependency);
 		}
 
-		for (Map.Entry<TypeMirror, List<Pair<RuleDependency, Element>>> entry : recognizerDependencies.entrySet()) {
+		for (Map.Entry<TypeMirror, List<Triple<RuleDependency, TypeMirror, Element>>> entry : recognizerDependencies.entrySet()) {
 			processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, String.format("ANTLR 4: Validating %d dependencies on rules in %s.", entry.getValue().size(), entry.getKey().toString()));
 			checkDependencies(entry.getValue(), entry.getKey());
 		}
@@ -204,14 +257,14 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 		}
 	}
 
-	private void checkDependencies(List<Pair<RuleDependency, Element>> dependencies, TypeMirror recognizerType) {
+	private void checkDependencies(List<Triple<RuleDependency, TypeMirror, Element>> dependencies, TypeMirror recognizerType) {
 		String[] ruleNames = getRuleNames(recognizerType);
 		int[] ruleVersions = getRuleVersions(recognizerType, ruleNames);
 		RuleRelations relations = extractRuleRelations(recognizerType);
 
-		for (Pair<RuleDependency, Element> dependency : dependencies) {
+		for (Triple<RuleDependency, TypeMirror, Element> dependency : dependencies) {
 			try {
-				if (!processingEnv.getTypeUtils().isAssignable(getRecognizerType(dependency.a), recognizerType)) {
+				if (!processingEnv.getTypeUtils().isAssignable(dependency.b, recognizerType)) {
 					continue;
 				}
 
@@ -222,15 +275,15 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 					String message = String.format("Rule dependency on unknown rule %d@%d in %s",
 												   dependency.a.rule(),
 												   dependency.a.version(),
-												   getRecognizerType(dependency.a).toString());
+												   dependency.b.toString());
 
 					if (ruleReferenceElement != null) {
 						processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message,
-													  dependency.b, ruleReferenceElement.a, ruleReferenceElement.b);
+													  dependency.c, ruleReferenceElement.a, ruleReferenceElement.b);
 					}
 					else {
 						processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message,
-													  dependency.b);
+													  dependency.c);
 					}
 
 					continue;
@@ -302,28 +355,28 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 												   ruleNames[dependency.a.rule()],
 												   highestRequiredDependency,
 												   declaredVersion,
-												   getRecognizerType(dependency.a).toString());
+												   dependency.b.toString());
 
 					if (versionElement != null) {
 						processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message,
-														  dependency.b, versionElement.a, versionElement.b);
+														  dependency.c, versionElement.a, versionElement.b);
 					}
 					else {
 						processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message,
-														  dependency.b);
+														  dependency.c);
 					}
 				}
 			}
 			catch (AnnotationTypeMismatchException ex) {
 				processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, String.format("Could not validate rule dependencies for element %s", dependency.b.toString()),
-														 dependency.b);
+														 dependency.c);
 			}
 		}
 	}
 
 	private static final Set<Dependents> IMPLEMENTED_DEPENDENTS = EnumSet.of(Dependents.SELF, Dependents.PARENTS, Dependents.CHILDREN, Dependents.ANCESTORS, Dependents.DESCENDANTS);
 
-	private void reportUnimplementedDependents(Pair<RuleDependency, Element> dependency, EnumSet<Dependents> dependents) {
+	private void reportUnimplementedDependents(Triple<RuleDependency, TypeMirror, Element> dependency, EnumSet<Dependents> dependents) {
 		EnumSet<Dependents> unimplemented = dependents.clone();
 		unimplemented.removeAll(IMPLEMENTED_DEPENDENTS);
 		if (!unimplemented.isEmpty()) {
@@ -338,16 +391,16 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 
 			if (dependentsElement != null) {
 				processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, message,
-											  dependency.b, dependentsElement.a, dependentsElement.b);
+											  dependency.c, dependentsElement.a, dependentsElement.b);
 			}
 			else {
 				processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, message,
-											  dependency.b);
+											  dependency.c);
 			}
 		}
 	}
 
-	private int checkDependencyVersion(Pair<RuleDependency, Element> dependency, String[] ruleNames, int[] ruleVersions, int relatedRule, String relation) {
+	private int checkDependencyVersion(Triple<RuleDependency, TypeMirror, Element> dependency, String[] ruleNames, int[] ruleVersions, int relatedRule, String relation) {
 		String ruleName = ruleNames[dependency.a.rule()];
 		String path;
 		if (relation == null) {
@@ -366,15 +419,15 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 										   path,
 										   actualVersion,
 										   declaredVersion,
-										   getRecognizerType(dependency.a).toString());
+										   dependency.b.toString());
 
 			if (versionElement != null) {
 				processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message,
-												  dependency.b, versionElement.a, versionElement.b);
+												  dependency.c, versionElement.a, versionElement.b);
 			}
 			else {
 				processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message,
-												  dependency.b);
+												  dependency.c);
 			}
 		}
 
@@ -499,8 +552,11 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 		return result.toArray(new String[result.size()]);
 	}
 
-	public static List<Pair<RuleDependency, Element>> getDependencies(RoundEnvironment roundEnv) {
-		List<Pair<RuleDependency, Element>> result = new ArrayList<Pair<RuleDependency, Element>>();
+	public List<Triple<RuleDependency, TypeMirror, Element>> getDependencies(RoundEnvironment roundEnv) {
+		TypeElement ruleDependencyTypeElement = processingEnv.getElementUtils().getTypeElement(RuleDependencyClassName);
+		TypeElement ruleDependenciesTypeElement = processingEnv.getElementUtils().getTypeElement(RuleDependenciesClassName);
+
+		List<Triple<RuleDependency, TypeMirror, Element>> result = new ArrayList<Triple<RuleDependency, TypeMirror, Element>>();
 		Set<? extends Element> elements = roundEnv.getElementsAnnotatedWith(RuleDependency.class);
 		for (Element element : elements) {
 			RuleDependency dependency = element.getAnnotation(RuleDependency.class);
@@ -508,7 +564,52 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 				continue;
 			}
 
-			result.add(new Pair<RuleDependency, Element>(dependency, element));
+			// first try to get the parser type from the annotation
+			TypeMirror recognizerType = getRecognizerType(dependency);
+			if (recognizerType != null && !recognizerType.toString().equals(Parser.class.getName())) {
+				result.add(new Triple<RuleDependency, TypeMirror, Element>(dependency, recognizerType, element));
+				continue;
+			}
+
+			// fallback to compiler tree API
+			AnnotationMirror annotationMirror = null;
+			for (AnnotationMirror mirror : element.getAnnotationMirrors()) {
+				if (processingEnv.getTypeUtils().isSameType(ruleDependencyTypeElement.asType(), mirror.getAnnotationType())) {
+					annotationMirror = mirror;
+					break;
+				}
+			}
+
+			if (annotationMirror == null) {
+				processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected RuleDependency annotation mirror for element of property 'value()'.", element);
+				continue;
+			}
+
+			AnnotationValue annotationValue = null;
+			for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : annotationMirror.getElementValues().entrySet()) {
+				if (entry.getKey().getSimpleName().contentEquals("rule")) {
+					annotationValue = entry.getValue();
+					break;
+				}
+			}
+
+			if (annotationValue == null) {
+				processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected RuleDependency annotation mirror to specify the 'rule()' property.", element);
+				continue;
+			}
+
+			TreePath treePath = trees.getPath(element, annotationMirror, annotationValue);
+			AnnotationVisitor visitor = new AnnotationVisitor();
+			recognizerType = visitor.scan(treePath, null);
+
+			if (recognizerType == null) {
+				processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not infer the recognizer from the 'rule()' property.", element, annotationMirror, annotationValue);
+				continue;
+			}
+
+			if (recognizerType != null) {
+				result.add(new Triple<RuleDependency, TypeMirror, Element>(dependency, recognizerType, element));
+			}
 		}
 
 		elements = roundEnv.getElementsAnnotatedWith(RuleDependencies.class);
@@ -518,8 +619,76 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 				continue;
 			}
 
-			for (RuleDependency dependency : dependencies.value()) {
-				result.add(new Pair<RuleDependency, Element>(dependency, element));
+			AnnotationMirror ruleDependenciesMirror = null;
+			for (AnnotationMirror mirror : element.getAnnotationMirrors()) {
+				if (processingEnv.getTypeUtils().isSameType(ruleDependenciesTypeElement.asType(), mirror.getAnnotationType())) {
+					ruleDependenciesMirror = mirror;
+					break;
+				}
+			}
+
+			for (int i = 0; i < dependencies.value().length; i++) {
+				RuleDependency dependency = dependencies.value()[i];
+
+				// first try to get the parser type from the annotation
+				TypeMirror recognizerType = getRecognizerType(dependency);
+				if (recognizerType != null && !recognizerType.toString().equals(Parser.class.getName())) {
+					result.add(new Triple<RuleDependency, TypeMirror, Element>(dependency, recognizerType, element));
+					continue;
+				}
+
+				// fallback to compiler tree API
+				AnnotationMirror annotationMirror = null;
+				for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : ruleDependenciesMirror.getElementValues().entrySet()) {
+					if ("value()".equals(entry.getKey().toString())) {
+						AnnotationValue annotationValue = entry.getValue();
+						if (!(annotationValue.getValue() instanceof List)) {
+							processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected array of RuleDependency annotations for annotation property 'value()'.", element, annotationMirror, annotationValue);
+							break;
+						}
+
+						List<?> annotationValueList = (List<?>)annotationValue.getValue();
+						Object mirror = annotationValueList.get(i);
+						if (!(mirror instanceof AnnotationMirror)) {
+							processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected RuleDependency annotation mirror for element of property 'value()'.", element, annotationMirror, annotationValue);
+							break;
+						}
+
+						annotationMirror = (AnnotationMirror)mirror;
+					}
+				}
+
+				if (annotationMirror == null) {
+					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected RuleDependency annotation mirror for element of property 'value()'.", element);
+					continue;
+				}
+
+				AnnotationValue annotationValue = null;
+				for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : annotationMirror.getElementValues().entrySet()) {
+					if (entry.getKey().getSimpleName().contentEquals("rule")) {
+						annotationValue = entry.getValue();
+						break;
+					}
+				}
+
+				if (annotationValue == null) {
+					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected RuleDependency annotation mirror to specify the 'rule()' property.", element, annotationMirror);
+					continue;
+				}
+
+				TreePath treePath = trees.getPath(element, annotationMirror, annotationValue);
+				AnnotationVisitor visitor = new AnnotationVisitor();
+				recognizerType = visitor.scan(treePath, null);
+
+
+				if (recognizerType == null) {
+					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not infer the recognizer from the 'rule()' property.", element, annotationMirror, annotationValue);
+					continue;
+				}
+
+				if (recognizerType != null) {
+					result.add(new Triple<RuleDependency, TypeMirror, Element>(dependency, recognizerType, element));
+				}
 			}
 		}
 
@@ -534,10 +703,10 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 	}
 
 	@Nullable
-	private Pair<AnnotationMirror, AnnotationValue> findRuleDependencyProperty(@NotNull Pair<RuleDependency, Element> dependency, @NotNull RuleDependencyProperty property) {
+	private Pair<AnnotationMirror, AnnotationValue> findRuleDependencyProperty(@NotNull Triple<RuleDependency, TypeMirror, Element> dependency, @NotNull RuleDependencyProperty property) {
 		TypeElement ruleDependencyTypeElement = processingEnv.getElementUtils().getTypeElement(RuleDependencyClassName);
 		TypeElement ruleDependenciesTypeElement = processingEnv.getElementUtils().getTypeElement(RuleDependenciesClassName);
-		List<? extends AnnotationMirror> mirrors = dependency.b.getAnnotationMirrors();
+		List<? extends AnnotationMirror> mirrors = dependency.c.getAnnotationMirrors();
 		for (AnnotationMirror annotationMirror : mirrors) {
 			if (processingEnv.getTypeUtils().isSameType(ruleDependencyTypeElement.asType(), annotationMirror.getAnnotationType())) {
 				AnnotationValue element = findRuleDependencyProperty(dependency, annotationMirror, property);
@@ -551,14 +720,14 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 					if ("value()".equals(value.getKey().toString())) {
 						AnnotationValue annotationValue = value.getValue();
 						if (!(annotationValue.getValue() instanceof List)) {
-							processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected array of RuleDependency annotations for annotation property 'value()'.", dependency.b, annotationMirror, annotationValue);
+							processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected array of RuleDependency annotations for annotation property 'value()'.", dependency.c, annotationMirror, annotationValue);
 							break;
 						}
 
 						List<?> annotationValueList = (List<?>)annotationValue.getValue();
 						for (Object obj : annotationValueList) {
 							if (!(obj instanceof AnnotationMirror)) {
-								processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected RuleDependency annotation mirror for element of property 'value()'.", dependency.b, annotationMirror, annotationValue);
+								processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected RuleDependency annotation mirror for element of property 'value()'.", dependency.c, annotationMirror, annotationValue);
 								break;
 							}
 
@@ -569,7 +738,7 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 						}
 					}
 					else {
-						processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, String.format("Unexpected annotation property %s.", value.getKey().toString()), dependency.b, annotationMirror, value.getValue());
+						processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, String.format("Unexpected annotation property %s.", value.getKey().toString()), dependency.c, annotationMirror, value.getValue());
 					}
 				}
 			}
@@ -579,7 +748,7 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 	}
 
 	@Nullable
-	private AnnotationValue findRuleDependencyProperty(@NotNull Pair<RuleDependency, Element> dependency, @NotNull AnnotationMirror annotationMirror, @NotNull RuleDependencyProperty property) {
+	private AnnotationValue findRuleDependencyProperty(@NotNull Triple<RuleDependency, TypeMirror, Element> dependency, @NotNull AnnotationMirror annotationMirror, @NotNull RuleDependencyProperty property) {
 		AnnotationValue recognizerValue = null;
 		AnnotationValue ruleValue = null;
 		AnnotationValue versionValue = null;
@@ -591,7 +760,7 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 			if ("rule()".equals(value.getKey().toString())) {
 				ruleValue = annotationValue;
 				if (!(annotationValue.getValue() instanceof Integer)) {
-					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected int constant for annotation property 'rule()'.", dependency.b, annotationMirror, annotationValue);
+					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected int constant for annotation property 'rule()'.", dependency.c, annotationMirror, annotationValue);
 					return null;
 				}
 
@@ -603,12 +772,12 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 			else if ("recognizer()".equals(value.getKey().toString())) {
 				recognizerValue = annotationValue;
 				if (!(annotationValue.getValue() instanceof TypeMirror)) {
-					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected Class constant for annotation property 'recognizer()'.", dependency.b, annotationMirror, annotationValue);
+					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected Class constant for annotation property 'recognizer()'.", dependency.c, annotationMirror, annotationValue);
 					return null;
 				}
 
 				TypeMirror annotationRecognizer = (TypeMirror)annotationValue.getValue();
-				TypeMirror expectedRecognizer = getRecognizerType(dependency.a);
+				TypeMirror expectedRecognizer = dependency.b;
 				if (!processingEnv.getTypeUtils().isSameType(expectedRecognizer, annotationRecognizer)) {
 					// this is a valid dependency annotation, but not the one we're looking for
 					return null;
@@ -617,7 +786,7 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 			else if ("version()".equals(value.getKey().toString())) {
 				versionValue = annotationValue;
 				if (!(annotationValue.getValue() instanceof Integer)) {
-					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected int constant for annotation property 'version()'.", dependency.b, annotationMirror, annotationValue);
+					processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Expected int constant for annotation property 'version()'.", dependency.c, annotationMirror, annotationValue);
 					return null;
 				}
 
@@ -628,27 +797,41 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 			}
 		}
 
-		if (recognizerValue != null) {
-			if (property == RuleDependencyProperty.RECOGNIZER) {
+		switch (property) {
+		case RECOGNIZER:
+			if (recognizerValue != null) {
 				return recognizerValue;
 			}
-			else if (ruleValue != null) {
-				if (property == RuleDependencyProperty.RULE) {
-					return ruleValue;
-				}
-				else if (versionValue != null) {
-					if (property == RuleDependencyProperty.VERSION) {
-						return versionValue;
-					}
-					else if (property == RuleDependencyProperty.DEPENDENTS) {
-						return dependentsValue;
-					}
-				}
+
+			break;
+
+		case RULE:
+			if (ruleValue != null) {
+				return ruleValue;
 			}
+
+			break;
+
+		case VERSION:
+			if (versionValue != null) {
+				return versionValue;
+			}
+
+			break;
+
+		case DEPENDENTS:
+			if (dependentsValue != null) {
+				return dependentsValue;
+			}
+
+			break;
+
+		default:
+			throw new IllegalArgumentException();
 		}
 
 		if (recognizerValue == null) {
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not find 'recognizer()' element in annotation.", dependency.b, annotationMirror);
+			processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not find 'recognizer()' element in annotation.", dependency.c, annotationMirror);
 		}
 
 		if (property == RuleDependencyProperty.RECOGNIZER) {
@@ -656,7 +839,7 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 		}
 
 		if (ruleValue == null) {
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not find 'rule()' element in annotation.", dependency.b, annotationMirror);
+			processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not find 'rule()' element in annotation.", dependency.c, annotationMirror);
 		}
 
 		if (property == RuleDependencyProperty.RULE) {
@@ -664,7 +847,7 @@ public class RuleDependencyProcessor extends AbstractProcessor {
 		}
 
 		if (versionValue == null) {
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not find 'version()' element in annotation.", dependency.b, annotationMirror);
+			processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Could not find 'version()' element in annotation.", dependency.c, annotationMirror);
 		}
 
 		return null;

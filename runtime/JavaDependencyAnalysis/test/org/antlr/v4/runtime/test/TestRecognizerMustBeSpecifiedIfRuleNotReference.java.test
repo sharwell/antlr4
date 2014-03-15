@@ -1,0 +1,6 @@
+import org.antlr.v4.runtime.RuleDependency;
+
+public class TestRecognizerMustBeSpecifiedIfRuleNotReference {
+    @RuleDependency(recognizer = SimpleParser.class, rule = 0, version = 0)
+    private int foo;
+}
