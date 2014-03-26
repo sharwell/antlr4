@@ -1463,6 +1463,8 @@ BITAND : '&';
 BITOR : '|';
 CARET : '^';
 MOD : '%';
+ARROW : '->';
+COLONCOLON : '::';
 
 ADD_ASSIGN : '+=';
 SUB_ASSIGN : '-=';
