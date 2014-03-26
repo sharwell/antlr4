@@ -117,6 +117,10 @@ typeParameter
 	:	typeParameterModifier* Identifier typeBound?
 	;
 
+typeParameterModifier
+	:	annotation
+	;
+
 typeBound
 	:	'extends' typeVariable
 	|	'extends' classOrInterfaceType additionalBound?
@@ -146,6 +150,39 @@ wildcard
 wildcardBounds
 	:	'extends' referenceType
 	|	'super' referenceType
+	;
+
+/*
+ * Productions from §6 (Names)
+ */
+
+packageName
+	:	Identifier
+	|	packageName '.' Identifier
+	;
+
+typeName
+	:	Identifier
+	|	packageOrTypeName '.' Identifier
+	;
+
+packageOrTypeName
+	:	Identifier
+	|	packageOrTypeName '.' Identifier
+	;
+
+expressionName
+	:	Identifier
+	|	ambiguousName '.' Identifier
+	;
+
+methodName
+	:	Identifier
+	;
+
+ambiguousName
+	:	Identifier
+	|	ambiguousName '.' Identifier
 	;
 
 /*
@@ -426,6 +463,10 @@ constructorModifier
 
 constructorDeclarator
 	:	typeParameters? simpleTypeName '(' formalParameterList? ')'
+	;
+
+simpleTypeName
+	:	Identifier
 	;
 
 constructorBody
