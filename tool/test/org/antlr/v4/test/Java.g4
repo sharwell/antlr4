@@ -955,6 +955,23 @@ primaryNoNewArray
 	|	methodReference
 	;
 
+primaryNoNewArray_lf_arrayAccess
+	:
+	;
+
+primaryNoNewArray_lfno_arrayAccess
+	:	literal
+	|	typeName ('[' ']')* '.' 'class'
+	|	'void' '.' 'class'
+	|	'this'
+	|	typeName '.' 'this'
+	|	'(' expression ')'
+	|	classInstanceCreationExpression
+	|	fieldAccess
+	|	methodInvocation
+	|	methodReference
+	;
+
 primaryNoNewArray_lf_primary
 	:	classInstanceCreationExpression_lf_primary
 	|	fieldAccess_lf_primary
@@ -1024,8 +1041,11 @@ fieldAccess_lfno_primary
 	;
 
 arrayAccess
-	:	expressionName '[' expression ']'
-	|	primaryNoNewArray '[' expression ']'
+	:	(	expressionName '[' expression ']'
+		|	primaryNoNewArray_lfno_arrayAccess '[' expression ']'
+		)
+		(	primaryNoNewArray_lf_arrayAccess '[' expression ']'
+		)*
 	;
 
 arrayAccess_lf_primary
