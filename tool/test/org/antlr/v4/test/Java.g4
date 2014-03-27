@@ -963,6 +963,17 @@ primaryNoNewArray_lf_primary
 	|	methodReference_lf_primary
 	;
 
+primaryNoNewArray_lf_primary_lf_arrayAccess_lf_primary
+	:
+	;
+
+primaryNoNewArray_lf_primary_lfno_arrayAccess_lf_primary
+	:	classInstanceCreationExpression_lf_primary
+	|	fieldAccess_lf_primary
+	|	methodInvocation_lf_primary
+	|	methodReference_lf_primary
+	;
+
 primaryNoNewArray_lfno_primary
 	:	literal
 	|	typeName ('[' ']')* '.' 'class'
@@ -1018,7 +1029,10 @@ arrayAccess
 	;
 
 arrayAccess_lf_primary
-	:	primaryNoNewArray_lf_primary '[' expression ']'
+	:	(	primaryNoNewArray_lf_primary_lfno_arrayAccess_lf_primary '[' expression ']'
+		)
+		(	primaryNoNewArray_lf_primary_lf_arrayAccess_lf_primary '[' expression ']'
+		)*
 	;
 
 arrayAccess_lfno_primary
