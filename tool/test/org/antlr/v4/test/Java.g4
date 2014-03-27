@@ -994,6 +994,7 @@ primaryNoNewArray_lf_primary_lfno_arrayAccess_lf_primary
 primaryNoNewArray_lfno_primary
 	:	literal
 	|	typeName ('[' ']')* '.' 'class'
+	|	unannPrimitiveType ('[' ']')* '.' 'class'
 	|	'void' '.' 'class'
 	|	'this'
 	|	typeName '.' 'this'
@@ -1012,6 +1013,7 @@ primaryNoNewArray_lfno_primary_lf_arrayAccess_lfno_primary
 primaryNoNewArray_lfno_primary_lfno_arrayAccess_lfno_primary
 	:	literal
 	|	typeName ('[' ']')* '.' 'class'
+	|	unannPrimitiveType ('[' ']')* '.' 'class'
 	|	'void' '.' 'class'
 	|	'this'
 	|	typeName '.' 'this'
@@ -1023,7 +1025,7 @@ primaryNoNewArray_lfno_primary_lfno_arrayAccess_lfno_primary
 	;
 
 classInstanceCreationExpression
-	:	'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
+	:	'new' typeArguments? annotation* Identifier ('.' annotation* Identifier)* typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	|	expressionName '.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	|	primary '.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	;
@@ -1033,7 +1035,7 @@ classInstanceCreationExpression_lf_primary
 	;
 
 classInstanceCreationExpression_lfno_primary
-	:	'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
+	:	'new' typeArguments? annotation* Identifier ('.' annotation* Identifier)* typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	|	expressionName '.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	;
 
