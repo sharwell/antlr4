@@ -94,14 +94,14 @@ public class SemanticPipeline {
 			new LeftRecursiveRuleTransformer(g.ast, ruleCollector.rules.values(), g);
 		lrtrans.translateLeftRecursiveRules();
 
-		// AUTO LEFT FACTORING
-		LeftFactoringRuleTransformer lftrans = new LeftFactoringRuleTransformer(g.ast, ruleCollector.rules, g);
-		lftrans.translateLeftFactoredRules();
-
 		// STORE RULES IN GRAMMAR
 		for (Rule r : ruleCollector.rules.values()) {
 			g.defineRule(r);
 		}
+
+		// AUTO LEFT FACTORING
+		LeftFactoringRuleTransformer lftrans = new LeftFactoringRuleTransformer(g.ast, ruleCollector.rules, g);
+		lftrans.translateLeftFactoredRules();
 
 		// COLLECT SYMBOLS: RULES, ACTIONS, TERMINALS, ...
 		SymbolCollector collector = new SymbolCollector(g);

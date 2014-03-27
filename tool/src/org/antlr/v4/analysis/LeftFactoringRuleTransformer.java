@@ -34,6 +34,8 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.atn.ATNSimulator;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.runtime.misc.NotNull;
+import org.antlr.v4.runtime.misc.Tuple;
+import org.antlr.v4.runtime.misc.Tuple2;
 import org.antlr.v4.tool.Alternative;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.LeftRecursiveRule;
@@ -48,8 +50,11 @@ import org.antlr.v4.tool.ast.RuleAST;
 import org.antlr.v4.tool.ast.RuleRefAST;
 import org.antlr.v4.tool.ast.StarBlockAST;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +77,8 @@ public class LeftFactoringRuleTransformer {
 	public Grammar _g;
 	public Tool _tool;
 
+	private final Map<Tuple2<String, String>, RuleVariants> _variants = new HashMap<Tuple2<String, String>, RuleVariants>();
+
 	private final GrammarASTAdaptor adaptor = new GrammarASTAdaptor();
 
 	public LeftFactoringRuleTransformer(@NotNull GrammarRootAST ast, @NotNull Map<String, Rule> rules, @NotNull Grammar g) {
@@ -81,30 +88,109 @@ public class LeftFactoringRuleTransformer {
 		this._tool = g.tool;
 	}
 
+	public void translateIndirectLeftRecursion() {
+		boolean changed;
+		do {
+			changed = false;
+			List<Rule> rules = new ArrayList<Rule>(_g.rules.values());
+			for (Rule r : rules) {
+				if (Grammar.isTokenName(r.name)) {
+					continue;
+				}
+
+				changed |= translateIndirectLeftRecursion(r);
+			}
+		} while (changed);
+	}
+
+	public boolean translateIndirectLeftRecursion(Rule r) {
+		if (_variants.containsKey(Tuple.create(r.name, r.name))) {
+			return false;
+		}
+
+		LOGGER.log(Level.FINE, "Left factoring {0} out of alts in grammar rule {1}", new Object[] { r.name, r.name });
+
+		GrammarAST block = (GrammarAST)r.ast.getFirstChildWithType(ANTLRParser.BLOCK);
+
+		RuleVariants ruleVariants = createLeftFactoredRuleVariant(r, r.name);
+		switch (ruleVariants) {
+		case NONE:
+			// no left recursion from this rule
+			return false;
+
+		case PARTIALLY_FACTORED:
+			/* Replace the existing rule r with
+			 *
+			 * r$nolf$r (r$lf$r)*
+			 */
+			GrammarAST root = adaptor.nil();
+			AltAST newAlt = new AltAST(adaptor.createToken(ANTLRParser.ALT, "ALT"));
+			adaptor.addChild(root, newAlt);
+
+			String unfactoredRule = r.name + ATNSimulator.RULE_NOLF_VARIANT_MARKER + r.name;
+			Rule unfactoredRuleDef = _g.getRule(unfactoredRule);
+			adaptor.addChild(newAlt, adaptor.dupTree(unfactoredRuleDef.ast.getFirstChildWithType(ANTLRParser.BLOCK)));
+
+			String factoredRule = r.name + ATNSimulator.RULE_LF_VARIANT_MARKER + r.name;
+			Rule factoredRuleDef = _g.getRule(factoredRule);
+			GrammarAST closure = new StarBlockAST(ANTLRParser.CLOSURE, adaptor.createToken(ANTLRParser.CLOSURE, "CLOSURE"), null);
+			adaptor.addChild(closure, adaptor.dupTree(factoredRuleDef.ast.getFirstChildWithType(ANTLRParser.BLOCK)));
+			adaptor.addChild(newAlt, closure);
+
+			block.replaceChildren(0, block.getChildCount() - 1, root);
+
+			if (block.getParent() instanceof RuleAST) {
+				r.numberOfAlts = 1;
+				r.alt = new Alternative[2];
+				r.alt[1] = new Alternative(r, 1);
+				r.alt[1].ast = newAlt;
+			}
+
+			if (_g.undefineRule(unfactoredRuleDef)) {
+				GrammarAST ruleParent = (GrammarAST)unfactoredRuleDef.ast.getParent();
+				ruleParent.deleteChild(unfactoredRuleDef.ast.getChildIndex());
+				ruleParent.freshenParentAndChildIndexes(unfactoredRuleDef.ast.getChildIndex());
+			}
+
+			if (_g.undefineRule(factoredRuleDef)) {
+				GrammarAST ruleParent = (GrammarAST)factoredRuleDef.ast.getParent();
+				ruleParent.deleteChild(factoredRuleDef.ast.getChildIndex());
+				ruleParent.freshenParentAndChildIndexes(factoredRuleDef.ast.getChildIndex());
+			}
+
+			return true;
+
+		case FULLY_FACTORED:
+			throw new UnsupportedOperationException("left-recursive rules must have at least one non-left-recursive alternative");
+
+		case PROCESSING:
+		default:
+			throw new UnsupportedOperationException("unknown rule variants");
+		}
+	}
+
 	public void translateLeftFactoredRules() {
+		// first translate to remove left recursion
+		translateIndirectLeftRecursion();
+		_g.ast.freshenParentAndChildIndexesDeeply();
+
 		// translate all rules marked for auto left factoring
 		for (Rule r : _rules.values()) {
 			if (Grammar.isTokenName(r.name)) {
 				continue;
 			}
 
-			Object leftFactoredRules = r.namedActions.get(LEFTFACTOR);
-			if (leftFactoredRules == null) {
+			Object leftFactoredRulesAction = r.namedActions.get(LEFTFACTOR);
+			if (!(leftFactoredRulesAction instanceof ActionAST)) {
 				continue;
 			}
 
-			if (!(leftFactoredRules instanceof ActionAST)) {
-				continue;
-			}
-
-			String leftFactoredRuleAction = leftFactoredRules.toString();
+			String leftFactoredRuleAction = leftFactoredRulesAction.toString();
 			leftFactoredRuleAction = leftFactoredRuleAction.substring(1, leftFactoredRuleAction.length() - 1);
 			String[] rules = leftFactoredRuleAction.split(",\\s*");
-			if (rules.length == 0) {
-				continue;
-			}
+			List<String> leftFactoredRules = Arrays.asList(rules);
 
-			LOGGER.log(Level.FINE, "Left factoring {0} out of alts in grammar rule {1}", new Object[] { Arrays.toString(rules), r.name });
+			LOGGER.log(Level.FINE, "Left factoring {0} out of alts in grammar rule {1}", new Object[] { leftFactoredRules, r.name });
 
 			Set<GrammarAST> translatedBlocks = new HashSet<GrammarAST>();
 			List<GrammarAST> blocks = r.ast.getNodesWithType(ANTLRParser.BLOCK);
@@ -117,16 +203,23 @@ public class LeftFactoringRuleTransformer {
 					}
 				}
 
-				if (rules.length != 1) {
-					throw new UnsupportedOperationException("Chained left factoring is not yet implemented.");
-				}
+				for (String rule : leftFactoredRules) {
+					if (translatedBlocks.contains(block)) {
+						throw new UnsupportedOperationException("Chained left factoring is not yet implemented.");
+					}
 
-				if (!translateLeftFactoredDecision(block, rules[0], false, DecisionFactorMode.COMBINED_FACTOR, true)) {
-					// couldn't translate the decision
-					continue;
-				}
+					try {
+						if (!translateLeftFactoredDecision(block, rule, false, DecisionFactorMode.COMBINED_FACTOR, true)) {
+							// couldn't translate the decision
+							continue;
+						}
 
-				translatedBlocks.add(block);
+						translatedBlocks.add(block);
+					}
+					catch (IllegalStateException ex) {
+						// recursive call detected
+					}
+				}
 			}
 		}
 	}
@@ -156,7 +249,7 @@ public class LeftFactoringRuleTransformer {
 		if (!variant && block.getParent() instanceof RuleAST) {
 			RuleAST ruleAST = (RuleAST)block.getParent();
 			String ruleName = ruleAST.getChild(0).getText();
-			Rule r = _rules.get(ruleName);
+			Rule r = _g.getRule(ruleName);
 			List<GrammarAST> blockAlts = block.getAllChildrenWithType(ANTLRParser.ALT);
 			r.numberOfAlts = blockAlts.size();
 			r.alt = new Alternative[blockAlts.size() + 1];
@@ -240,7 +333,7 @@ public class LeftFactoringRuleTransformer {
 		IntervalSet unfactoredIntervals = new IntervalSet();
 		for (int i = 0; i < alternatives.size(); i++) {
 			GrammarAST alternative = alternatives.get(i);
-			if (mode.includeUnfactoredAlts()) {
+			if (mode.includeUnfactoredAlts() || mode == DecisionFactorMode.FULL_FACTOR) {
 				GrammarAST unfactoredAlt = translateLeftFactoredAlternative(alternative.dupTree(), factoredRule, variant, DecisionFactorMode.PARTIAL_UNFACTORED, false);
 				unfactoredAlternatives[i] = unfactoredAlt;
 				if (unfactoredAlt != null) {
@@ -249,7 +342,7 @@ public class LeftFactoringRuleTransformer {
 			}
 
 			if (mode.includeFactoredAlts()) {
-				GrammarAST factoredAlt = translateLeftFactoredAlternative(alternative, factoredRule, variant, mode == DecisionFactorMode.COMBINED_FACTOR ? DecisionFactorMode.PARTIAL_FACTORED : DecisionFactorMode.FULL_FACTOR, includeFactoredElement);
+				GrammarAST factoredAlt = translateLeftFactoredAlternative(alternative, factoredRule, variant, mode == DecisionFactorMode.COMBINED_FACTOR ? DecisionFactorMode.PARTIAL_FACTORED : mode, includeFactoredElement);
 				factoredAlternatives[i] = factoredAlt;
 				if (factoredAlt != null) {
 					factoredIntervals.add(alternative.getChildIndex());
@@ -376,12 +469,16 @@ public class LeftFactoringRuleTransformer {
 			}
 		}
 
+		if (newChildren.isNil() && newChildren.getChildren() == null) {
+			throw new IllegalStateException();
+		}
+
 		adaptor.replaceChildren(block, 0, block.getChildCount() - 1, newChildren);
 
 		if (!variant && block.getParent() instanceof RuleAST) {
 			RuleAST ruleAST = (RuleAST)block.getParent();
 			String ruleName = ruleAST.getChild(0).getText();
-			Rule r = _rules.get(ruleName);
+			Rule r = _g.getRule(ruleName);
 			List<GrammarAST> blockAlts = block.getAllChildrenWithType(ANTLRParser.ALT);
 			r.numberOfAlts = blockAlts.size();
 			r.alt = new Alternative[blockAlts.size() + 1];
@@ -499,12 +596,25 @@ public class LeftFactoringRuleTransformer {
 				return root;
 			}
 
-			Rule targetRule = _rules.get(element.getToken().getText());
+			Rule targetRule = _g.getRule(element.getToken().getText());
 			if (targetRule == null) {
 				return null;
 			}
 
 			RuleVariants ruleVariants = createLeftFactoredRuleVariant(targetRule, factoredRule);
+			if (ruleVariants == RuleVariants.PROCESSING) {
+				// this occurs when overlapping left-recursive chains appear in
+				// the grammar. the result will end up as NONE or
+				// PARTIALLY_FACTORED. figure that out here so we can process it
+				// properly below.
+				if (containsLeftEdgeCall(targetRule, factoredRule)) {
+					ruleVariants = RuleVariants.PARTIALLY_FACTORED;
+				}
+				else {
+					ruleVariants = RuleVariants.NONE;
+				}
+			}
+
 			switch (ruleVariants) {
 			case NONE:
 				if (!mode.includeUnfactoredAlts()) {
@@ -537,12 +647,12 @@ public class LeftFactoringRuleTransformer {
 				assert mode.includeFactoredAlts();
 				RuleRefAST factoredRuleRef = new RuleRefAST(adaptor.createToken(ANTLRParser.RULE_REF, factoredRule));
 				factoredRuleRef.setOption(SUPPRESS_ACCESSOR, adaptor.create(ANTLRParser.ID, "true"));
-				Rule factoredRuleDef = _rules.get(factoredRule);
+				Rule factoredRuleDef = _g.getRule(factoredRule);
 				if (factoredRuleDef instanceof LeftRecursiveRule) {
 					factoredRuleRef.setOption(LeftRecursiveRuleTransformer.PRECEDENCE_OPTION_NAME, adaptor.create(ANTLRParser.INT, "0"));
 				}
 
-				if (_rules.get(factoredRule).args != null && _rules.get(factoredRule).args.size() > 0) {
+				if (_g.getRule(factoredRule).args != null && _g.getRule(factoredRule).args.size() > 0) {
 					throw new UnsupportedOperationException("Cannot left-factor rules with arguments yet.");
 				}
 
@@ -562,9 +672,12 @@ public class LeftFactoringRuleTransformer {
 			}
 
 			if (cloned.getChildCount() != 1) {
-				return null;
+				// if the BLOCK has more than one ALT, keep it as a BLOCK
+				return cloned;
 			}
 
+			// otherwise, remove the wrapping BLOCK; effectively converts `(x)`
+			// to just `x`.
 			GrammarAST root = adaptor.nil();
 			for (int i = 0; i < cloned.getChild(0).getChildCount(); i++) {
 				adaptor.addChild(root, cloned.getChild(0).getChild(i));
@@ -632,6 +745,7 @@ public class LeftFactoringRuleTransformer {
 		case ANTLRParser.STRING_LITERAL:
 		case ANTLRParser.TOKEN_REF:
 		case ANTLRParser.NOT:
+		case ANTLRParser.SET:
 			// terminals
 			if (mode.includeUnfactoredAlts()) {
 				return element;
@@ -653,7 +767,121 @@ public class LeftFactoringRuleTransformer {
 		}
 	}
 
+	private final Map<Tuple2<String, String>, Boolean> _knownCalls = new HashMap<Tuple2<String, String>, Boolean>();
+
+	/**
+	 * Determine if {@code rule} contains a left-edge call to rule
+	 * {@code target}.
+	 *
+	 * @param rule The source rule to analyze.
+	 * @param target The target rule to test for on the left edge of {@code rule}.
+	 * @return {@code true} if {@code rule} contains a left-edge call to rule
+	 * {@code target}; otherwise, {@code false}.
+	 */
+	protected final boolean containsLeftEdgeCall(@NotNull Rule rule, @NotNull String target) {
+		Boolean result = _knownCalls.get(Tuple.create(rule.name, target));
+		if (result != null) {
+			return result;
+		}
+
+		LOGGER.log(Level.FINER, "Checking if rule {0} calls rule {1}...", new Object[] { rule.name, target });
+		return containsLeftEdgeCall(rule.name, target, new HashSet<String>());
+	}
+
+	protected boolean containsLeftEdgeCall(@NotNull String rule, @NotNull String target, Set<String> visited) {
+		Boolean result = _knownCalls.get(Tuple.create(rule, target));
+		if (result != null) {
+			return result;
+		}
+
+		if (!visited.add(rule)) {
+			// if there is a left-edge call, it's not going to be found through
+			// recursion...
+			return false;
+		}
+
+		try {
+			Rule grammarRule = _g.getRule(rule);
+			RuleAST ruleAST = grammarRule.ast;
+
+			Deque<Tuple2<GrammarAST, Integer>> worklist = new ArrayDeque<Tuple2<GrammarAST, Integer>>();
+			worklist.add(Tuple.create((GrammarAST)ruleAST.getFirstChildWithType(ANTLRParser.BLOCK), -1));
+			while (!worklist.isEmpty()) {
+				Tuple2<GrammarAST, Integer> current = worklist.poll();
+				GrammarAST ast = (GrammarAST)(current.getItem2() >= 0 ? current.getItem1().getChild(current.getItem2()) : current.getItem1());
+				switch (ast.getType()) {
+				case ANTLRParser.BLOCK:
+					for (GrammarAST alt : ast.getAllChildrenWithType(ANTLRParser.ALT)) {
+						worklist.add(Tuple.create(alt, -1));
+					}
+					continue;
+
+				case ANTLRParser.ALT:
+					if (ast.getChild(0).getType() != ANTLRParser.EPSILON) {
+						worklist.add(Tuple.create(ast, 0));
+					}
+
+					continue;
+
+				case ANTLRParser.CLOSURE:
+				case ANTLRParser.OPTIONAL:
+					assert current.getItem2() >= 0;
+					worklist.add(Tuple.create((GrammarAST)ast.getFirstChildWithType(ANTLRParser.BLOCK), -1));
+					if (current.getItem2() + 1 < current.getItem1().getChildCount()) {
+						worklist.add(Tuple.create(current.getItem1(), current.getItem2() + 1));
+					}
+
+					continue;
+
+				case ANTLRParser.ACTION:
+				case ANTLRParser.SEMPRED:
+					assert current.getItem2() >= 0;
+					if (current.getItem2() + 1 < current.getItem1().getChildCount()) {
+						worklist.add(Tuple.create(current.getItem1(), current.getItem2() + 1));
+					}
+
+					continue;
+
+				case ANTLRParser.RULE_REF:
+					if (target.equals(ast.toString())) {
+						_knownCalls.put(Tuple.create(rule, target), true);
+						return true;
+					}
+
+					if (containsLeftEdgeCall(ast.toString(), target, visited)) {
+						return true;
+					}
+
+					continue;
+
+				case ANTLRParser.STRING_LITERAL:
+				case ANTLRParser.WILDCARD:
+				case ANTLRParser.NOT:
+				case ANTLRParser.SET:
+				case ANTLRParser.TOKEN_REF:
+					continue;
+
+				default:
+					throw new UnsupportedOperationException(String.format("Unknown AST node type %d", ast.getType()));
+				}
+			}
+
+			_knownCalls.put(Tuple.create(rule, target), false);
+			return false;
+		}
+		finally {
+			visited.remove(rule);
+		}
+	}
+
 	protected RuleVariants createLeftFactoredRuleVariant(Rule rule, String factoredElement) {
+		RuleVariants cachedResult = _variants.get(Tuple.create(rule.name, factoredElement));
+		if (cachedResult != null) {
+			return cachedResult;
+		}
+
+		_variants.put(Tuple.create(rule.name, factoredElement), RuleVariants.PROCESSING);
+
 		RuleAST ast = (RuleAST)rule.ast.dupTree();
 		BlockAST block = (BlockAST)ast.getFirstChildWithType(ANTLRParser.BLOCK);
 
@@ -667,6 +895,7 @@ public class LeftFactoringRuleTransformer {
 			block = (BlockAST)ast.getFirstChildWithType(ANTLRParser.BLOCK);
 			if (!translateLeftFactoredDecision(block, factoredElement, true, DecisionFactorMode.PARTIAL_FACTORED, false)) {
 				// no left factored alts
+				_variants.put(Tuple.create(rule.name, factoredElement), RuleVariants.NONE);
 				return RuleVariants.NONE;
 			}
 
@@ -689,7 +918,11 @@ public class LeftFactoringRuleTransformer {
 
 			List<GrammarAST> alts = block.getAllChildrenWithType(ANTLRParser.ALT);
 			Rule variant = new Rule(_g, ast.getChild(0).getText(), ast, alts.size());
-			_g.defineRule(variant);
+			if (!_g.defineRule(variant)) {
+				throw new IllegalStateException(String.format("Failed to define left-factored rule variant %s", variant.name));
+			}
+
+			LOGGER.log(Level.FINE, "Defined left-factored rule variant {0}", variant.name);
 			for (int i = 0; i < alts.size(); i++) {
 				variant.alt[i + 1].ast = (AltAST)alts.get(i);
 			}
@@ -707,7 +940,11 @@ public class LeftFactoringRuleTransformer {
 
 			List<GrammarAST> alts = unfactoredBlock.getAllChildrenWithType(ANTLRParser.ALT);
 			Rule variant = new Rule(_g, unfactoredAst.getChild(0).getText(), unfactoredAst, alts.size());
-			_g.defineRule(variant);
+			if (!_g.defineRule(variant)) {
+				throw new IllegalStateException(String.format("Failed to define non-left-factored rule variant %s", variant.name));
+			}
+
+			LOGGER.log(Level.FINE, "Defined non-left-factored rule variant {0}", variant.name);
 			for (int i = 0; i < alts.size(); i++) {
 				variant.alt[i + 1].ast = (AltAST)alts.get(i);
 			}
@@ -716,7 +953,9 @@ public class LeftFactoringRuleTransformer {
 		/*
 		 * result
 		 */
-		return unfactoredAst == null ? RuleVariants.FULLY_FACTORED : RuleVariants.PARTIALLY_FACTORED;
+		cachedResult = unfactoredAst == null ? RuleVariants.FULLY_FACTORED : RuleVariants.PARTIALLY_FACTORED;
+		_variants.put(Tuple.create(rule.name, factoredElement), cachedResult);
+		return cachedResult;
 	}
 
 	protected enum DecisionFactorMode {
@@ -765,5 +1004,6 @@ public class LeftFactoringRuleTransformer {
 		NONE,
 		PARTIALLY_FACTORED,
 		FULLY_FACTORED,
+		PROCESSING,
 	}
 }
