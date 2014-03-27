@@ -1159,18 +1159,28 @@ unaryExpressionNotPlusMinus
 	;
 
 postfixExpression
-	:	primary
-	|	expressionName
-	|	postIncrementExpression
-	|	postDecrementExpression
+	:	(	primary
+		|	expressionName
+		)
+		(	postIncrementExpression_lf_postfixExpression
+		|	postDecrementExpression_lf_postfixExpression
+		)*
 	;
 
 postIncrementExpression
 	:	postfixExpression '++'
 	;
 
+postIncrementExpression_lf_postfixExpression
+	:	'++'
+	;
+
 postDecrementExpression
 	:	postfixExpression '--'
+	;
+
+postDecrementExpression_lf_postfixExpression
+	:	'--'
 	;
 
 castExpression
