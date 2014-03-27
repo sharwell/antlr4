@@ -934,8 +934,11 @@ resource
  */
 
 primary
-	:	primaryNoNewArray
-	|	arrayCreationExpression
+	:	(	primaryNoNewArray_lfno_primary
+		|	arrayCreationExpression
+		)
+		(	primaryNoNewArray_lf_primary
+		)*
 	;
 
 primaryNoNewArray
@@ -952,10 +955,41 @@ primaryNoNewArray
 	|	methodReference
 	;
 
+primaryNoNewArray_lf_primary
+	:	classInstanceCreationExpression_lf_primary
+	|	fieldAccess_lf_primary
+	|	arrayAccess_lf_primary
+	|	methodInvocation_lf_primary
+	|	methodReference_lf_primary
+	;
+
+primaryNoNewArray_lfno_primary
+	:	literal
+	|	typeName ('[' ']')* '.' 'class'
+	|	'void' '.' 'class'
+	|	'this'
+	|	typeName '.' 'this'
+	|	'(' expression ')'
+	|	classInstanceCreationExpression_lfno_primary
+	|	fieldAccess_lfno_primary
+	|	arrayAccess_lfno_primary
+	|	methodInvocation_lfno_primary
+	|	methodReference_lfno_primary
+	;
+
 classInstanceCreationExpression
 	:	'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	|	expressionName '.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	|	primary '.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
+	;
+
+classInstanceCreationExpression_lf_primary
+	:	'.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
+	;
+
+classInstanceCreationExpression_lfno_primary
+	:	'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
+	|	expressionName '.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	;
 
 typeArgumentsOrDiamond
@@ -969,9 +1003,27 @@ fieldAccess
 	|	typeName '.' 'super' '.' Identifier
 	;
 
+fieldAccess_lf_primary
+	:	'.' Identifier
+	;
+
+fieldAccess_lfno_primary
+	:	'super' '.' Identifier
+	|	typeName '.' 'super' '.' Identifier
+	;
+
 arrayAccess
 	:	expressionName '[' expression ']'
 	|	primaryNoNewArray '[' expression ']'
+	;
+
+arrayAccess_lf_primary
+	:	primaryNoNewArray_lf_primary '[' expression ']'
+	;
+
+arrayAccess_lfno_primary
+	:	expressionName '[' expression ']'
+	|	primaryNoNewArray_lfno_primary '[' expression ']'
 	;
 
 methodInvocation
@@ -979,6 +1031,18 @@ methodInvocation
 	|	typeName '.' typeArguments? Identifier '(' argumentList? ')'
 	|	expressionName '.' typeArguments? Identifier '(' argumentList? ')'
 	|	primary '.' typeArguments? Identifier '(' argumentList? ')'
+	|	'super' '.' typeArguments? Identifier '(' argumentList? ')'
+	|	typeName '.' 'super' '.' typeArguments? Identifier '(' argumentList? ')'
+	;
+
+methodInvocation_lf_primary
+	:	'.' typeArguments? Identifier '(' argumentList? ')'
+	;
+
+methodInvocation_lfno_primary
+	:	methodName '(' argumentList? ')'
+	|	typeName '.' typeArguments? Identifier '(' argumentList? ')'
+	|	expressionName '.' typeArguments? Identifier '(' argumentList? ')'
 	|	'super' '.' typeArguments? Identifier '(' argumentList? ')'
 	|	typeName '.' 'super' '.' typeArguments? Identifier '(' argumentList? ')'
 	;
@@ -991,6 +1055,19 @@ methodReference
 	:	expressionName '::' typeArguments? Identifier
 	|	referenceType '::' typeArguments? Identifier
 	|	primary '::' typeArguments? Identifier
+	|	'super' '::' typeArguments? Identifier
+	|	typeName '.' 'super' '::' typeArguments? Identifier
+	|	classType '::' typeArguments? 'new'
+	|	arrayType '::' 'new'
+	;
+
+methodReference_lf_primary
+	:	'::' typeArguments? Identifier
+	;
+
+methodReference_lfno_primary
+	:	expressionName '::' typeArguments? Identifier
+	|	referenceType '::' typeArguments? Identifier
 	|	'super' '::' typeArguments? Identifier
 	|	typeName '.' 'super' '::' typeArguments? Identifier
 	|	classType '::' typeArguments? 'new'
