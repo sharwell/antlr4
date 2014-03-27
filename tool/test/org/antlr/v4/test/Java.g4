@@ -362,8 +362,12 @@ unannReferenceType
 	;
 
 unannClassOrInterfaceType
-	:	unannClassType
-	|	unannInterfaceType
+	:	(	unannClassType_lfno_unannClassOrInterfaceType
+		|	unannInterfaceType_lfno_unannClassOrInterfaceType
+		)
+		(	unannClassType_lf_unannClassOrInterfaceType
+		|	unannInterfaceType_lf_unannClassOrInterfaceType
+		)*
 	;
 
 unannClassType
@@ -371,8 +375,24 @@ unannClassType
 	|	unannClassOrInterfaceType '.' annotation* Identifier typeArguments?
 	;
 
+unannClassType_lf_unannClassOrInterfaceType
+	:	'.' annotation* Identifier typeArguments?
+	;
+
+unannClassType_lfno_unannClassOrInterfaceType
+	:	Identifier typeArguments?
+	;
+
 unannInterfaceType
 	:	unannClassType
+	;
+
+unannInterfaceType_lf_unannClassOrInterfaceType
+	:	unannClassType_lf_unannClassOrInterfaceType
+	;
+
+unannInterfaceType_lfno_unannClassOrInterfaceType
+	:	unannClassType_lfno_unannClassOrInterfaceType
 	;
 
 unannTypeVariable
