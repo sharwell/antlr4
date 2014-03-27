@@ -1005,6 +1005,23 @@ primaryNoNewArray_lfno_primary
 	|	methodReference_lfno_primary
 	;
 
+primaryNoNewArray_lfno_primary_lf_arrayAccess_lfno_primary
+	:
+	;
+
+primaryNoNewArray_lfno_primary_lfno_arrayAccess_lfno_primary
+	:	literal
+	|	typeName ('[' ']')* '.' 'class'
+	|	'void' '.' 'class'
+	|	'this'
+	|	typeName '.' 'this'
+	|	'(' expression ')'
+	|	classInstanceCreationExpression_lfno_primary
+	|	fieldAccess_lfno_primary
+	|	methodInvocation_lfno_primary
+	|	methodReference_lfno_primary
+	;
+
 classInstanceCreationExpression
 	:	'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
 	|	expressionName '.' 'new' typeArguments? annotation* Identifier typeArgumentsOrDiamond? '(' argumentList? ')' classBody?
@@ -1056,8 +1073,11 @@ arrayAccess_lf_primary
 	;
 
 arrayAccess_lfno_primary
-	:	expressionName '[' expression ']'
-	|	primaryNoNewArray_lfno_primary '[' expression ']'
+	:	(	expressionName '[' expression ']'
+		|	primaryNoNewArray_lfno_primary_lfno_arrayAccess_lfno_primary '[' expression ']'
+		)
+		(	primaryNoNewArray_lfno_primary_lf_arrayAccess_lfno_primary '[' expression ']'
+		)*
 	;
 
 methodInvocation
