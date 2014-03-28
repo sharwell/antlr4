@@ -323,8 +323,8 @@ public class LeftFactoringRuleTransformer {
 						GrammarAST newBlock = new BlockAST(adaptor.createToken(ANTLRParser.BLOCK, "BLOCK"));
 						GrammarAST newAlt = new AltAST(adaptor.createToken(ANTLRParser.ALT, "ALT"));
 						adaptor.addChild(newBlock, newAlt);
-						while (previous.getChildCount() > 1) {
-							adaptor.addChild(newAlt, previous.deleteChild(1));
+						while (previous.getChildCount() > 0) {
+							adaptor.addChild(newAlt, previous.deleteChild(0));
 						}
 
 						if (newAlt.getChildCount() == 0) {
@@ -338,8 +338,8 @@ public class LeftFactoringRuleTransformer {
 						GrammarAST newBlock = new BlockAST(adaptor.createToken(ANTLRParser.BLOCK, "BLOCK"));
 						GrammarAST newAlt = new AltAST(adaptor.createToken(ANTLRParser.ALT, "ALT"));
 						adaptor.addChild(newBlock, newAlt);
-						while (translatedAlt.getChildCount() > 1) {
-							adaptor.addChild(newAlt, translatedAlt.deleteChild(1));
+						while (translatedAlt.getChildCount() > 0) {
+							adaptor.addChild(newAlt, translatedAlt.deleteChild(0));
 						}
 
 						if (newAlt.getChildCount() == 0) {
@@ -349,8 +349,8 @@ public class LeftFactoringRuleTransformer {
 						adaptor.addChild(translatedAlt, newBlock);
 					}
 
-					GrammarAST combinedBlock = (GrammarAST)previous.getChild(1);
-					adaptor.addChild(combinedBlock, translatedAlt.getChild(1).getChild(0));
+					GrammarAST combinedBlock = (GrammarAST)previous.getChild(0);
+					adaptor.addChild(combinedBlock, translatedAlt.getChild(0).getChild(0));
 
 					if (LOGGER.isLoggable(Level.FINE)) {
 						LOGGER.log(Level.FINE, previous.toStringTree());
