@@ -601,13 +601,12 @@ setState(<choice.stateNumber>);
 _errHandler.sync(this);
 _alt = getInterpreter().adaptivePredict(_input,<choice.decision>,_ctx);
 while ( _alt!=<choice.exitAlt> && _alt!=ATN.INVALID_ALT_NUMBER ) {
-	if ( _alt==1<if(!choice.ast.greedy)>+1<endif> ) {
 <if(choice.ast.options.("pushRecursionContext"))>
-		<recRuleAltStartAction(choice.ast.options.("pushRecursionContext"), ({<currentRule.rule.baseContext>}), [], "_localctx.getParent()", "_localctx.invokingState", {<currentRule.startState>})>
+	<recRuleAltStartAction(choice.ast.options.("pushRecursionContext"), ({<currentRule.rule.baseContext>}), [], "_localctx.getParent()", "_localctx.invokingState", {<currentRule.startState>})>
 <endif>
-		<iteration>
-		<alts> <! should only be one !>
-	}
+	assert _alt==1<if(!choice.ast.greedy)>+1<endif>;
+	<iteration>
+	<alts><! should only be one !>
 	setState(<choice.loopBackStateNumber>);
 	_errHandler.sync(this);
 	_alt = getInterpreter().adaptivePredict(_input,<choice.decision>,_ctx);
