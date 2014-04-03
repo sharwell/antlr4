@@ -358,7 +358,7 @@ LeftFactoredRuleFunction(currentRule,code,locals,namedActions,finallyAction,post
 
 <if(currentRule.modifiers)><currentRule.modifiers:{f | <f> }><else>private final <endif><currentRule.ctxType> <currentRule.name>(<currentRule.args; separator=",">) throws RecognitionException {
 	<currentRule.ctxType> _localctx = new <currentRule.ctxType>(_ctx, getState()<currentRule.args:{a | , <a.name>}>);
-	enterLeftFactoredRule(_localctx, <currentRule.startState>, RULE_<currentRule.variantOf>);
+	enterLeftFactoredRule(_localctx, <currentRule.startState>, RULE_<currentRule.rule.baseContext>, <currentRule.rule.leftFactoredCount>);
 	<namedActions.init>
 	<locals; separator="\n">
 	try {
@@ -390,7 +390,7 @@ LeftUnfactoredRuleFunction(currentRule,code,locals,namedActions,finallyAction,po
 
 <if(currentRule.modifiers)><currentRule.modifiers:{f | <f> }><else>private final <endif><currentRule.ctxType> <currentRule.name>(<currentRule.args; separator=",">) throws RecognitionException {
 	<currentRule.ctxType> _localctx = new <currentRule.ctxType>(_ctx, getState()<currentRule.args:{a | , <a.name>}>);
-	enterRule(_localctx, <currentRule.startState>, RULE_<currentRule.variantOf>);
+	enterRule(_localctx, <currentRule.startState>, RULE_<currentRule.rule.baseContext>);
 	<namedActions.init>
 	<locals; separator="\n">
 	try {
@@ -513,6 +513,9 @@ _errHandler.sync(this);
 while (true) {
 	switch (_input.LA(1)) {
 	<choice.altLook,alts:{look,alt| <cases(look)>
+<if(choice.ast.options.("pushRecursionContext"))>
+	<recRuleAltStartAction(choice.ast.options.("pushRecursionContext"), ({<currentRule.rule.baseContext>}), [], "_localctx.getParent()", "_localctx.invokingState", {<currentRule.startState>})>
+<endif>
 	<alt>
 	break;}; separator="\n">
 	<cases(choice.exitLook)>
@@ -528,6 +531,9 @@ setState(<choice.stateNumber>);
 _errHandler.sync(this);
 <preamble; separator="\n">
 while (<loopExpr>) {
+<if(choice.ast.options.("pushRecursionContext"))>
+	<recRuleAltStartAction(choice.ast.options.("pushRecursionContext"), ({<currentRule.rule.baseContext>}), [], "_localctx.getParent()", "_localctx.invokingState", {<currentRule.startState>})>
+<endif>
 	<alts; separator="\n">
 	setState(<choice.loopBackStateNumber>);
 	_errHandler.sync(this);
@@ -596,6 +602,9 @@ _errHandler.sync(this);
 _alt = getInterpreter().adaptivePredict(_input,<choice.decision>,_ctx);
 while ( _alt!=<choice.exitAlt> && _alt!=ATN.INVALID_ALT_NUMBER ) {
 	if ( _alt==1<if(!choice.ast.greedy)>+1<endif> ) {
+<if(choice.ast.options.("pushRecursionContext"))>
+		<recRuleAltStartAction(choice.ast.options.("pushRecursionContext"), ({<currentRule.rule.baseContext>}), [], "_localctx.getParent()", "_localctx.invokingState", {<currentRule.startState>})>
+<endif>
 		<iteration>
 		<alts> <! should only be one !>
 	}
@@ -866,10 +875,10 @@ recRuleAltPredicate(ruleName,opPrec)  ::= "precpred(_ctx, <opPrec>)"
 recRuleSetReturnAction(src,name)	  ::= "$<name>=$<src>.<name>;"
 recRuleSetStopToken()                 ::= "_ctx.stop = _input.LT(-1);"
 
-recRuleAltStartAction(ruleName, ctxName, label) ::= <<
-_localctx = new <ctxName>Context(_parentctx, _parentState);
+recRuleAltStartAction(ruleName, ctxName, label, parentctx="_parentctx", parentState="_parentState", startState="_startState") ::= <<
+_localctx = new <ctxName; format="cap">Context(<parentctx>, <parentState>);
 <if(label)>_localctx.<label> = _prevctx;<endif>
-pushNewRecursionContext(_localctx, _startState, RULE_<ruleName>);
+pushNewRecursionContext(_localctx, <startState>, RULE_<ruleName>);
 >>
 
 recRuleLabeledAltStartAction(ruleName, currentAltLabel, label) ::= <<

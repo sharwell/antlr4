@@ -244,7 +244,7 @@ public abstract class Target {
 			return getTemplates().getInstanceOf("LexerRuleContext").render();
 		}
 
-		String baseName = function.variantOf != null ? function.variantOf : function.name;
+		String baseName = r.getBaseContext();
 		return Utils.capitalize(baseName)+getTemplates().getInstanceOf("RuleContextNameSuffix").render();
 	}
 

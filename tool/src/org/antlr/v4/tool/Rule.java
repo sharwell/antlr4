@@ -30,6 +30,7 @@
 
 package org.antlr.v4.tool;
 
+import org.antlr.v4.runtime.atn.ATNSimulator;
 import org.antlr.v4.runtime.misc.MultiMap;
 import org.antlr.v4.runtime.misc.Tuple;
 import org.antlr.v4.runtime.misc.Tuple2;
@@ -76,6 +77,21 @@ public class Rule implements AttributeResolver {
 	}
 
 	public String name;
+	/**
+	 * Indicates the left-factored rule variant. This is one of the following
+	 * values:
+	 *
+	 * <ul>
+	 * <li>{@code null}: This is a standard rule.</li>
+	 * <li>{@link ATNSimulator#RULE_LF_VARIANT_MARKER}: This rule is the
+	 * left-factored variant of another rule.</li>
+	 * <li>{@link ATNSimulator#RULE_NOLF_VARIANT_MARKER}: This rule is the
+	 * non-left-factored variant of another rule.</li>
+	 * </ul>
+	 */
+	public String variant;
+	public int leftFactoredCount;
+	private String baseContext;
 	public List<GrammarAST> modifiers;
 
 	public RuleAST ast;
@@ -132,6 +148,23 @@ public class Rule implements AttributeResolver {
 		this.numberOfAlts = numberOfAlts;
 		alt = new Alternative[numberOfAlts+1]; // 1..n
 		for (int i=1; i<=numberOfAlts; i++) alt[i] = new Alternative(this, i);
+	}
+
+	public String getBaseContext() {
+		if (baseContext != null && !baseContext.isEmpty()) {
+			return baseContext;
+		}
+
+		String optionBaseContext = ast.getOptionString("baseContext");
+		if (optionBaseContext != null && !optionBaseContext.isEmpty()) {
+			return optionBaseContext;
+		}
+
+		return name;
+	}
+
+	public void setBaseContext(String baseContext) {
+		this.baseContext = baseContext;
 	}
 
 	public void defineActionInAlt(int currentAlt, ActionAST actionAST) {

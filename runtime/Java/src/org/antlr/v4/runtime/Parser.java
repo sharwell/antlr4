@@ -622,13 +622,28 @@ public abstract class Parser extends Recognizer<Token, ParserATNSimulator> {
         if ( _parseListeners != null) triggerEnterRuleEvent();
 	}
 
-	public void enterLeftFactoredRule(ParserRuleContext localctx, int state, int ruleIndex) {
+	/**
+	 *
+	 * @param localctx
+	 * @param state
+	 * @param ruleIndex
+	 * @param count The number of contexts that have been left-factored out of
+	 * the rule.
+	 */
+	public void enterLeftFactoredRule(ParserRuleContext localctx, int state, int ruleIndex, int count) {
 		setState(state);
 		if (_buildParseTrees) {
-			ParserRuleContext factoredContext = (ParserRuleContext)_ctx.getChild(_ctx.getChildCount() - 1);
-			_ctx.removeLastChild();
-			factoredContext.parent = localctx;
-			localctx.addChild(factoredContext);
+			// the previous `count` rules should actually be children of the new
+			// context
+			for (int i = 0; i < count; i++) {
+				ParserRuleContext factoredContext = (ParserRuleContext)_ctx.getChild(_ctx.getChildCount() - count + i);
+				factoredContext.parent = localctx;
+				localctx.addChild(factoredContext);
+			}
+
+			for (int i = 0; i < count; i++) {
+				_ctx.removeLastChild();
+			}
 		}
 
 		_ctx = localctx;

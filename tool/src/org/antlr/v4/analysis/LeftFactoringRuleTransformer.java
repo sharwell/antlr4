@@ -133,7 +133,8 @@ public class LeftFactoringRuleTransformer {
 
 			String factoredRule = r.name + ATNSimulator.RULE_LF_VARIANT_MARKER + r.name;
 			Rule factoredRuleDef = _g.getRule(factoredRule);
-			GrammarAST closure = new StarBlockAST(ANTLRParser.CLOSURE, adaptor.createToken(ANTLRParser.CLOSURE, "CLOSURE"), null);
+			StarBlockAST closure = new StarBlockAST(ANTLRParser.CLOSURE, adaptor.createToken(ANTLRParser.CLOSURE, "CLOSURE"), null);
+			closure.setOption("pushRecursionContext", adaptor.create(ANTLRParser.ID, factoredRuleDef.getBaseContext()));
 			adaptor.addChild(closure, adaptor.dupTree(factoredRuleDef.ast.getFirstChildWithType(ANTLRParser.BLOCK)));
 			adaptor.addChild(newAlt, closure);
 
@@ -918,6 +919,9 @@ public class LeftFactoringRuleTransformer {
 
 			List<GrammarAST> alts = block.getAllChildrenWithType(ANTLRParser.ALT);
 			Rule variant = new Rule(_g, ast.getChild(0).getText(), ast, alts.size());
+			variant.variant = ATNSimulator.RULE_LF_VARIANT_MARKER;
+			variant.setBaseContext(rule.getBaseContext());
+			variant.leftFactoredCount = rule.leftFactoredCount + 1;
 			if (!_g.defineRule(variant)) {
 				throw new IllegalStateException(String.format("Failed to define left-factored rule variant %s", variant.name));
 			}
@@ -940,6 +944,9 @@ public class LeftFactoringRuleTransformer {
 
 			List<GrammarAST> alts = unfactoredBlock.getAllChildrenWithType(ANTLRParser.ALT);
 			Rule variant = new Rule(_g, unfactoredAst.getChild(0).getText(), unfactoredAst, alts.size());
+			variant.variant = ATNSimulator.RULE_LF_VARIANT_MARKER.equals(rule.variant) ? ATNSimulator.RULE_LF_VARIANT_MARKER : ATNSimulator.RULE_NOLF_VARIANT_MARKER;
+			variant.setBaseContext(rule.getBaseContext());
+			variant.leftFactoredCount = rule.leftFactoredCount;
 			if (!_g.defineRule(variant)) {
 				throw new IllegalStateException(String.format("Failed to define non-left-factored rule variant %s", variant.name));
 			}

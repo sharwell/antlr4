@@ -100,10 +100,10 @@ public class ParserFactory extends DefaultOutputModelFactory {
 		if ( r instanceof LeftRecursiveRule ) {
 			return new LeftRecursiveRuleFunction(this, (LeftRecursiveRule)r);
 		}
-		else if (r.name.contains(ATNSimulator.RULE_LF_VARIANT_MARKER)) {
+		else if (ATNSimulator.RULE_LF_VARIANT_MARKER.equals(r.variant)) {
 			return new LeftFactoredRuleFunction(this, r);
 		}
-		else if (r.name.contains(ATNSimulator.RULE_NOLF_VARIANT_MARKER)) {
+		else if (ATNSimulator.RULE_NOLF_VARIANT_MARKER.equals(r.variant)) {
 			return new LeftUnfactoredRuleFunction(this, r);
 		}
 		else {

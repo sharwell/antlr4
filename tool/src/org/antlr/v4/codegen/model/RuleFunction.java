@@ -90,7 +90,6 @@ public class RuleFunction extends OutputModelObject {
 	public Rule rule;
 	public AltLabelStructDecl[] altToContext;
 	public boolean hasLookaheadBlock;
-	public String variantOf;
 
 	@ModelElement public List<SrcOp> code;
 	@ModelElement public OrderedHashSet<Decl> locals; // TODO: move into ctx?
@@ -112,27 +111,21 @@ public class RuleFunction extends OutputModelObject {
 		modifiers = Utils.nodesToStrings(r.modifiers);
 
 		index = r.index;
-		int lfIndex = name.indexOf(ATNSimulator.RULE_VARIANT_DELIMITER);
-		if (lfIndex >= 0) {
-			variantOf = name.substring(0, lfIndex);
+
+		ruleCtx = new StructDecl(factory, r);
+		altToContext = new AltLabelStructDecl[r.getOriginalNumberOfAlts()+1];
+		addContextGetters(factory, r);
+
+		if ( r.args!=null ) {
+			ruleCtx.addDecls(r.args.attributes.values());
+			args = r.args.attributes.values();
+			ruleCtx.ctorAttrs = args;
 		}
-
-		if (variantOf == null || true) {
-			ruleCtx = new StructDecl(factory, r);
-			altToContext = new AltLabelStructDecl[r.getOriginalNumberOfAlts()+1];
-			addContextGetters(factory, r);
-
-			if ( r.args!=null ) {
-				ruleCtx.addDecls(r.args.attributes.values());
-				args = r.args.attributes.values();
-				ruleCtx.ctorAttrs = args;
-			}
-			if ( r.retvals!=null ) {
-				ruleCtx.addDecls(r.retvals.attributes.values());
-			}
-			if ( r.locals!=null ) {
-				ruleCtx.addDecls(r.locals.attributes.values());
-			}
+		if ( r.retvals!=null ) {
+			ruleCtx.addDecls(r.retvals.attributes.values());
+		}
+		if ( r.locals!=null ) {
+			ruleCtx.addDecls(r.locals.attributes.values());
 		}
 
 		ruleLabels = r.getElementLabelNames();
