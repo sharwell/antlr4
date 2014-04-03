@@ -75,7 +75,7 @@ rec_rule returns [boolean isLeftRec]
       		(	^(OPTIONS .*)
 		    |   ^(AT ID ACTION) // TODO: copy
 		    )*
-			ruleBlock {$isLeftRec = $ruleBlock.isLeftRec;}
+			ruleBlock {$isLeftRec = $ruleBlock.isLeftRec && $ruleBlock.prefixOrBinary;}
 			exceptionGroup
 		)
 	;
@@ -98,23 +98,24 @@ ruleModifier
     | PROTECTED
     ;
 
-ruleBlock returns [boolean isLeftRec]
+ruleBlock returns [boolean isLeftRec, boolean prefixOrBinary]
 @init{boolean lr=false; this.numAlts = $start.getChildCount();}
 	:	^(	BLOCK
 			(
 				o=outerAlternative
 				{if ($o.isLeftRec) $isLeftRec = true;}
+				{if ($o.prefixOrBinary) $prefixOrBinary = true;}
 				{currentOuterAltNumber++;}
 			)+
 		)
 	;
 
 /** An alt is either prefix, suffix, binary, or ternary operation or "other" */
-outerAlternative returns [boolean isLeftRec]
+outerAlternative returns [boolean isLeftRec, boolean prefixOrBinary]
     :   (binary)=>           binary
-                             {binaryAlt((AltAST)$start, currentOuterAltNumber); $isLeftRec=true;}
+                             {binaryAlt((AltAST)$start, currentOuterAltNumber); $isLeftRec=true; $prefixOrBinary=true;}
     |   (prefix)=>           prefix
-                             {prefixAlt((AltAST)$start, currentOuterAltNumber);}
+                             {prefixAlt((AltAST)$start, currentOuterAltNumber); $prefixOrBinary=true;}
     |   (suffix)=>           suffix
                              {suffixAlt((AltAST)$start, currentOuterAltNumber); $isLeftRec=true;}
     |   nonLeftRecur         {otherAlt((AltAST)$start,  currentOuterAltNumber);}

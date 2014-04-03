@@ -31,6 +31,7 @@
 package org.antlr.v4.analysis;
 
 import org.antlr.runtime.CommonToken;
+import org.antlr.runtime.RecognitionException;
 import org.antlr.runtime.TokenStream;
 import org.antlr.runtime.tree.CommonTreeNodeStream;
 import org.antlr.runtime.tree.Tree;
@@ -307,6 +308,41 @@ public class LeftRecursiveRuleAnalyzer extends LeftRecursiveRuleWalker {
 			if ( rref!=null && rref.getType()==RULE_REF && rref.getText().equals(ruleName) ) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Determines if the AST for a rule matches the pattern for a precedence
+	 * rule, which is a rule that meets all of the following properties.
+	 *
+	 * <ul>
+	 * <li>The rule contains an alternative with <stronG>direct
+	 * left-recursion</strong>.</li>
+	 * <li>The rule contains one or more alternatives which match one of the
+	 * following.
+	 * <ul>
+	 * <li>The alternative matches the <strong>prefix</strong> pattern, i.e. the
+	 * alternative does not contain a direct left-recursive call, but does
+	 * contain a direct tail-recursive call.</li>
+	 * <li>The alternative matches the <strong>binary</strong> pattern, i.e. the
+	 * alternative contains both direct left-recursion and direct
+	 * tail-recursion.</li>
+	 * </ul>
+	 * </li>
+	 * </ul>
+	 *
+	 * @param t The AST for the rule to check.
+	 * @param ruleName The name of the rule.
+	 * @return {@code true} if the specified rule matches the pattern for a
+	 * precedence rule.
+	 */
+	public static boolean fitsPrecedencePattern(GrammarAST t, String ruleName) {
+		LeftRecursiveRuleAnalyzer leftRecursiveRuleWalker = new LeftRecursiveRuleAnalyzer(t, t.g.tool, ruleName, null);
+		try {
+			return leftRecursiveRuleWalker.rec_rule();
+		}
+		catch (RecognitionException re) {
+			return false;
+		}
 	}
 
 	// TODO: this strips the tree properly, but since text()
