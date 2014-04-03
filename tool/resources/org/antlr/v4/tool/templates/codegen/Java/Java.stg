@@ -356,7 +356,7 @@ RuleFunction(currentRule,code,locals,ruleCtx,altLabelCtxs,namedActions,finallyAc
 LeftFactoredRuleFunction(currentRule,code,locals,namedActions,finallyAction,postamble) ::=
 <<
 
-<if(currentRule.modifiers)><currentRule.modifiers:{f | <f> }><else>private final <endif><currentRule.ctxType> <currentRule.name>(<currentRule.args; separator=",">) throws RecognitionException {
+<if(currentRule.modifiers)><currentRule.modifiers:{f | <f> }><else>private <endif><currentRule.ctxType> <currentRule.name>(<currentRule.args; separator=",">) throws RecognitionException {
 	<currentRule.ctxType> _localctx = new <currentRule.ctxType>(_ctx, getState()<currentRule.args:{a | , <a.name>}>);
 	enterLeftFactoredRule(_localctx, <currentRule.startState>, RULE_<currentRule.rule.baseContext>, <currentRule.rule.leftFactoredCount>);
 	<namedActions.init>
@@ -388,7 +388,7 @@ LeftFactoredRuleFunction(currentRule,code,locals,namedActions,finallyAction,post
 LeftUnfactoredRuleFunction(currentRule,code,locals,namedActions,finallyAction,postamble) ::=
 <<
 
-<if(currentRule.modifiers)><currentRule.modifiers:{f | <f> }><else>private final <endif><currentRule.ctxType> <currentRule.name>(<currentRule.args; separator=",">) throws RecognitionException {
+<if(currentRule.modifiers)><currentRule.modifiers:{f | <f> }><else>private <endif><currentRule.ctxType> <currentRule.name>(<currentRule.args; separator=",">) throws RecognitionException {
 	<currentRule.ctxType> _localctx = new <currentRule.ctxType>(_ctx, getState()<currentRule.args:{a | , <a.name>}>);
 	enterRule(_localctx, <currentRule.startState>, RULE_<currentRule.rule.baseContext>);
 	<namedActions.init>
