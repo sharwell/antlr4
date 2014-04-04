@@ -37,6 +37,7 @@ import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Tuple;
 import org.antlr.v4.runtime.misc.Tuple2;
 import org.antlr.v4.tool.Alternative;
+import org.antlr.v4.tool.ErrorType;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.LeftRecursiveRule;
 import org.antlr.v4.tool.Rule;
@@ -162,7 +163,8 @@ public class LeftFactoringRuleTransformer {
 			return true;
 
 		case FULLY_FACTORED:
-			throw new UnsupportedOperationException("left-recursive rules must have at least one non-left-recursive alternative");
+			_g.tool.errMgr.grammarError(ErrorType.NO_NON_LR_ALTS, _g.fileName, adaptor.getToken(r.ast.getChild(0)), r.name);
+			return false;
 
 		case PROCESSING:
 		default:
@@ -335,7 +337,9 @@ public class LeftFactoringRuleTransformer {
 		for (int i = 0; i < alternatives.size(); i++) {
 			GrammarAST alternative = alternatives.get(i);
 			if (mode.includeUnfactoredAlts() || mode == DecisionFactorMode.FULL_FACTOR) {
-				GrammarAST unfactoredAlt = translateLeftFactoredAlternative(alternative.dupTree(), factoredRule, variant, DecisionFactorMode.PARTIAL_UNFACTORED, false);
+				GrammarAST unfactoredAlt = alternative.dupTree();
+				unfactoredAlt.parent = alternative.parent;
+				unfactoredAlt = translateLeftFactoredAlternative(unfactoredAlt, factoredRule, variant, DecisionFactorMode.PARTIAL_UNFACTORED, false);
 				unfactoredAlternatives[i] = unfactoredAlt;
 				if (unfactoredAlt != null) {
 					unfactoredIntervals.add(i);
@@ -535,52 +539,33 @@ public class LeftFactoringRuleTransformer {
 
 		assert !mode.includeFactoredAlts() || !mode.includeUnfactoredAlts();
 
+		GrammarAST labeledAST = null;
 		switch (element.getType()) {
 		case ANTLRParser.ASSIGN:
 		case ANTLRParser.PLUS_ASSIGN:
+			labeledAST = element;
+			element = (GrammarAST)element.getChild(1);
+			break;
+
+		default:
+			break;
+		}
+
+		switch (element.getType()) {
+		case ANTLRParser.ASSIGN:
+		case ANTLRParser.PLUS_ASSIGN:
+			throw new IllegalStateException("ANTLR doesn't allow labels nested inside labels.");
+
+		case ANTLRParser.RULE_REF:
 		{
 			/* label=a
 			 *
 			 * ==>
 			 *
-			 * factoredElement label=a_factored
+			 * factoredElement a_factored         (for unlabeled)
+			 * factoredElement label=a_factored   (for ASSIGN labeled)
+			 * factoredElement label+=a_factored  (for PLUS_ASSIGN labeled)
 			 */
-
-			GrammarAST translatedChildElement = translateLeftFactoredElement((GrammarAST)element.getChild(1), factoredRule, variant, mode, includeFactoredElement);
-			if (translatedChildElement == null) {
-				return null;
-			}
-
-			RuleAST ruleAST = (RuleAST)element.getAncestor(ANTLRParser.RULE);
-			LOGGER.log(Level.WARNING, "Could not left factor ''{0}'' out of decision in rule ''{1}'': labeled rule references are not yet supported.",
-				new Object[] { factoredRule, ruleAST.getChild(0).getText() });
-			return null;
-			//if (!translatedChildElement.isNil()) {
-			//	GrammarAST root = adaptor.nil();
-			//	Object factoredElement = translatedChildElement;
-			//	if (outerRule) {
-			//		adaptor.addChild(root, factoredElement);
-			//	}
-			//
-			//	String action = String.format("_localctx.%s = (ContextType)_localctx.getParent().getChild(_localctx.getParent().getChildCount() - 1);", element.getChild(0).getText());
-			//	adaptor.addChild(root, new ActionAST(adaptor.createToken(ANTLRParser.ACTION, action)));
-			//	return root;
-			//}
-			//else {
-			//	GrammarAST root = adaptor.nil();
-			//	Object factoredElement = adaptor.deleteChild(translatedChildElement, 0);
-			//	if (outerRule) {
-			//		adaptor.addChild(root, factoredElement);
-			//	}
-			//
-			//	adaptor.addChild(root, element);
-			//	adaptor.replaceChildren(element, 1, 1, translatedChildElement);
-			//	return root;
-			//}
-		}
-
-		case ANTLRParser.RULE_REF:
-		{
 			if (factoredRule.equals(element.getToken().getText())) {
 				if (!mode.includeFactoredAlts()) {
 					return null;
@@ -588,7 +573,7 @@ public class LeftFactoringRuleTransformer {
 
 				if (includeFactoredElement) {
 					// this element is already left factored
-					return element;
+					return labeledAST != null ? labeledAST : element;
 				}
 
 				GrammarAST root = adaptor.nil();
@@ -623,7 +608,7 @@ public class LeftFactoringRuleTransformer {
 				}
 
 				// just call the original rule (leave the element unchanged)
-				return element;
+				return labeledAST != null ? labeledAST : element;
 
 			case FULLY_FACTORED:
 				if (!mode.includeFactoredAlts()) {
@@ -660,13 +645,20 @@ public class LeftFactoringRuleTransformer {
 				adaptor.addChild(root, factoredRuleRef);
 			}
 
-			adaptor.addChild(root, element);
+			adaptor.addChild(root, labeledAST != null ? labeledAST : element);
 
 			return root;
 		}
 
 		case ANTLRParser.BLOCK:
 		{
+			if (labeledAST != null) {
+				RuleAST ruleAST = (RuleAST)labeledAST.getAncestor(ANTLRParser.RULE);
+				LOGGER.log(Level.WARNING, "Could not left factor ''{0}'' out of decision in rule ''{1}'': labeled rule references are not yet supported.",
+					new Object[] { factoredRule, ruleAST.getChild(0).getText() });
+				return null;
+			}
+
 			GrammarAST cloned = element.dupTree();
 			if (!translateLeftFactoredDecision(cloned, factoredRule, variant, mode, includeFactoredElement)) {
 				return null;
@@ -689,6 +681,13 @@ public class LeftFactoringRuleTransformer {
 
 		case ANTLRParser.POSITIVE_CLOSURE:
 		{
+			if (labeledAST != null) {
+				RuleAST ruleAST = (RuleAST)labeledAST.getAncestor(ANTLRParser.RULE);
+				LOGGER.log(Level.WARNING, "Could not left factor ''{0}'' out of decision in rule ''{1}'': labeled rule references are not yet supported.",
+					new Object[] { factoredRule, ruleAST.getChild(0).getText() });
+				return null;
+			}
+
 			/* a+
 			 *
 			 * =>
@@ -721,7 +720,7 @@ public class LeftFactoringRuleTransformer {
 		case ANTLRParser.OPTIONAL:
 			// not yet supported
 			if (mode.includeUnfactoredAlts()) {
-				return element;
+				return labeledAST != null ? labeledAST : element;
 			}
 
 			return null;
@@ -729,7 +728,7 @@ public class LeftFactoringRuleTransformer {
 		case ANTLRParser.DOT:
 			// ref to imported grammar, not yet supported
 			if (mode.includeUnfactoredAlts()) {
-				return element;
+				return labeledAST != null ? labeledAST : element;
 			}
 
 			return null;
@@ -737,7 +736,7 @@ public class LeftFactoringRuleTransformer {
 		case ANTLRParser.ACTION:
 		case ANTLRParser.SEMPRED:
 			if (mode.includeUnfactoredAlts()) {
-				return element;
+				return labeledAST != null ? labeledAST : element;
 			}
 
 			return null;
@@ -749,7 +748,7 @@ public class LeftFactoringRuleTransformer {
 		case ANTLRParser.SET:
 			// terminals
 			if (mode.includeUnfactoredAlts()) {
-				return element;
+				return labeledAST != null ? labeledAST : element;
 			}
 
 			return null;
@@ -757,7 +756,7 @@ public class LeftFactoringRuleTransformer {
 		case ANTLRParser.EPSILON:
 			// empty tree
 			if (mode.includeUnfactoredAlts()) {
-				return element;
+				return labeledAST != null ? labeledAST : element;
 			}
 
 			return null;
