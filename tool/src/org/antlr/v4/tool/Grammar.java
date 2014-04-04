@@ -57,6 +57,7 @@ import org.antlr.v4.runtime.misc.Nullable;
 import org.antlr.v4.runtime.misc.Tuple;
 import org.antlr.v4.runtime.misc.Tuple2;
 import org.antlr.v4.tool.ast.ActionAST;
+import org.antlr.v4.tool.ast.AltAST;
 import org.antlr.v4.tool.ast.GrammarAST;
 import org.antlr.v4.tool.ast.GrammarASTWithOptions;
 import org.antlr.v4.tool.ast.GrammarRootAST;
@@ -474,6 +475,27 @@ public class Grammar implements AttributeResolver {
 			return g.rules.get(ruleName);
 		}
 		return getRule(ruleName);
+	}
+
+	protected String getBaseContextName(String ruleName) {
+		Rule referencedRule = rules.get(ruleName);
+		if (referencedRule != null) {
+			ruleName = referencedRule.getBaseContext();
+		}
+
+		return ruleName;
+	}
+
+	public List<AltAST> getUnlabeledAlternatives(RuleAST ast) throws org.antlr.runtime.RecognitionException {
+		AltLabelVisitor visitor = new AltLabelVisitor(new org.antlr.runtime.tree.CommonTreeNodeStream(new GrammarASTAdaptor(), ast));
+		visitor.rule();
+		return visitor.getUnlabeledAlternatives();
+	}
+
+	public Map<String, List<Tuple2<Integer, AltAST>>> getLabeledAlternatives(RuleAST ast) throws org.antlr.runtime.RecognitionException {
+		AltLabelVisitor visitor = new AltLabelVisitor(new org.antlr.runtime.tree.CommonTreeNodeStream(new GrammarASTAdaptor(), ast));
+		visitor.rule();
+		return visitor.getLabeledAlternatives();
 	}
 
     /** Get list of all imports from all grammars in the delegate subtree of g.
@@ -995,5 +1017,40 @@ public class Grammar implements AttributeResolver {
 		char[] serializedAtn = ATNSerializer.getSerializedAsChars(atn, Arrays.asList(getRuleNames()));
 		ATN deserialized = new ATNDeserializer().deserialize(serializedAtn);
 		return new ParserInterpreter(fileName, Arrays.asList(getTokenNames()), Arrays.asList(getRuleNames()), deserialized, tokenStream);
+	}
+
+	protected static class AltLabelVisitor extends GrammarTreeVisitor {
+		private final Map<String, List<Tuple2<Integer, AltAST>>> labeledAlternatives =
+			new HashMap<String, List<Tuple2<Integer, AltAST>>>();
+		private final List<AltAST> unlabeledAlternatives =
+			new ArrayList<AltAST>();
+
+		public AltLabelVisitor(org.antlr.runtime.tree.TreeNodeStream input) {
+			super(input);
+		}
+
+		public Map<String, List<Tuple2<Integer, AltAST>>> getLabeledAlternatives() {
+			return labeledAlternatives;
+		}
+
+		public List<AltAST> getUnlabeledAlternatives() {
+			return unlabeledAlternatives;
+		}
+
+		@Override
+		public void discoverOuterAlt(AltAST alt) {
+			if (alt.altLabel != null) {
+				List<Tuple2<Integer, AltAST>> list = labeledAlternatives.get(alt.altLabel.getText());
+				if (list == null) {
+					list = new ArrayList<Tuple2<Integer, AltAST>>();
+					labeledAlternatives.put(alt.altLabel.getText(), list);
+				}
+
+				list.add(Tuple.create(currentOuterAltNumber, alt));
+			}
+			else {
+				unlabeledAlternatives.add(alt);
+			}
+		}
 	}
 }

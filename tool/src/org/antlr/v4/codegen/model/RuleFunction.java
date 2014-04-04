@@ -157,10 +157,8 @@ public class RuleFunction extends OutputModelObject {
 
 		for (RuleAST ast : contextASTs) {
 			try {
-				AltLabelVisitor visitor = new AltLabelVisitor(new CommonTreeNodeStream(new GrammarASTAdaptor(), ast));
-				visitor.rule();
-				unlabeledAlternatives.addAll(visitor.getUnlabeledAlternatives());
-				for (Map.Entry<String, List<Tuple2<Integer, AltAST>>> entry : visitor.getLabeledAlternatives().entrySet()) {
+				unlabeledAlternatives.addAll(rule.g.getUnlabeledAlternatives(ast));
+				for (Map.Entry<String, List<Tuple2<Integer, AltAST>>> entry : rule.g.getLabeledAlternatives(ast).entrySet()) {
 					List<AltAST> list = labeledAlternatives.get(entry.getKey());
 					if (list == null) {
 						list = new ArrayList<AltAST>();
@@ -198,12 +196,6 @@ public class RuleFunction extends OutputModelObject {
 				}
 			}
 		}
-	}
-
-	public static Map<String, List<Tuple2<Integer, AltAST>>> getAltLabels(RuleAST ast) throws RecognitionException {
-		AltLabelVisitor visitor = new AltLabelVisitor(new CommonTreeNodeStream(new GrammarASTAdaptor(), ast));
-		visitor.rule();
-		return visitor.getLabeledAlternatives();
 	}
 
 	public void fillNamedActions(OutputModelFactory factory, Rule r) {
@@ -334,41 +326,6 @@ public class RuleFunction extends OutputModelObject {
 			}
 		}
 		ruleCtx.addDecl(d); // stick in overall rule's ctx
-	}
-
-	protected static class AltLabelVisitor extends GrammarTreeVisitor {
-		private final Map<String, List<Tuple2<Integer, AltAST>>> labeledAlternatives =
-			new HashMap<String, List<Tuple2<Integer, AltAST>>>();
-		private final List<AltAST> unlabeledAlternatives =
-			new ArrayList<AltAST>();
-
-		public AltLabelVisitor(TreeNodeStream input) {
-			super(input);
-		}
-
-		public Map<String, List<Tuple2<Integer, AltAST>>> getLabeledAlternatives() {
-			return labeledAlternatives;
-		}
-
-		public List<AltAST> getUnlabeledAlternatives() {
-			return unlabeledAlternatives;
-		}
-
-		@Override
-		public void discoverOuterAlt(AltAST alt) {
-			if (alt.altLabel != null) {
-				List<Tuple2<Integer, AltAST>> list = labeledAlternatives.get(alt.altLabel.getText());
-				if (list == null) {
-					list = new ArrayList<Tuple2<Integer, AltAST>>();
-					labeledAlternatives.put(alt.altLabel.getText(), list);
-				}
-
-				list.add(Tuple.create(currentOuterAltNumber, alt));
-			}
-			else {
-				unlabeledAlternatives.add(alt);
-			}
-		}
 	}
 
 	protected static class ElementFrequenciesVisitor extends GrammarTreeVisitor {
