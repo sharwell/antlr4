@@ -61,6 +61,7 @@ import org.antlr.v4.tool.ast.GrammarAST;
 import org.antlr.v4.tool.ast.GrammarASTWithOptions;
 import org.antlr.v4.tool.ast.GrammarRootAST;
 import org.antlr.v4.tool.ast.PredAST;
+import org.antlr.v4.tool.ast.RuleAST;
 import org.antlr.v4.tool.ast.TerminalAST;
 
 import java.io.IOException;
@@ -88,6 +89,9 @@ public class Grammar implements AttributeResolver {
 	public static final Set<String> lexerOptions = parserOptions;
 
 	public static final Set<String> ruleOptions = new HashSet<String>();
+	static {
+		ruleOptions.add("baseContext");
+	}
 
 	public static final Set<String> ParserBlockOptions = new HashSet<String>();
 	static {
@@ -158,6 +162,23 @@ public class Grammar implements AttributeResolver {
 	 */
     public OrderedHashMap<String, Rule> rules = new OrderedHashMap<String, Rule>();
 	public List<Rule> indexToRule = new ArrayList<Rule>();
+
+	/**
+	 * This maps a context name &rarr; a collection of {@link RuleAST} nodes in
+	 * the original grammar. The union of accessors and labels identified by
+	 * these ASTs define the accessor methods and fields of the generated
+	 * context classes.
+	 *
+	 * <p>
+	 * The keys of this map match the result of {@link Rule#getBaseContext}.</p>
+	 * <p>
+	 * The values in this map are clones of the nodes in the original grammar
+	 * (provided by {@link GrammarAST#dupTree}) to ensure that grammar
+	 * transformations do not affect the values generated for the contexts. The
+	 * duplication is performed after nodes from imported grammars are merged
+	 * into the AST.</p>
+	 */
+	public final Map<String, List<RuleAST>> contextASTs = new HashMap<String, List<RuleAST>>();
 
 	int ruleNumber = 0; // used to get rule indexes (0..n-1)
 	int stringLiteralRuleNumber = 0; // used to invent rule names for 'keyword', ';', ... (0..n-1)

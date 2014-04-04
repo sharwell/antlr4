@@ -220,7 +220,7 @@ public abstract class Target {
 			return getTemplates().getInstanceOf("LexerRuleContext").render();
 		}
 
-		String baseName = r.name;
+		String baseName = r.getBaseContext();
 		int lfIndex = baseName.indexOf(ATNSimulator.RULE_VARIANT_DELIMITER);
 		if (lfIndex >= 0) {
 			baseName = baseName.substring(0, lfIndex);

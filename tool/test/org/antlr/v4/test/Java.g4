@@ -326,40 +326,48 @@ variableInitializer
 	;
 
 unannType
+options { baseContext=type; }
 	:	unannPrimitiveType
 	|	unannReferenceType
 	;
 
 unannPrimitiveType
+options { baseContext=primitiveType; }
 	:	numericType
 	|	'boolean'
 	;
 
 unannReferenceType
+options { baseContext=referenceType; }
 	:	unannClassOrInterfaceType
 	|	unannTypeVariable
 	|	unannArrayType
 	;
 
 unannClassOrInterfaceType
+options { baseContext=classOrInterfaceType; }
 	:	unannClassType
 	|	unannInterfaceType
 	;
 
 unannClassType
+options { baseContext=classType; }
 	:	Identifier typeArguments?
 	|	unannClassOrInterfaceType '.' annotation* Identifier typeArguments?
 	;
 
 unannInterfaceType
+options { baseContext=interfaceType; }
 	:	unannClassType
 	;
 
 unannTypeVariable
+options { baseContext=typeVariable; }
 	:	Identifier
 	;
 
 unannArrayType
+options { baseContext=arrayType; }
 	:	unannPrimitiveType dims
 	|	unannClassOrInterfaceType dims
 	|	unannTypeVariable dims
@@ -685,6 +693,7 @@ statement
 	;
 
 statementNoShortIf
+options { baseContext=statement; }
 	:	statementWithoutTrailingSubstatement
 	|	labeledStatementNoShortIf
 	|	ifThenElseStatementNoShortIf
@@ -716,6 +725,7 @@ labeledStatement
 	;
 
 labeledStatementNoShortIf
+options { baseContext=labeledStatement; }
 	:	Identifier ':' statementNoShortIf
 	;
 
@@ -734,6 +744,7 @@ statementExpression
 	;
 
 ifThenStatement
+options { baseContext=ifThenElseStatement; }
 	:	'if' '(' expression ')' statement
 	;
 
@@ -742,6 +753,7 @@ ifThenElseStatement
 	;
 
 ifThenElseStatementNoShortIf
+options { baseContext=ifThenElseStatement; }
 	:	'if' '(' expression ')' statementNoShortIf 'else' statementNoShortIf
 	;
 
@@ -781,6 +793,7 @@ whileStatement
 	;
 
 whileStatementNoShortIf
+options { baseContext=whileStatement; }
 	:	'while' '(' expression ')' statementNoShortIf
 	;
 
@@ -794,6 +807,7 @@ forStatement
 	;
 
 forStatementNoShortIf
+options { baseContext=forStatement; }
 	:	basicForStatementNoShortIf
 	|	enhancedForStatementNoShortIf
 	;
@@ -803,6 +817,7 @@ basicForStatement
 	;
 
 basicForStatementNoShortIf
+options { baseContext=basicForStatement; }
 	:	'for' '(' forInit? ';' expression? ';' forUpdate? ')' statementNoShortIf
 	;
 
@@ -824,6 +839,7 @@ enhancedForStatement
 	;
 
 enhancedForStatementNoShortIf
+options { baseContext=enhancedForStatement; }
 	:	'for' '(' variableModifier* unannType variableDeclaratorId ':' expression ')' statementNoShortIf
 	;
 

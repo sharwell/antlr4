@@ -319,7 +319,9 @@ case <index>: return <actions.(index)>;}; separator="\n">
 
 RuleFunction(currentRule,code,locals,ruleCtx,altLabelCtxs,namedActions,finallyAction,postamble,exceptions) ::= <<
 
+<if(ruleCtx)>
 <ruleCtx>
+<endif>
 <altLabelCtxs:{l | <altLabelCtxs.(l)>}; separator="\n">
 
 @RuleVersion(<namedActions.version; null="0">)
