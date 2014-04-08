@@ -105,11 +105,19 @@ public abstract class Transition {
 	public abstract TransitionType getSerializationType();
 
 	/**
-	 * Are we epsilon, action, sempred?
+	 * Determines if the transition is an "epsilon" transition.
+	 *
+	 * <p>The default implementation returns {@code false}.</p>
+	 *
+	 * @return {@code true} if traversing this transition in the ATN does not
+	 * consume an input symbol; otherwise, {@code false} if traversing this
+	 * transition consumes (matches) an input symbol.
 	 * 
 	 * @sharpen.property
 	 */
-	public boolean isEpsilon() { return false; }
+	public boolean isEpsilon() {
+		return false;
+	}
 
 	/**
 	 * @sharpen.property

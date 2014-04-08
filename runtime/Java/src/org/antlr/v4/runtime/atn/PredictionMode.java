@@ -562,7 +562,7 @@ public enum PredictionMode {
 	 * </pre>
 	 */
 	@NotNull
-	public static Collection<BitSet> getConflictingAltSubsets(Iterable<ATNConfig> configs) {
+	public static Collection<BitSet> getConflictingAltSubsets(@NotNull Iterable<ATNConfig> configs) {
 		AltAndContextMap configToAlts = new AltAndContextMap();
 		for (ATNConfig c : configs) {
 			BitSet alts = configToAlts.get(c);

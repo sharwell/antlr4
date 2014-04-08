@@ -32,6 +32,7 @@ package org.antlr.v4.runtime.atn;
 
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.FailedPredicateException;
 import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.Parser;
@@ -846,16 +847,126 @@ public class ParserATNSimulator extends ATNSimulator {
 		}
 	}
 
+	/**
+	 * This method is used to improve the localization of error messages by
+	 * choosing an alternative rather than throwing a
+	 * {@link NoViableAltException} in particular prediction scenarios where the
+	 * {@link #ERROR} state was reached during ATN simulation.
+	 *
+	 * <p>
+	 * The default implementation of this method uses the following
+	 * algorithm to identify an ATN configuration which successfully parsed the
+	 * decision entry rule. Choosing such an alternative ensures that the
+	 * {@link ParserRuleContext} returned by the calling rule will be complete
+	 * and valid, and the syntax error will be reported later at a more
+	 * localized location.</p>
+	 *
+	 * <ul>
+	 * <li>If no configuration in {@code configs} reached the end of the
+	 * decision rule, return {@link ATN#INVALID_ALT_NUMBER}.</li>
+	 * <li>If all configurations in {@code configs} which reached the end of the
+	 * decision rule predict the same alternative, return that alternative.</li>
+	 * <li>If the configurations in {@code configs} which reached the end of the
+	 * decision rule predict multiple alternatives (call this <em>S</em>),
+	 * choose an alternative in the following order.
+	 * <ol>
+	 * <li>Filter the configurations in {@code configs} to only those
+	 * configurations which remain viable after evaluating semantic predicates.
+	 * If the set of these filtered configurations which also reached the end of
+	 * the decision rule is not empty, return the minimum alternative
+	 * represented in this set.</li>
+	 * <li>Otherwise, choose the minimum alternative in <em>S</em>.</li>
+	 * </ol>
+	 * </li>
+	 * </ul>
+	 *
+	 * <p>
+	 * In some scenarios, the algorithm described above could predict an
+	 * alternative which will result in a {@link FailedPredicateException} in
+	 * parser. Specifically, this could occur if the <em>only</em> configuration
+	 * capable of successfully parsing to the end of the decision rule is
+	 * blocked by a semantic predicate. By choosing this alternative within
+	 * {@link #adaptivePredict} instead of throwing a
+	 * {@link NoViableAltException}, the resulting
+	 * {@link FailedPredicateException} in the parser will identify the specific
+	 * predicate which is preventing the parser from successfully parsing the
+	 * decision rule, which helps developers identify and correct logic errors
+	 * in semantic predicates.
+	 * </p>
+	 *
+	 * @param input The input {@link TokenStream}
+	 * @param startIndex The start index for the current prediction, which is
+	 * the input index where any semantic context in {@code configs} should be
+	 * evaluated
+	 * @param previous The ATN simulation state immediately before the
+	 * {@link #ERROR} state was reached
+	 *
+	 * @return The value to return from {@link #adaptivePredict}, or
+	 * {@link ATN#INVALID_ALT_NUMBER} if a suitable alternative was not
+	 * identified and {@link #adaptivePredict} should report an error instead.
+	 */
 	protected int handleNoViableAlt(@NotNull TokenStream input, int startIndex, @NotNull SimulatorState previous) {
 		if (previous.s0 != null) {
 			BitSet alts = new BitSet();
+			int maxAlt = 0;
 			for (ATNConfig config : previous.s0.configs) {
 				if (config.getReachesIntoOuterContext() || config.getState() instanceof RuleStopState) {
 					alts.set(config.getAlt());
+					maxAlt = Math.max(maxAlt, config.getAlt());
 				}
 			}
 
-			if (!alts.isEmpty()) {
+			switch (alts.cardinality()) {
+			case 0:
+				break;
+
+			case 1:
+				return alts.nextSetBit(0);
+
+			default:
+				if (!previous.s0.configs.hasSemanticContext()) {
+					// configs doesn't contain any predicates, so the predicate
+					// filtering code below would be pointless
+					return alts.nextSetBit(0);
+				}
+
+				/*
+				 * Try to find a configuration set that not only dipped into the outer
+				 * context, but also isn't eliminated by a predicate.
+				 */
+				ATNConfigSet filteredConfigs = new ATNConfigSet();
+				for (ATNConfig config : previous.s0.configs) {
+					if (config.getReachesIntoOuterContext() || config.getState() instanceof RuleStopState) {
+						filteredConfigs.add(config);
+					}
+				}
+
+				/* The following code blocks are adapted from predicateDFAState with
+				 * the following key changes.
+				 *
+				 *  1. The code operates on an ATNConfigSet rather than a DFAState.
+				 *  2. Predicates are collected for all alternatives represented in
+				 *     filteredConfigs, rather than restricting the evaluation to
+				 *     conflicting and/or unique configurations.
+				 */
+				SemanticContext[] altToPred = getPredsForAmbigAlts(alts, filteredConfigs, maxAlt);
+				if (altToPred != null) {
+					DFAState.PredPrediction[] predicates = getPredicatePredictions(alts, altToPred);
+					if (predicates != null) {
+						int stopIndex = input.index();
+						try {
+							input.seek(startIndex);
+							BitSet filteredAlts = evalSemanticContext(predicates, previous.outerContext, false);
+							if (!filteredAlts.isEmpty()) {
+								return filteredAlts.nextSetBit(0);
+							}
+						}
+						finally {
+							input.seek(stopIndex);
+						}
+					}
+				}
+
 				return alts.nextSetBit(0);
 			}
 		}
@@ -998,9 +1109,9 @@ public class ParserATNSimulator extends ATNSimulator {
 			 * The conditions assume that intermediate
 			 * contains all configurations relevant to the reach set, but this
 			 * condition is not true when one or more configurations have been
-			 * withheld in skippedStopStates.
+			 * withheld in skippedStopStates, or when the current symbol is EOF.
 			 */
-			if (optimize_unique_closure && skippedStopStates == null && reachIntermediate.getUniqueAlt() != ATN.INVALID_ALT_NUMBER) {
+			if (optimize_unique_closure && skippedStopStates == null && t != Token.EOF && reachIntermediate.getUniqueAlt() != ATN.INVALID_ALT_NUMBER) {
 				reachIntermediate.setOutermostConfigSet(reach.isOutermostConfigSet());
 				reach = reachIntermediate;
 				break;
@@ -1010,7 +1121,8 @@ public class ParserATNSimulator extends ATNSimulator {
 			 * operation on the intermediate set to compute its initial value.
 			 */
 			final boolean collectPredicates = false;
-			closure(reachIntermediate, reach, collectPredicates, hasMoreContext, contextCache);
+			boolean treatEofAsEpsilon = t == Token.EOF;
+			closure(reachIntermediate, reach, collectPredicates, hasMoreContext, contextCache, treatEofAsEpsilon);
 			stepIntoGlobal = reach.getDipsIntoOuterContext();
 
 			if (t == IntStream.EOF) {
@@ -1192,7 +1304,7 @@ public class ParserATNSimulator extends ATNSimulator {
 			}
 
 			final boolean collectPredicates = true;
-			closure(reachIntermediate, configs, collectPredicates, hasMoreContext, contextCache);
+			closure(reachIntermediate, configs, collectPredicates, hasMoreContext, contextCache, false);
 			boolean stepIntoGlobal = configs.getDipsIntoOuterContext();
 
 			DFAState next;
@@ -1516,7 +1628,8 @@ public class ParserATNSimulator extends ATNSimulator {
 						   @NotNull ATNConfigSet configs,
 						   boolean collectPredicates,
 						   boolean hasMoreContext,
-						   @Nullable PredictionContextCache contextCache)
+						   @Nullable PredictionContextCache contextCache,
+						   boolean treatEofAsEpsilon)
 	{
 		if (contextCache == null) {
 			contextCache = PredictionContextCache.UNCACHED;
@@ -1527,7 +1640,7 @@ public class ParserATNSimulator extends ATNSimulator {
 		while (currentConfigs.size() > 0) {
 			ATNConfigSet intermediate = new ATNConfigSet();
 			for (ATNConfig config : currentConfigs) {
-				closure(config, configs, intermediate, closureBusy, collectPredicates, hasMoreContext, contextCache, 0);
+				closure(config, configs, intermediate, closureBusy, collectPredicates, hasMoreContext, contextCache, 0, treatEofAsEpsilon);
 			}
 
 			currentConfigs = intermediate;
@@ -1541,7 +1654,8 @@ public class ParserATNSimulator extends ATNSimulator {
 						   boolean collectPredicates,
 						   boolean hasMoreContexts,
 						   @NotNull PredictionContextCache contextCache,
-						   int depth)
+						   int depth,
+						   boolean treatEofAsEpsilon)
 	{
 		if ( debug ) System.out.println("closure("+config.toString(parser,true)+")");
 
@@ -1559,7 +1673,7 @@ public class ParserATNSimulator extends ATNSimulator {
 					// Make sure we track that we are now out of context.
 					c.setOuterContextDepth(config.getOuterContextDepth());
 					assert depth > Integer.MIN_VALUE;
-					closure(c, configs, intermediate, closureBusy, collectPredicates, hasMoreContexts, contextCache, depth - 1);
+					closure(c, configs, intermediate, closureBusy, collectPredicates, hasMoreContexts, contextCache, depth - 1, treatEofAsEpsilon);
 				}
 
 				if (!hasEmpty || !hasMoreContexts) {
@@ -1588,6 +1702,8 @@ public class ParserATNSimulator extends ATNSimulator {
 		// optimization
 		if ( !p.onlyHasEpsilonTransitions() ) {
             configs.add(config, contextCache);
+			// make sure to not return here, because EOF transitions can act as
+			// both epsilon transitions and non-epsilon transitions.
             if ( debug ) System.out.println("added config "+configs);
         }
 
@@ -1595,13 +1711,18 @@ public class ParserATNSimulator extends ATNSimulator {
             Transition t = p.getOptimizedTransition(i);
             boolean continueCollecting =
 				!(t instanceof ActionTransition) && collectPredicates;
-            ATNConfig c = getEpsilonTarget(config, t, continueCollecting, depth == 0, contextCache);
+            ATNConfig c = getEpsilonTarget(config, t, continueCollecting, depth == 0, contextCache, treatEofAsEpsilon);
 			if ( c!=null ) {
 				if (t instanceof RuleTransition) {
 					if (intermediate != null && !collectPredicates) {
 						intermediate.add(c, contextCache);
 						continue;
 					}
+				}
+
+				if (!t.isEpsilon() && !closureBusy.add(c)) {
+					// avoid infinite recursion for EOF* and EOF+
+					continue;
 				}
 
 				int newDepth = depth;
@@ -1644,7 +1765,7 @@ public class ParserATNSimulator extends ATNSimulator {
 					}
 				}
 
-				closure(c, configs, intermediate, closureBusy, continueCollecting, hasMoreContexts, contextCache, newDepth);
+				closure(c, configs, intermediate, closureBusy, continueCollecting, hasMoreContexts, contextCache, newDepth, treatEofAsEpsilon);
 			}
 		}
 	}
@@ -1656,7 +1777,7 @@ public class ParserATNSimulator extends ATNSimulator {
 	}
 
 	@Nullable
-	protected ATNConfig getEpsilonTarget(@NotNull ATNConfig config, @NotNull Transition t, boolean collectPredicates, boolean inContext, PredictionContextCache contextCache) {
+	protected ATNConfig getEpsilonTarget(@NotNull ATNConfig config, @NotNull Transition t, boolean collectPredicates, boolean inContext, PredictionContextCache contextCache, boolean treatEofAsEpsilon) {
 		switch (t.getSerializationType()) {
 		case RULE:
 			return ruleTransition(config, (RuleTransition)t, contextCache);
@@ -1672,6 +1793,19 @@ public class ParserATNSimulator extends ATNSimulator {
 
 		case EPSILON:
 			return config.transform(t.target, false);
+
+		case ATOM:
+		case RANGE:
+		case SET:
+			// EOF transitions act like epsilon transitions after the first EOF
+			// transition is traversed
+			if (treatEofAsEpsilon) {
+				if (t.matches(Token.EOF, 0, 1)) {
+					return config.transform(t.target, false);
+				}
+			}
+
+			return null;
 
 		default:
 			return null;
