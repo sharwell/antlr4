@@ -407,13 +407,6 @@ public class RuleFunction extends OutputModelObject {
 
 		@Override
 		public void ruleRef(GrammarAST ref, ActionAST arg) {
-			if (ref instanceof GrammarASTWithOptions) {
-				GrammarASTWithOptions grammarASTWithOptions = (GrammarASTWithOptions)ref;
-				if (Boolean.parseBoolean(grammarASTWithOptions.getOptionString(LeftFactoringRuleTransformer.SUPPRESS_ACCESSOR))) {
-					return;
-				}
-			}
-
 			frequencies.peek().add(getLabelName(grammar, ref));
 		}
 

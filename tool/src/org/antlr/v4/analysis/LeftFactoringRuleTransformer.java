@@ -69,7 +69,6 @@ import java.util.logging.Logger;
  */
 public class LeftFactoringRuleTransformer {
 	public static final String LEFTFACTOR = "leftfactor";
-	public static final String SUPPRESS_ACCESSOR = "suppressAccessor";
 
 	private static final Logger LOGGER = Logger.getLogger(LeftFactoringRuleTransformer.class.getName());
 
@@ -632,7 +631,6 @@ public class LeftFactoringRuleTransformer {
 			if (includeFactoredElement) {
 				assert mode.includeFactoredAlts();
 				RuleRefAST factoredRuleRef = new RuleRefAST(adaptor.createToken(ANTLRParser.RULE_REF, factoredRule));
-				factoredRuleRef.setOption(SUPPRESS_ACCESSOR, adaptor.create(ANTLRParser.ID, "true"));
 				Rule factoredRuleDef = _g.getRule(factoredRule);
 				if (factoredRuleDef instanceof LeftRecursiveRule) {
 					factoredRuleRef.setOption(LeftRecursiveRuleTransformer.PRECEDENCE_OPTION_NAME, adaptor.create(ANTLRParser.INT, "0"));
