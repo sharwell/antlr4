@@ -113,7 +113,7 @@ public class SemanticPipeline {
 		}
 
 		// AUTO LEFT FACTORING
-		LeftFactoringRuleTransformer lftrans = new LeftFactoringRuleTransformer(g.ast, ruleCollector.rules, g);
+		LeftFactoringRuleTransformer lftrans = new LeftFactoringRuleTransformer(g);
 		lftrans.translateLeftFactoredRules();
 
 		// COLLECT SYMBOLS: RULES, ACTIONS, TERMINALS, ...

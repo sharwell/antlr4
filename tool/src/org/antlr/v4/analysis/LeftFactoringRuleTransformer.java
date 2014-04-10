@@ -72,20 +72,14 @@ public class LeftFactoringRuleTransformer {
 
 	private static final Logger LOGGER = Logger.getLogger(LeftFactoringRuleTransformer.class.getName());
 
-	public GrammarRootAST _ast;
-	public Map<String, Rule> _rules;
 	public Grammar _g;
-	public Tool _tool;
 
 	private final Map<Tuple2<String, String>, RuleVariants> _variants = new HashMap<Tuple2<String, String>, RuleVariants>();
 
 	private final GrammarASTAdaptor adaptor = new GrammarASTAdaptor();
 
-	public LeftFactoringRuleTransformer(@NotNull GrammarRootAST ast, @NotNull Map<String, Rule> rules, @NotNull Grammar g) {
-		this._ast = ast;
-		this._rules = rules;
+	public LeftFactoringRuleTransformer(@NotNull Grammar g) {
 		this._g = g;
-		this._tool = g.tool;
 	}
 
 	public void translateIndirectLeftRecursion() {
@@ -177,7 +171,8 @@ public class LeftFactoringRuleTransformer {
 		_g.ast.freshenParentAndChildIndexesDeeply();
 
 		// translate all rules marked for auto left factoring
-		for (Rule r : _rules.values()) {
+		List<Rule> rulesToProcess = new ArrayList<Rule>(_g.rules.values());
+		for (Rule r : rulesToProcess) {
 			if (Grammar.isTokenName(r.name)) {
 				continue;
 			}
