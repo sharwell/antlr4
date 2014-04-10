@@ -64,25 +64,66 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
+ * This class implements automatic left-factoring for rules in a grammar. This
+ * class supports indirect left recursion removal by allowing a rule to be
+ * left-factored out of itself.
  *
  * @author Sam Harwell
  */
 public class LeftFactoringRuleTransformer {
+	/**
+	 * This option can be added to a grammar rule to force a rule to be
+	 * automatically left-factored by this transformation.
+	 */
 	public static final String LEFTFACTOR = "leftfactor";
 
 	private static final Logger LOGGER = Logger.getLogger(LeftFactoringRuleTransformer.class.getName());
 
-	public Grammar _g;
+	/**
+	 * The {@link Grammar} to process.
+	 */
+	public final Grammar _g;
 
+	/**
+	 * This map tracks the variants which are created for rules in the grammar
+	 * throughout the left-factoring process. The keys of the map are pairs; the
+	 * first item is the name of the target rule of the left-factoring
+	 * operation, and the second item is the name of the rule which is being
+	 * left-factored out of the target rule. The values of the map are a
+	 * {@link RuleVariants} instance indicating the net result of the specific
+	 * left-factoring operation described by the key.
+	 */
 	private final Map<Tuple2<String, String>, RuleVariants> _variants = new HashMap<Tuple2<String, String>, RuleVariants>();
 
+	/**
+	 * This {@link GrammarASTAdaptor} is used for manipulating the AST for rules
+	 * in the grammar during the left-factoring process.
+	 */
 	private final GrammarASTAdaptor adaptor = new GrammarASTAdaptor();
 
 	public LeftFactoringRuleTransformer(@NotNull Grammar g) {
 		this._g = g;
 	}
 
-	public void translateIndirectLeftRecursion() {
+	/**
+	 * Perform automatic left-factoring on all rules in the grammar that require
+	 * it. This method first removes all remaining left-recursion from the
+	 * grammar, following by left-factoring rules that were explicitly marked
+	 * with the {@code @leftfactor{}} named action.
+	 */
+	public void translateLeftFactoredRules() {
+		// first translate to remove left recursion
+		translateIndirectLeftRecursion();
+		// second translate to handle the @leftfactor named action
+		translateExplicitLeftFactoredRules();
+	}
+
+	/**
+	 * Remove left-recursion from the grammar by iteratively removing
+	 * left-recursion from individual rules until no more left-recursive rules
+	 * exist in the grammar.
+	 */
+	protected void translateIndirectLeftRecursion() {
 		boolean changed;
 		do {
 			changed = false;
@@ -97,7 +138,16 @@ public class LeftFactoringRuleTransformer {
 		} while (changed);
 	}
 
-	public boolean translateIndirectLeftRecursion(Rule r) {
+	/**
+	 * Remove left-recursion from rule {@code r} by applying the left-factoring
+	 * transformation to itself.
+	 *
+	 * @param r The rule to remove left recursion from.
+	 * @return {@code true} if changes were made to {@code r}; otherwise,
+	 * {@code false} if no changes were required (i.e. rule {@code r} was not
+	 * directly or indirectly left-recursive).
+	 */
+	protected boolean translateIndirectLeftRecursion(Rule r) {
 		if (_variants.containsKey(Tuple.create(r.name, r.name))) {
 			return false;
 		}
@@ -165,11 +215,7 @@ public class LeftFactoringRuleTransformer {
 		}
 	}
 
-	public void translateLeftFactoredRules() {
-		// first translate to remove left recursion
-		translateIndirectLeftRecursion();
-		_g.ast.freshenParentAndChildIndexesDeeply();
-
+	protected void translateExplicitLeftFactoredRules() {
 		// translate all rules marked for auto left factoring
 		List<Rule> rulesToProcess = new ArrayList<Rule>(_g.rules.values());
 		for (Rule r : rulesToProcess) {
