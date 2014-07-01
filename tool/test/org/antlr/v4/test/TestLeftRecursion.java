@@ -109,6 +109,23 @@ public class TestLeftRecursion extends BaseTest {
 		assertEquals(expecting, found);
 	}
 
+	@Test
+	public void testSemPredFailOption() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"s @after {System.out.println($ctx.toStringTree(this));} : a ;\n" +
+			"a : a ID {false}?<fail='custom message'>\n" +
+			"  | ID" +
+			"  ;\n" +
+			"ID : 'a'..'z'+ ;\n" +
+			"WS : (' '|'\\n') -> skip ;\n";
+		String found = execParser("T.g4", grammar, "TParser", "TLexer",
+								  "s", "x y z", debug);
+		String expecting = "(s (a (a x) y z))\n";
+		assertEquals(expecting, found);
+		assertEquals("line 1:4 rule a custom message\n", stderrDuringParse);
+	}
+
 	@Test public void testTernaryExpr() throws Exception {
 		String grammar =
 			"grammar T;\n" +
@@ -135,6 +152,36 @@ public class TestLeftRecursion extends BaseTest {
 		runTests(grammar, tests, "s");
 	}
 
+	/**
+	 * This is a regression test for antlr/antlr4#542 "First alternative cannot
+	 * be right-associative".
+	 * https://github.com/antlr/antlr4/issues/542
+	 */
+	@Test public void testTernaryExprExplicitAssociativity() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"s @after {System.out.println($ctx.toStringTree(this));} : e EOF ;\n" + // must indicate EOF can follow or 'a<EOF>' won't match
+			"e :<assoc=right> e '*' e" +
+			"  |<assoc=right> e '+' e" +
+			"  |<assoc=right> e '?' e ':' e" +
+			"  |<assoc=right> e '=' e" +
+			"  | ID" +
+			"  ;\n" +
+			"ID : 'a'..'z'+ ;\n" +
+			"WS : (' '|'\\n') -> skip ;\n";
+		String[] tests = {
+			"a",			"(s (e a) <EOF>)",
+			"a+b",			"(s (e (e a) + (e b)) <EOF>)",
+			"a*b",			"(s (e (e a) * (e b)) <EOF>)",
+			"a?b:c",		"(s (e (e a) ? (e b) : (e c)) <EOF>)",
+			"a=b=c",		"(s (e (e a) = (e (e b) = (e c))) <EOF>)",
+			"a?b+c:d",		"(s (e (e a) ? (e (e b) + (e c)) : (e d)) <EOF>)",
+			"a?b=c:d",		"(s (e (e a) ? (e (e b) = (e c)) : (e d)) <EOF>)",
+			"a? b?c:d : e",	"(s (e (e a) ? (e (e b) ? (e c) : (e d)) : (e e)) <EOF>)",
+			"a?b: c?d:e",	"(s (e (e a) ? (e b) : (e (e c) ? (e d) : (e e))) <EOF>)",
+		};
+		runTests(grammar, tests, "s");
+	}
 
 	@Test public void testExpressions() throws Exception {
 		String grammar =
@@ -551,12 +598,60 @@ public class TestLeftRecursion extends BaseTest {
 		assertEquals("(prog (statement (letterA a)) (statement (letterA a)) <EOF>)\n", found);
 	}
 
+	/**
+	 * This is a regression test for antlr/antlr4#625 "Duplicate action breaks
+	 * operator precedence"
+	 * https://github.com/antlr/antlr4/issues/625
+	 */
+	@Test public void testMultipleActions() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"s @after {System.out.println($ctx.toStringTree(this));} : e ;\n" +
+			"e : a=e op=('*'|'/') b=e  {}{}\n" +
+			"  | INT {}{}\n" +
+			"  | '(' x=e ')' {}{}\n" +
+			"  ;\n" +
+			"INT : '0'..'9'+ ;\n" +
+			"WS : (' '|'\\n') -> skip ;\n";
+		String[] tests = {
+			"4",		"(s (e 4))",
+		"1*2/3",		"(s (e (e (e 1) * (e 2)) / (e 3)))",
+		"(1/2)*3",		"(s (e (e ( (e (e 1) / (e 2)) )) * (e 3)))",
+		};
+		runTests(grammar, tests, "s");
+	}
+
+	/**
+	 * This is a regression test for antlr/antlr4#625 "Duplicate action breaks
+	 * operator precedence"
+	 * https://github.com/antlr/antlr4/issues/625
+	 */
+	@Test public void testMultipleActionsPredicatesOptions() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"s @after {System.out.println($ctx.toStringTree(this));} : e ;\n" +
+			"e : a=e op=('*'|'/') b=e  {}{true}?\n" +
+			"  | a=e op=('+'|'-') b=e  {}<p=3>{true}?<fail='Message'>\n" +
+			"  | INT {}{}\n" +
+			"  | '(' x=e ')' {}{}\n" +
+			"  ;\n" +
+			"INT : '0'..'9'+ ;\n" +
+			"WS : (' '|'\\n') -> skip ;\n";
+		String[] tests = {
+			"4",		"(s (e 4))",
+		"1*2/3",		"(s (e (e (e 1) * (e 2)) / (e 3)))",
+		"(1/2)*3",		"(s (e (e ( (e (e 1) / (e 2)) )) * (e 3)))",
+		};
+		runTests(grammar, tests, "s");
+	}
+
 	public void runTests(String grammar, String[] tests, String startRule) {
 		rawGenerateAndBuildRecognizer("T.g4", grammar, "TParser", "TLexer");
 		writeRecognizerAndCompile("TParser",
 								  "TLexer",
 								  startRule,
-								  debug);
+								  debug,
+								  false);
 
 		for (int i=0; i<tests.length; i+=2) {
 			String test = tests[i];

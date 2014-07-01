@@ -1,7 +1,7 @@
 /*
  * [The "BSD license"]
- *  Copyright (c) 2012 Terence Parr
- *  Copyright (c) 2012 Sam Harwell
+ *  Copyright (c) 2014 Terence Parr
+ *  Copyright (c) 2014 Sam Harwell
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,8 +28,38 @@
  *  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.antlr.v4.codegen.model.chunk;
+package org.antlr.v4.runtime.atn;
 
-public class DefaultParserSuperClass extends ActionChunk {
-	public DefaultParserSuperClass() { super(null); }
+import org.antlr.v4.runtime.TokenStream;
+import org.antlr.v4.runtime.misc.NotNull;
+import org.antlr.v4.runtime.misc.Nullable;
+
+/**
+ * This class represents profiling event information for tracking the lookahead
+ * depth required in order to make a prediction.
+ *
+ * @since 4.3
+ */
+public class LookaheadEventInfo extends DecisionEventInfo {
+	/**
+	 * Constructs a new instance of the {@link LookaheadEventInfo} class with
+	 * the specified detailed lookahead information.
+	 *
+	 * @param decision The decision number
+	 * @param state The final simulator state containing the necessary
+	 * information to determine the result of a prediction, or {@code null} if
+	 * the final state is not available
+	 * @param input The input token stream
+	 * @param startIndex The start index for the current prediction
+	 * @param stopIndex The index at which the prediction was finally made
+	 * @param fullCtx {@code true} if the current lookahead is part of an LL
+	 * prediction; otherwise, {@code false} if the current lookahead is part of
+	 * an SLL prediction
+	 */
+	public LookaheadEventInfo(int decision, @Nullable SimulatorState state,
+							  @NotNull TokenStream input, int startIndex, int stopIndex,
+							  boolean fullCtx)
+	{
+		super(decision, state, input, startIndex, stopIndex, fullCtx);
+	}
 }

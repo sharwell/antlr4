@@ -1,7 +1,7 @@
 /*
  * [The "BSD license"]
- *  Copyright (c) 2012 Terence Parr
- *  Copyright (c) 2012 Sam Harwell
+ *  Copyright (c) 2014 Terence Parr
+ *  Copyright (c) 2014 Sam Harwell
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,43 +28,41 @@
  *  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.antlr.v4.codegen.model;
+package org.antlr.v4.runtime.atn;
 
-import org.antlr.v4.codegen.OutputModelFactory;
-import org.antlr.v4.runtime.atn.StarLoopEntryState;
-import org.antlr.v4.runtime.misc.IntervalSet;
-import org.antlr.v4.tool.ast.GrammarAST;
+import org.antlr.v4.runtime.ANTLRErrorListener;
+import org.antlr.v4.runtime.Parser;
+import org.antlr.v4.runtime.RecognitionException;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.TokenStream;
+import org.antlr.v4.runtime.misc.NotNull;
 
-import java.util.Arrays;
-import java.util.List;
-
-/** */
-public class LL1StarBlock extends LL1Loop {
-	/** Token names for each alt 0..n-1 */
-	public List<String[]> altLook;
-	public String loopLabel;
-	public String[] exitLook;
-
-	public LL1StarBlock(OutputModelFactory factory, GrammarAST starRootAST, List<CodeBlockForAlt> alts) {
-		super(factory, starRootAST, alts);
-
-		StarLoopEntryState star = (StarLoopEntryState)starRootAST.atnState;
-		blockStartStateNumber =
-			starRootAST.atnState.transition(0).target.stateNumber;
-
-		loopBackStateNumber = star.loopBackState.stateNumber;
-
-		this.decision = star.decision;
-
-		/** Lookahead for each alt 1..n */
-		IntervalSet[] altLookSets = factory.getGrammar().decisionLOOK.get(decision);
-		IntervalSet lastLook = altLookSets[altLookSets.length-1];
-		// remove last (exit) alt
-		altLookSets = Arrays.copyOf(altLookSets, altLookSets.length - 1);
-		altLook = getAltLookaheadAsStringLists(altLookSets);
-		loopLabel = factory.getGenerator().getTarget().getLoopLabel(starRootAST);
-
-		this.exitLook =
-			factory.getGenerator().getTarget().getTokenTypesAsTargetLabels(factory.getGrammar(), lastLook.toArray());
+/**
+ * This class represents profiling event information for a syntax error
+ * identified during prediction. Syntax errors occur when the prediction
+ * algorithm is unable to identify an alternative which would lead to a
+ * successful parse.
+ *
+ * @see Parser#notifyErrorListeners(Token, String, RecognitionException)
+ * @see ANTLRErrorListener#syntaxError
+ *
+ * @since 4.3
+ */
+public class ErrorInfo extends DecisionEventInfo {
+	/**
+	 * Constructs a new instance of the {@link ErrorInfo} class with the
+	 * specified detailed syntax error information.
+	 *
+	 * @param decision The decision number
+	 * @param state The final simulator state reached during prediction
+	 * prior to reaching the {@link ATNSimulator#ERROR} state
+	 * @param input The input token stream
+	 * @param startIndex The start index for the current prediction
+	 * @param stopIndex The index at which the syntax error was identified
+	 */
+	public ErrorInfo(int decision, @NotNull SimulatorState state, @NotNull TokenStream input,
+					 int startIndex, int stopIndex)
+	{
+		super(decision, state, input, startIndex, stopIndex, state.useContext);
 	}
 }

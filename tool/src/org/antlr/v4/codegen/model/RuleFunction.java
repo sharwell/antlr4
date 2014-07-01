@@ -36,6 +36,7 @@ import org.antlr.runtime.tree.TreeNodeStream;
 import org.antlr.v4.analysis.LeftFactoringRuleTransformer;
 import org.antlr.v4.codegen.OutputModelFactory;
 import org.antlr.v4.codegen.model.decl.AltLabelStructDecl;
+import org.antlr.v4.codegen.model.decl.AttributeDecl;
 import org.antlr.v4.codegen.model.decl.ContextRuleGetterDecl;
 import org.antlr.v4.codegen.model.decl.ContextRuleListGetterDecl;
 import org.antlr.v4.codegen.model.decl.ContextRuleListIndexedGetterDecl;
@@ -86,7 +87,6 @@ public class RuleFunction extends OutputModelObject {
 	public Collection<String> tokenLabels;
 	public ATNState startState;
 	public int index;
-	public Collection<Attribute> args = null;
 	public Rule rule;
 	public AltLabelStructDecl[] altToContext;
 	public boolean hasLookaheadBlock;
@@ -94,6 +94,7 @@ public class RuleFunction extends OutputModelObject {
 
 	@ModelElement public List<SrcOp> code;
 	@ModelElement public OrderedHashSet<Decl> locals; // TODO: move into ctx?
+	@ModelElement public Collection<AttributeDecl> args = null;
 	@ModelElement public StructDecl ruleCtx;
 	@ModelElement public Map<String,AltLabelStructDecl> altLabelCtxs;
 	@ModelElement public Map<String,Action> namedActions;
@@ -123,9 +124,15 @@ public class RuleFunction extends OutputModelObject {
 			addContextGetters(factory, r);
 
 			if ( r.args!=null ) {
-				ruleCtx.addDecls(r.args.attributes.values());
-				args = r.args.attributes.values();
-				ruleCtx.ctorAttrs = args;
+				Collection<Attribute> decls = r.args.attributes.values();
+				if ( decls.size()>0 ) {
+					args = new ArrayList<AttributeDecl>();
+					ruleCtx.addDecls(decls);
+					for (Attribute a : decls) {
+						args.add(new AttributeDecl(factory, a));
+					}
+					ruleCtx.ctorAttrs = args;
+				}
 			}
 			if ( r.retvals!=null ) {
 				ruleCtx.addDecls(r.retvals.attributes.values());
@@ -263,8 +270,9 @@ public class RuleFunction extends OutputModelObject {
 			Rule rref = factory.getGrammar().getRule(t.getText());
 			String ctxName = factory.getGenerator().getTarget()
 							 .getRuleFunctionContextStructName(rref);
-			if ( needList ) {
-				decls.add( new ContextRuleListGetterDecl(factory, refLabelName, ctxName) );
+			if ( needList) {
+				if(factory.getGenerator().getTarget().supportsOverloadedMethods())
+					decls.add( new ContextRuleListGetterDecl(factory, refLabelName, ctxName) );
 				decls.add( new ContextRuleListIndexedGetterDecl(factory, refLabelName, ctxName) );
 			}
 			else {
@@ -273,7 +281,8 @@ public class RuleFunction extends OutputModelObject {
 		}
 		else {
 			if ( needList ) {
-				decls.add( new ContextTokenListGetterDecl(factory, refLabelName) );
+				if(factory.getGenerator().getTarget().supportsOverloadedMethods())
+					decls.add( new ContextTokenListGetterDecl(factory, refLabelName) );
 				decls.add( new ContextTokenListIndexedGetterDecl(factory, refLabelName) );
 			}
 			else {

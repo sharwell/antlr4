@@ -658,10 +658,11 @@ alternative
     paraphrases.pop();
     Grammar.setNodeOptions($tree, $o.tree);
 }
-    :	o=elementOptions?
-        e+=element+                     -> ^(ALT<AltAST> elementOptions? $e+)
-    |                                   -> ^(ALT<AltAST> EPSILON) // empty alt
-    ;
+	:	o=elementOptions?
+		(	e+=element+                     -> ^(ALT<AltAST> elementOptions? $e+)
+		|                                   -> ^(ALT<AltAST> elementOptions? EPSILON) // empty alt
+		)
+	;
 
 element
 @init {
@@ -818,8 +819,8 @@ blockSet
     ;
 
 setElement
-	:	TOKEN_REF<TerminalAST>
-	|	STRING_LITERAL<TerminalAST>
+	:	TOKEN_REF<TerminalAST>^ elementOptions?
+	|	STRING_LITERAL<TerminalAST>^ elementOptions?
 	|	range
     |   LEXER_CHAR_SET
 	;
