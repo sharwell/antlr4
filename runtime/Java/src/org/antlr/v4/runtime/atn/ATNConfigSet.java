@@ -137,6 +137,8 @@ public class ATNConfigSet implements Set<ATNConfig> {
 	/**
 	 * Get the set of all alternatives represented by configurations in this
 	 * set.
+	 *
+	 * @sharpen.property RepresentedAlternatives
 	 */
 	@NotNull
 	public BitSet getRepresentedAlternatives() {
@@ -203,6 +205,9 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		this.outermostConfigSet = outermostConfigSet;
 	}
 
+	/**
+	 * @sharpen.property States
+	 */
 	public Set<ATNState> getStates() {
 		Set<ATNState> states = new HashSet<ATNState>();
 		for (ATNConfig c : this.configs) {

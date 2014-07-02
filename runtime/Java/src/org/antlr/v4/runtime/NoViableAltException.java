@@ -75,10 +75,16 @@ public class NoViableAltException extends RecognitionException {
 		this.setOffendingToken(offendingToken);
 	}
 
+	/**
+	 * @sharpen.property StartToken
+	 */
 	public Token getStartToken() {
 		return startToken;
 	}
 
+	/**
+	 * @sharpen.property DeadEndConfigs
+	 */
 	@Nullable
 	public ATNConfigSet getDeadEndConfigs() {
 		return deadEndConfigs;

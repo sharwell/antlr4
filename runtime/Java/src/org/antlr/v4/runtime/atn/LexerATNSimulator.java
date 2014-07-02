@@ -727,18 +727,30 @@ public class LexerATNSimulator extends ATNSimulator {
 		return input.getText(Interval.of(startIndex, input.index()-1));
 	}
 
+	/**
+	 * @sharpen.property Line
+	 */
 	public int getLine() {
 		return line;
 	}
 
+	/**
+	 * @sharpen.property Line
+	 */
 	public void setLine(int line) {
 		this.line = line;
 	}
 
+	/**
+	 * @sharpen.property Column
+	 */
 	public int getCharPositionInLine() {
 		return charPositionInLine;
 	}
 
+	/**
+	 * @sharpen.property Column
+	 */
 	public void setCharPositionInLine(int charPositionInLine) {
 		this.charPositionInLine = charPositionInLine;
 	}

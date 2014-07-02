@@ -181,6 +181,9 @@ public abstract class ATNState {
 		return String.valueOf(stateNumber);
 	}
 
+	/**
+	 * @sharpen.property Transitions
+	 */
 	public Transition[] getTransitions() {
 		return transitions.toArray(new Transition[transitions.size()]);
 	}

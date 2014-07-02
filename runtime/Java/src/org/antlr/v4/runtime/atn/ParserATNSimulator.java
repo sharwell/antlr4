@@ -2407,6 +2407,8 @@ public class ParserATNSimulator extends ATNSimulator {
 
 	/**
 	 * @since 4.3
+	 *
+	 * @sharpen.property Parser
 	 */
 	public Parser getParser() {
 		return parser;

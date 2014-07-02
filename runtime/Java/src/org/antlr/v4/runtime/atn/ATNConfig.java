@@ -204,6 +204,9 @@ public class ATNConfig {
 		return SemanticContext.NONE;
 	}
 
+	/**
+	 * @sharpen.property PassedThroughNonGreedyDecision
+	 */
 	public boolean hasPassedThroughNonGreedyDecision() {
 		return false;
 	}

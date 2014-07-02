@@ -217,6 +217,9 @@ public class TokenStreamRewriter {
 		lastRewriteTokenIndexes = new HashMap<String, Integer>();
 	}
 
+	/**
+	 * @sharpen.property TokenStream
+	 */
 	public final TokenStream getTokenStream() {
 		return tokens;
 	}
@@ -338,6 +341,9 @@ public class TokenStreamRewriter {
 		replace(programName,from,to,null);
 	}
 
+	/**
+	 * @sharpen.property LastRewriteTokenIndex
+	 */
 	public int getLastRewriteTokenIndex() {
 		return getLastRewriteTokenIndex(DEFAULT_PROGRAM_NAME);
 	}

@@ -79,6 +79,8 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	 * Get a map from token names to token types.
 	 *
 	 * <p>Used for XPath and tree pattern compilation.</p>
+	 *
+	 * @sharpen.property TokenTypeMap
 	 */
 	@NotNull
 	public Map<String, Integer> getTokenTypeMap() {
@@ -104,6 +106,8 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	 * Get a map from rule names to rule indexes.
 	 *
 	 * <p>Used for XPath and tree pattern compilation.</p>
+	 *
+	 * @sharpen.property RuleIndexMap
 	 */
 	@NotNull
 	public Map<String, Integer> getRuleIndexMap() {
@@ -178,6 +182,8 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	 *  for each decision in recognizer in a ParseInfo object.
 	 *
 	 * @since 4.3
+	 *
+	 * @sharpen.property ParseInfo
 	 */
 	public ParseInfo getParseInfo() {
 		return null;
@@ -250,11 +256,17 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 		_listeners.clear();
 	}
 
+	/**
+	 * @sharpen.property ErrorListeners
+	 */
 	@NotNull
 	public List<? extends ANTLRErrorListener<? super Symbol>> getErrorListeners() {
 		return new ArrayList<ANTLRErrorListener<? super Symbol>>(_listeners);
 	}
 
+	/**
+	 * @sharpen.property ErrorListenerDispatch
+	 */
 	public ANTLRErrorListener<? super Symbol> getErrorListenerDispatch() {
 		return new ProxyErrorListener<Symbol>(getErrorListeners());
 	}

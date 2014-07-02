@@ -218,6 +218,8 @@ public abstract class SemanticContext {
 		 * operator.
 		 *
 		 * @since 4.3
+		 *
+		 * @sharpen.property Operands
 		 */
 		@NotNull
 		public abstract Collection<SemanticContext> getOperands();

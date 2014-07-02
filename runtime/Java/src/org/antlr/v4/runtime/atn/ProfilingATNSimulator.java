@@ -263,6 +263,9 @@ public class ProfilingATNSimulator extends ParserATNSimulator {
 
 	// ---------------------------------------------------------------------
 
+	/**
+	 * @sharpen.property DecisionInfo
+	 */
 	public DecisionInfo[] getDecisionInfo() {
 		return decisions;
 	}

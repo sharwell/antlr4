@@ -63,6 +63,9 @@ public final class PredicateTransition extends AbstractPredicateTransition {
 		return false;
 	}
 
+	/**
+	 * @sharpen.property Predicate
+	 */
     public SemanticContext.Predicate getPredicate() {
    		return new SemanticContext.Predicate(ruleIndex, predIndex, isCtxDependent);
    	}

@@ -98,6 +98,8 @@ public class RuleContext implements RuleNode {
 
 	/** A context is empty if there is no invoking state; meaning nobody call
 	 *  current context.
+	 *
+	 * @sharpen.property IsEmpty
 	 */
 	public boolean isEmpty() {
 		return invokingState == -1;
@@ -140,6 +142,9 @@ public class RuleContext implements RuleNode {
 		return builder.toString();
 	}
 
+	/**
+	 * @sharpen.property RuleIndex
+	 */
 	public int getRuleIndex() { return -1; }
 
 	@Override

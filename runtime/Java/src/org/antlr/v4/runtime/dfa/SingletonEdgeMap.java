@@ -59,10 +59,16 @@ public class SingletonEdgeMap<T> extends AbstractEdgeMap<T> {
 		}
 	}
 
+	/**
+	 * @sharpen.property Key
+	 */
 	public int getKey() {
 		return key;
 	}
 
+	/**
+	 * @sharpen.property Value
+	 */
 	public T getValue() {
 		return value;
 	}

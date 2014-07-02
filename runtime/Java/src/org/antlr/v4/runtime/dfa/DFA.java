@@ -89,6 +89,8 @@ public class DFA {
 	 * @return {@code true} if this is a precedence DFA; otherwise,
 	 * {@code false}.
 	 * @see Parser#getPrecedence()
+	 *
+	 * @sharpen.property IsPrecedenceDfa
 	 */
 	public final boolean isPrecedenceDfa() {
 		return precedenceDfa;
@@ -169,6 +171,8 @@ public class DFA {
 	 *
 	 * @param precedenceDfa {@code true} if this is a precedence DFA; otherwise,
 	 * {@code false}
+	 *
+	 * @sharpen.property IsPrecedenceDfa
 	 */
 	public final synchronized void setPrecedenceDfa(boolean precedenceDfa) {
 		if (this.precedenceDfa != precedenceDfa) {
@@ -191,6 +195,9 @@ public class DFA {
 		}
 	}
 
+	/**
+	 * @sharpen.property IsEmpty
+	 */
 	public boolean isEmpty() {
 		if (isPrecedenceDfa()) {
 			return s0.get().getEdgeMap().isEmpty() && s0full.get().getEdgeMap().isEmpty();
@@ -199,6 +206,9 @@ public class DFA {
 		return s0.get() == null && s0full.get() == null;
 	}
 
+	/**
+	 * @sharpen.property IsContextSensitive
+	 */
 	public boolean isContextSensitive() {
 		if (isPrecedenceDfa()) {
 			return !s0full.get().getEdgeMap().isEmpty();

@@ -70,14 +70,23 @@ public class SparseEdgeMap<T> extends AbstractEdgeMap<T> {
 		values.addAll(map.values);
 	}
 
+	/**
+	 * @sharpen.property Keys
+	 */
 	public int[] getKeys() {
 		return keys;
 	}
 
+	/**
+	 * @sharpen.property Values
+	 */
 	public List<T> getValues() {
 		return values;
 	}
 
+	/**
+	 * @sharpen.property MaxSparseSize
+	 */
 	public int getMaxSparseSize() {
 		return keys.length;
 	}

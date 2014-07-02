@@ -174,6 +174,9 @@ public class ParserInterpreter extends Parser {
 		super.enterRecursionRule(localctx, state, ruleIndex, precedence);
 	}
 
+	/**
+	 * @sharpen.property AtnState
+	 */
 	protected ATNState getATNState() {
 		return atn.states.get(getState());
 	}

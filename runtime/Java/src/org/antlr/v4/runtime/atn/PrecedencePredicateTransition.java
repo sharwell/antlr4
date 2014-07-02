@@ -59,6 +59,9 @@ public final class PrecedencePredicateTransition extends AbstractPredicateTransi
 		return false;
 	}
 
+	/**
+	 * @sharpen.property Predicate
+	 */
 	public SemanticContext.PrecedencePredicate getPredicate() {
 		return new SemanticContext.PrecedencePredicate(precedence);
 	}

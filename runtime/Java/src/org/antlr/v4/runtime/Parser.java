@@ -457,6 +457,9 @@ public abstract class Parser extends Recognizer<Token, ParserATNSimulator> {
 		return _syntaxErrors;
 	}
 
+	/**
+	 * @sharpen.property TokenFactory
+	 */
 	public TokenFactory getTokenFactory() {
 		return _input.getTokenSource().getTokenFactory();
 	}
@@ -691,6 +694,8 @@ public abstract class Parser extends Recognizer<Token, ParserATNSimulator> {
 	 *
 	 * @return The precedence level for the top-most precedence rule, or -1 if
 	 * the parser context is not nested within a precedence rule.
+	 *
+	 * @sharpen.property Precedence
 	 */
 	public final int getPrecedence() {
 		if (_precedenceStack.isEmpty()) {
@@ -780,6 +785,9 @@ public abstract class Parser extends Recognizer<Token, ParserATNSimulator> {
 		return _ctx;
 	}
 
+	/**
+	 * @sharpen.property Context
+	 */
 	public void setContext(ParserRuleContext ctx) {
 		_ctx = ctx;
 	}
@@ -940,6 +948,7 @@ public abstract class Parser extends Recognizer<Token, ParserATNSimulator> {
 
 	/**
 	 * @since 4.3
+	 * @sharpen.property Profile
 	 */
 	public void setProfile(boolean profile) {
 		ParserATNSimulator interp = getInterpreter();
