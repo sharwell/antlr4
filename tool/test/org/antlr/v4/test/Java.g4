@@ -143,7 +143,7 @@ typeParameterModifier
 
 typeBound
 	:	'extends' typeVariable
-	|	'extends' classOrInterfaceType additionalBound?
+	|	'extends' classOrInterfaceType additionalBound*
 	;
 
 additionalBound
