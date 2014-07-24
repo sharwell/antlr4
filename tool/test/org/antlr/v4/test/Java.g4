@@ -143,7 +143,7 @@ typeParameterModifier
 
 typeBound
 	:	'extends' typeVariable
-	|	'extends' classOrInterfaceType additionalBound?
+	|	'extends' classOrInterfaceType additionalBound*
 	;
 
 additionalBound
@@ -980,10 +980,6 @@ primaryNoNewArray_lf_primary
 	|	methodReference_lf_primary
 	;
 
-primaryNoNewArray_lf_primary_lf_arrayAccess_lf_primary
-	:
-	;
-
 primaryNoNewArray_lf_primary_lfno_arrayAccess_lf_primary
 	:	classInstanceCreationExpression_lf_primary
 	|	fieldAccess_lf_primary
@@ -1004,10 +1000,6 @@ primaryNoNewArray_lfno_primary
 	|	arrayAccess_lfno_primary
 	|	methodInvocation_lfno_primary
 	|	methodReference_lfno_primary
-	;
-
-primaryNoNewArray_lfno_primary_lf_arrayAccess_lfno_primary
-	:
 	;
 
 primaryNoNewArray_lfno_primary_lfno_arrayAccess_lfno_primary
@@ -1068,9 +1060,8 @@ arrayAccess
 	;
 
 arrayAccess_lf_primary
-	:	(	primaryNoNewArray_lf_primary_lfno_arrayAccess_lf_primary '[' expression ']'
-		)
-		(	primaryNoNewArray_lf_primary_lf_arrayAccess_lf_primary '[' expression ']'
+	:	primaryNoNewArray_lf_primary_lfno_arrayAccess_lf_primary '[' expression ']'
+		(	'[' expression ']'
 		)*
 	;
 
@@ -1078,7 +1069,7 @@ arrayAccess_lfno_primary
 	:	(	expressionName '[' expression ']'
 		|	primaryNoNewArray_lfno_primary_lfno_arrayAccess_lfno_primary '[' expression ']'
 		)
-		(	primaryNoNewArray_lfno_primary_lf_arrayAccess_lfno_primary '[' expression ']'
+		(	'[' expression ']'
 		)*
 	;
 
