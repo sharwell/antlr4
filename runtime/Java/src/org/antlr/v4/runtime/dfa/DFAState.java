@@ -159,18 +159,30 @@ public class DFAState {
 		}
 	}
 
+	/**
+	 * @sharpen.property AcceptStateInfo
+	 */
 	public final AcceptStateInfo getAcceptStateInfo() {
 		return acceptStateInfo;
 	}
 
+	/**
+	 * @sharpen.property AcceptStateInfo
+	 */
 	public final void setAcceptState(AcceptStateInfo acceptStateInfo) {
 		this.acceptStateInfo = acceptStateInfo;
 	}
 
+	/**
+	 * @sharpen.property IsAcceptState
+	 */
 	public final boolean isAcceptState() {
 		return acceptStateInfo != null;
 	}
 
+	/**
+	 * @sharpen.property Prediction
+	 */
 	public final int getPrediction() {
 		if (acceptStateInfo == null) {
 			return ATN.INVALID_ALT_NUMBER;
@@ -179,6 +191,9 @@ public class DFAState {
 		return acceptStateInfo.getPrediction();
 	}
 
+	/**
+	 * @sharpen.property LexerActionExecutor
+	 */
 	public final LexerActionExecutor getLexerActionExecutor() {
 		if (acceptStateInfo == null) {
 			return null;

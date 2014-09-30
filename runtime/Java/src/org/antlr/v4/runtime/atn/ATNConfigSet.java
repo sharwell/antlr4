@@ -532,10 +532,16 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		hasSemanticContext = true;
 	}
 
+	/**
+	 * @sharpen.property ConflictInformation
+	 */
 	public ConflictInfo getConflictInfo() {
 		return conflictInfo;
 	}
 
+	/**
+	 * @sharpen.property ConflictInformation
+	 */
 	public void setConflictInfo(ConflictInfo conflictInfo) {
 		ensureWritable();
 		this.conflictInfo = conflictInfo;
@@ -552,6 +558,9 @@ public class ATNConfigSet implements Set<ATNConfig> {
 		return conflictInfo.getConflictedAlts();
 	}
 
+	/**
+	 * @sharpen.property
+	 */
 	public boolean isExactConflict() {
 		if (conflictInfo == null) {
 			return false;

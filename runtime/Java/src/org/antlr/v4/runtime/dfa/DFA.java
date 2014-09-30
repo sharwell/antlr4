@@ -111,19 +111,31 @@ public class DFA {
 		this.emptyContextEdgeMap = new EmptyEdgeMap<DFAState>(-1, atnStartState.atn.states.size() - 1);
 	}
 
+	/**
+	 * @sharpen.property MinDfaEdge
+	 */
 	public final int getMinDfaEdge() {
 		return minDfaEdge;
 	}
 
+	/**
+	 * @sharpen.property MaxDfaEdge
+	 */
 	public final int getMaxDfaEdge() {
 		return maxDfaEdge;
 	}
 
+	/**
+	 * @sharpen.property EmptyEdgeMap
+	 */
 	@NotNull
 	public EmptyEdgeMap<DFAState> getEmptyEdgeMap() {
 		return emptyEdgeMap;
 	}
 
+	/**
+	 * @sharpen.property EmptyContextEdgeMap
+	 */
 	@NotNull
 	public EmptyEdgeMap<DFAState> getEmptyContextEdgeMap() {
 		return emptyContextEdgeMap;

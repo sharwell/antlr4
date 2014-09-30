@@ -309,10 +309,16 @@ public class ATNConfig {
 		return false;
 	}
 
+	/**
+	 * @sharpen.property PrecedenceFilterSuppressed
+	 */
 	public final boolean isPrecedenceFilterSuppressed() {
 		return (altAndOuterContextDepth & SUPPRESS_PRECEDENCE_FILTER) != 0;
 	}
 
+	/**
+	 * @sharpen.property PrecedenceFilterSuppressed
+	 */
 	public final void setPrecedenceFilterSuppressed(boolean value) {
 		if (value) {
 			this.altAndOuterContextDepth |= SUPPRESS_PRECEDENCE_FILTER;

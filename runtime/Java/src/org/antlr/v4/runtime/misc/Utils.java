@@ -145,11 +145,17 @@ public class Utils {
 		}
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	@NotNull
 	public static char[] readFile(@NotNull String fileName) throws IOException {
 		return readFile(fileName, null);
 	}
 
+	/**
+	 * @sharpen.ignore
+	 */
 	@NotNull
 	public static char[] readFile(@NotNull String fileName, @Nullable String encoding) throws IOException {
 		File f = new File(fileName);

@@ -84,6 +84,8 @@ public abstract class Recognizer<Symbol, ATNInterpreter extends ATNSimulator> {
 	 *
 	 * @return A {@link Vocabulary} instance providing information about the
 	 * vocabulary used by the grammar.
+	 *
+	 * @sharpen.property Vocabulary
 	 */
 	@NotNull
 	@SuppressWarnings("deprecation")

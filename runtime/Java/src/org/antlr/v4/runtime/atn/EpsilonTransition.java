@@ -52,6 +52,8 @@ public final class EpsilonTransition extends Transition {
 	 * @see ATNConfig#isPrecedenceFilterSuppressed()
 	 * @see ParserATNSimulator#applyPrecedenceFilter(ATNConfigSet)
 	 * @since 4.4.1
+	 *
+	 * @sharpen.property
 	 */
 	public int outermostPrecedenceReturn() {
 		return outermostPrecedenceReturn;
