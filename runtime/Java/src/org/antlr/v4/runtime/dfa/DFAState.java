@@ -78,23 +78,14 @@ public class DFAState {
 
 	/** {@code edges.get(symbol)} points to target of symbol.
 	 */
-	@Nullable
-	private AbstractEdgeMap<DFAState> edges;
-	private final int minSymbol;
-	private final int maxSymbol;
+	@NotNull
+	private volatile AbstractEdgeMap<DFAState> edges;
 
-	public boolean isAcceptState = false;
-
-	/** if accept state, what ttype do we match or alt do we predict?
-	 *  This is set to {@link ATN#INVALID_ALT_NUMBER} when {@link #predicates}{@code !=null}.
-	 */
-	public int prediction;
-
-	public LexerActionExecutor lexerActionExecutor;
+	private AcceptStateInfo acceptStateInfo;
 
 	/** These keys for these edges are the top level element of the global context. */
-	@Nullable
-	private AbstractEdgeMap<DFAState> contextEdges;
+	@NotNull
+	private volatile AbstractEdgeMap<DFAState> contextEdges;
 
 	/** Symbols in this set require a global context transition before matching an input symbol. */
 	@Nullable
@@ -121,59 +112,86 @@ public class DFAState {
 		}
 	}
 
-	public DFAState(@NotNull ATNConfigSet configs, int minSymbol, int maxSymbol) {
+	public DFAState(@NotNull DFA dfa, @NotNull ATNConfigSet configs) {
+		this(dfa.getEmptyEdgeMap(), dfa.getEmptyContextEdgeMap(), configs);
+	}
+
+	public DFAState(@NotNull EmptyEdgeMap<DFAState> emptyEdges, @NotNull EmptyEdgeMap<DFAState> emptyContextEdges, @NotNull ATNConfigSet configs) {
 		this.configs = configs;
-		this.minSymbol = minSymbol;
-		this.maxSymbol = maxSymbol;
+		this.edges = emptyEdges;
+		this.contextEdges = emptyContextEdges;
 	}
 
 	/**
 	 * @sharpen.property
 	 */
 	public final boolean isContextSensitive() {
-		return contextEdges != null;
+		return contextSymbols != null;
 	}
 
 	public final boolean isContextSymbol(int symbol) {
-		if (!isContextSensitive() || symbol < minSymbol) {
+		if (!isContextSensitive() || symbol < edges.minIndex) {
 			return false;
 		}
 
-		return contextSymbols.get(symbol - minSymbol);
+		return contextSymbols.get(symbol - edges.minIndex);
 	}
 
 	public final void setContextSymbol(int symbol) {
 		assert isContextSensitive();
-		if (symbol < minSymbol) {
+		if (symbol < edges.minIndex) {
 			return;
 		}
 
-		contextSymbols.set(symbol - minSymbol);
+		contextSymbols.set(symbol - edges.minIndex);
 	}
 
-	public synchronized void setContextSensitive(ATN atn) {
+	public void setContextSensitive(ATN atn) {
 		assert !configs.isOutermostConfigSet();
 		if (isContextSensitive()) {
 			return;
 		}
 
-		contextSymbols = new BitSet();
-		contextEdges = new SingletonEdgeMap<DFAState>(-1, atn.states.size() - 1);
+		synchronized (this) {
+			if (contextSymbols == null) {
+				contextSymbols = new BitSet();
+			}
+		}
 	}
 
-	public synchronized DFAState getTarget(int symbol) {
-		if (edges == null) {
+	public final AcceptStateInfo getAcceptStateInfo() {
+		return acceptStateInfo;
+	}
+
+	public final void setAcceptState(AcceptStateInfo acceptStateInfo) {
+		this.acceptStateInfo = acceptStateInfo;
+	}
+
+	public final boolean isAcceptState() {
+		return acceptStateInfo != null;
+	}
+
+	public final int getPrediction() {
+		if (acceptStateInfo == null) {
+			return ATN.INVALID_ALT_NUMBER;
+		}
+
+		return acceptStateInfo.getPrediction();
+	}
+
+	public final LexerActionExecutor getLexerActionExecutor() {
+		if (acceptStateInfo == null) {
 			return null;
 		}
 
+		return acceptStateInfo.getLexerActionExecutor();
+	}
+
+	public DFAState getTarget(int symbol) {
 		return edges.get(symbol);
 	}
 
-	public synchronized void setTarget(int symbol, DFAState target) {
-		if (edges == null) {
-			edges = new SingletonEdgeMap<DFAState>(minSymbol, maxSymbol);
-		}
-
+	public void setTarget(int symbol, DFAState target) {
 		edges = edges.put(symbol, target);
 	}
 
@@ -181,18 +199,10 @@ public class DFAState {
 	 * @sharpen.property EdgeMap
 	 */
 	public Map<Integer, DFAState> getEdgeMap() {
-		if (edges == null) {
-			return Collections.emptyMap();
-		}
-
 		return edges.toMap();
 	}
 
 	public synchronized DFAState getContextTarget(int invokingState) {
-		if (contextEdges == null) {
-			return null;
-		}
-
 		if (invokingState == PredictionContext.EMPTY_FULL_STATE_KEY) {
 			invokingState = -1;
 		}
@@ -201,7 +211,7 @@ public class DFAState {
 	}
 
 	public synchronized void setContextTarget(int invokingState, DFAState target) {
-		if (contextEdges == null) {
+		if (!isContextSensitive()) {
 			throw new IllegalStateException("The state is not context sensitive.");
 		}
 
@@ -216,10 +226,6 @@ public class DFAState {
 	 * @sharpen.property ContextEdgeMap
 	 */
 	public Map<Integer, DFAState> getContextEdgeMap() {
-		if (contextEdges == null) {
-			return Collections.emptyMap();
-		}
-
 		Map<Integer, DFAState> map = contextEdges.toMap();
 		if (map.containsKey(-1)) {
 			if (map.size() == 1) {
@@ -279,13 +285,13 @@ public class DFAState {
 	public String toString() {
         StringBuilder buf = new StringBuilder();
         buf.append(stateNumber).append(":").append(configs);
-        if ( isAcceptState ) {
+        if ( isAcceptState() ) {
             buf.append("=>");
             if ( predicates!=null ) {
                 buf.append(Arrays.toString(predicates));
             }
             else {
-                buf.append(prediction);
+                buf.append(getPrediction());
             }
         }
 		return buf.toString();

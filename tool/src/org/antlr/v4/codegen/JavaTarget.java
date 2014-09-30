@@ -45,6 +45,11 @@ import java.util.Set;
  */
 public class JavaTarget extends Target {
 
+	/**
+	 * The Java target can cache the code generation templates.
+	 */
+	private static final ThreadLocal<STGroup> targetTemplates = new ThreadLocal<STGroup>();
+
 	protected static final String[] javaKeywords = {
 		"abstract", "assert", "boolean", "break", "byte", "case", "catch",
 		"char", "class", "const", "continue", "default", "do", "double", "else",
@@ -79,15 +84,17 @@ public class JavaTarget extends Target {
 
 	/**
 	 * {@inheritDoc}
-	 * <p/>
+	 * <p>
 	 * For Java, this is the translation {@code 'a\n"'} &rarr; {@code "a\n\""}.
 	 * Expect single quotes around the incoming literal. Just flip the quotes
 	 * and replace double quotes with {@code \"}.
-	 * <p/>
+	 * </p>
+	 * <p>
 	 * Note that we have decided to allow people to use '\"' without penalty, so
 	 * we must build the target string in a loop as {@link String#replace}
 	 * cannot handle both {@code \"} and {@code "} without a lot of messing
 	 * around.
+	 * </p>
 	 */
 	@Override
 	public String getTargetStringLiteralFromANTLRStringLiteral(
@@ -189,8 +196,13 @@ public class JavaTarget extends Target {
 
 	@Override
 	protected STGroup loadTemplates() {
-		STGroup result = super.loadTemplates();
-		result.registerRenderer(String.class, new JavaStringRenderer(), true);
+		STGroup result = targetTemplates.get();
+		if (result == null) {
+			result = super.loadTemplates();
+			result.registerRenderer(String.class, new JavaStringRenderer(), true);
+			targetTemplates.set(result);
+		}
+
 		return result;
 	}
 

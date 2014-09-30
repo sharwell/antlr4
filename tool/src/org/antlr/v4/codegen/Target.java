@@ -36,6 +36,7 @@ import org.antlr.v4.misc.Utils;
 import org.antlr.v4.parse.ANTLRParser;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.atn.ATNSimulator;
+import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.tool.ErrorType;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.Rule;
@@ -88,6 +89,7 @@ public abstract class Target {
 		return language;
 	}
 
+	@NotNull
 	public STGroup getTemplates() {
 		if (templates == null) {
 			templates = loadTemplates();
@@ -221,12 +223,7 @@ public abstract class Target {
 			return getTemplates().getInstanceOf("LexerRuleContext").render();
 		}
 
-		String baseName = r.name;
-		int lfIndex = baseName.indexOf(ATNSimulator.RULE_VARIANT_DELIMITER);
-		if (lfIndex >= 0) {
-			baseName = baseName.substring(0, lfIndex);
-		}
-
+		String baseName = r.getBaseContext();
 		return Utils.capitalize(baseName)+getTemplates().getInstanceOf("RuleContextNameSuffix").render();
 	}
 
@@ -245,7 +242,7 @@ public abstract class Target {
 			return getTemplates().getInstanceOf("LexerRuleContext").render();
 		}
 
-		String baseName = function.variantOf != null ? function.variantOf : function.name;
+		String baseName = r.getBaseContext();
 		return Utils.capitalize(baseName)+getTemplates().getInstanceOf("RuleContextNameSuffix").render();
 	}
 
@@ -306,33 +303,33 @@ public abstract class Target {
 
 	public boolean grammarSymbolCausesIssueInGeneratedCode(GrammarAST idNode) {
 		switch (idNode.getParent().getType()) {
-		case ANTLRParser.ASSIGN:
-			switch (idNode.getParent().getParent().getType()) {
+			case ANTLRParser.ASSIGN:
+				switch (idNode.getParent().getParent().getType()) {
+					case ANTLRParser.ELEMENT_OPTIONS:
+					case ANTLRParser.OPTIONS:
+						return false;
+
+					default:
+						break;
+				}
+
+				break;
+
+			case ANTLRParser.AT:
 			case ANTLRParser.ELEMENT_OPTIONS:
-			case ANTLRParser.OPTIONS:
 				return false;
+
+			case ANTLRParser.LEXER_ACTION_CALL:
+				if (idNode.getChildIndex() == 0) {
+					// first child is the command name which is part of the ANTLR language
+					return false;
+				}
+
+				// arguments to the command should be checked
+				break;
 
 			default:
 				break;
-			}
-
-			break;
-
-		case ANTLRParser.AT:
-		case ANTLRParser.ELEMENT_OPTIONS:
-			return false;
-
-		case ANTLRParser.LEXER_ACTION_CALL:
-			if (idNode.getChildIndex() == 0) {
-				// first child is the command name which is part of the ANTLR language
-				return false;
-			}
-
-			// arguments to the command should be checked
-			break;
-
-		default:
-			break;
 		}
 
 		return visibleGrammarSymbolCausesIssueInGeneratedCode(idNode);
@@ -340,6 +337,7 @@ public abstract class Target {
 
 	protected abstract boolean visibleGrammarSymbolCausesIssueInGeneratedCode(GrammarAST idNode);
 
+	@NotNull
 	protected STGroup loadTemplates() {
 		STGroup result = new STGroupFile(CodeGenerator.TEMPLATE_ROOT+"/"+getLanguage()+"/"+getLanguage()+STGroup.GROUP_FILE_EXTENSION);
 		result.registerRenderer(Integer.class, new NumberRenderer());

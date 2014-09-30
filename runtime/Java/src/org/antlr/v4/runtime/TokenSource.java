@@ -99,6 +99,7 @@ public interface TokenSource {
 	 * 
 	 * @sharpen.property SourceName
 	 */
+	@NotNull
 	public String getSourceName();
 
 	/**

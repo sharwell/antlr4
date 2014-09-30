@@ -30,6 +30,7 @@
 
 package org.antlr.v4.test;
 
+import org.antlr.v4.Tool;
 import org.antlr.v4.tool.ErrorType;
 import org.junit.Test;
 
@@ -325,7 +326,7 @@ public class TestToolSyntaxErrors extends BaseTest {
 			grammar,
 			expected
 		};
-			
+
 		super.testErrors(pair, true);
 	}
 
@@ -373,7 +374,7 @@ public class TestToolSyntaxErrors extends BaseTest {
 			"WS   : [ \\r\\t\\n]+ -> skip ;\n";
 		String expected =
 			"";
-		
+
 		String[] pair = new String[] { grammar, expected };
 		super.testErrors(pair, true);
 	}
@@ -521,6 +522,257 @@ public class TestToolSyntaxErrors extends BaseTest {
 			expected
 		};
 
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a regression test for antlr/antlr4#649 "unknown target causes
+	 * null ptr exception.".
+	 * https://github.com/antlr/antlr4/issues/649
+	 */
+	@Test public void testInvalidLanguageInGrammar() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"options { language=Foo; }\n" +
+			"start : 'T' EOF;\n";
+		String expected =
+			"error(" + ErrorType.CANNOT_CREATE_TARGET_GENERATOR.code + "):  ANTLR cannot generate 'org.antlr.v4.codegen.FooTarget' code as of version " + Tool.VERSION + "\n";
+
+		String[] pair = new String[] {
+			grammar,
+			expected
+		};
+
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a regression test for antlr/antlr4#649 "unknown target causes
+	 * null ptr exception.".
+	 * https://github.com/antlr/antlr4/issues/649
+	 */
+	@Test public void testInvalidLanguageInGrammarWithLexerCommand() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"options { language=Foo; }\n" +
+			"start : 'T' EOF;\n" +
+			"Something : 'something' -> channel(CUSTOM);";
+		String expected =
+			"error(" + ErrorType.CANNOT_CREATE_TARGET_GENERATOR.code + "):  ANTLR cannot generate 'org.antlr.v4.codegen.FooTarget' code as of version " + Tool.VERSION + "\n" +
+			"warning(" + ErrorType.UNKNOWN_LEXER_CONSTANT.code + "): T.g4:4:35: rule 'Something' contains a lexer command with an unrecognized constant value; lexer interpreters may produce incorrect output\n";
+
+		String[] pair = new String[] {
+			grammar,
+			expected
+		};
+
+		super.testErrors(pair, true);
+	}
+
+	@Test public void testChannelDefinitionInLexer() throws Exception {
+		String grammar =
+			"lexer grammar T;\n" +
+			"\n" +
+			"channels {\n" +
+			"	WHITESPACE_CHANNEL,\n" +
+			"	COMMENT_CHANNEL\n" +
+			"}\n" +
+			"\n" +
+			"COMMENT:    '//' ~[\\n]+ -> channel(COMMENT_CHANNEL);\n" +
+			"WHITESPACE: [ \\t]+      -> channel(WHITESPACE_CHANNEL);\n";
+
+		String expected = "";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	@Test public void testChannelDefinitionInParser() throws Exception {
+		String grammar =
+			"parser grammar T;\n" +
+			"\n" +
+			"channels {\n" +
+			"	WHITESPACE_CHANNEL,\n" +
+			"	COMMENT_CHANNEL\n" +
+			"}\n" +
+			"\n" +
+			"start : EOF;\n";
+
+		String expected =
+			"error(" + ErrorType.CHANNELS_BLOCK_IN_PARSER_GRAMMAR.code + "): T.g4:3:0: custom channels are not supported in parser grammars\n";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	@Test public void testChannelDefinitionInCombined() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"\n" +
+			"channels {\n" +
+			"	WHITESPACE_CHANNEL,\n" +
+			"	COMMENT_CHANNEL\n" +
+			"}\n" +
+			"\n" +
+			"start : EOF;\n" +
+			"\n" +
+			"COMMENT:    '//' ~[\\n]+ -> channel(COMMENT_CHANNEL);\n" +
+			"WHITESPACE: [ \\t]+      -> channel(WHITESPACE_CHANNEL);\n";
+
+		String expected =
+			"warning(" + ErrorType.UNKNOWN_LEXER_CONSTANT.code + "): T.g4:10:35: rule 'COMMENT' contains a lexer command with an unrecognized constant value; lexer interpreters may produce incorrect output\n" +
+			"warning(" + ErrorType.UNKNOWN_LEXER_CONSTANT.code + "): T.g4:11:35: rule 'WHITESPACE' contains a lexer command with an unrecognized constant value; lexer interpreters may produce incorrect output\n" +
+			"error(" + ErrorType.CHANNELS_BLOCK_IN_COMBINED_GRAMMAR.code + "): T.g4:3:0: custom channels are not supported in combined grammars\n";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a regression test for antlr/antlr4#497 now that antlr/antlr4#309
+	 * is resolved.
+	 * https://github.com/antlr/antlr4/issues/497
+	 * https://github.com/antlr/antlr4/issues/309
+	 */
+	@Test public void testChannelDefinitions() throws Exception {
+		String grammar =
+			"lexer grammar T;\n" +
+			"\n" +
+			"channels {\n" +
+			"	WHITESPACE_CHANNEL,\n" +
+			"	COMMENT_CHANNEL\n" +
+			"}\n" +
+			"\n" +
+			"COMMENT:    '//' ~[\\n]+ -> channel(COMMENT_CHANNEL);\n" +
+			"WHITESPACE: [ \\t]+      -> channel(WHITESPACE_CHANNEL);\n" +
+			"NEWLINE:    '\\r'? '\\n' -> channel(NEWLINE_CHANNEL);";
+
+		// WHITESPACE_CHANNEL and COMMENT_CHANNEL are defined, but NEWLINE_CHANNEL is not
+		String expected =
+			"warning(" + ErrorType.UNKNOWN_LEXER_CONSTANT.code + "): T.g4:10:34: rule 'NEWLINE' contains a lexer command with an unrecognized constant value; lexer interpreters may produce incorrect output\n";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a test for {@link ErrorType#RULE_WITH_TOO_FEW_ALT_LABELS_GROUP}.
+	 *
+	 * <p>
+	 * This test verifies that
+	 * {@link ErrorType#RULE_WITH_TOO_FEW_ALT_LABELS_GROUP} is reported if one
+	 * of the rules in a base context group uses alt labels, and another does
+	 * not.</p>
+	 */
+	@Test public void testRuleWithTooFewAltLabelsGroup() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"tokens { Foo1, Foo2 }\n" +
+			"start options { baseContext = start2; }\n" +
+			"  : Foo1 EOF\n" +
+			"  ;\n" +
+			"start2\n" +
+			"  : Foo1 EOF # labeled\n" +
+			"  | Foo2 EOF # labeled\n" +
+			"  ;\n";
+
+		String expected =
+			"error(" + ErrorType.RULE_WITH_TOO_FEW_ALT_LABELS_GROUP.code + "): T.g4:3:0: rule 'start': must label all alternatives in rules with the same base context, or none\n";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a test for {@link ErrorType#RULE_WITH_TOO_FEW_ALT_LABELS_GROUP}.
+	 *
+	 * <p>
+	 * This test verifies that
+	 * {@link ErrorType#RULE_WITH_TOO_FEW_ALT_LABELS_GROUP} is disabled if
+	 * {@link ErrorType#RULE_WITH_TOO_FEW_ALT_LABELS} is reported for one of the
+	 * rules with the base context of the group.</p>
+	 */
+	@Test public void testRuleWithTooFewAltLabelsGroupSuppressed() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"tokens { Foo1, Foo2 }\n" +
+			"start options { baseContext = start2; }\n" +
+			"  : Foo1 EOF\n" +
+			"  ;\n" +
+			"start2\n" +
+			"  : Foo1 EOF\n" +
+			"  | Foo2 EOF # labeled\n" +
+			"  ;\n";
+
+		String expected =
+			"error(" + ErrorType.RULE_WITH_TOO_FEW_ALT_LABELS.code + "): T.g4:6:0: rule 'start2': must label all alternatives or none\n";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a test for {@link ErrorType#BASE_CONTEXT_MUST_BE_RULE_NAME}.
+	 */
+	@Test public void testBaseContextMustBeRuleName() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"tokens { Foo1, Foo2 }\n" +
+			"start options { baseContext = start2; }\n" +
+			"  : Foo1 EOF\n" +
+			"  ;\n";
+
+		String expected =
+			"error(" + ErrorType.BASE_CONTEXT_MUST_BE_RULE_NAME.code + "): T.g4:3:30: rule 'start': baseContext option value must reference a rule\n";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a test for {@link ErrorType#BASE_CONTEXT_CANNOT_BE_TRANSITIVE}.
+	 */
+	@Test public void testBaseContextCannotBeTransitive() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"tokens { Foo1, Foo2 }\n" +
+			"start options { baseContext = start2; }\n" +
+			"  : Foo1 EOF\n" +
+			"  ;\n" +
+			"start2 options { baseContext = start3; }\n" +
+			"  : Foo1 EOF\n" +
+			"  ;\n" +
+			"start3\n" +
+			"  : Foo1 EOF\n" +
+			"  ;\n";
+
+		String expected =
+			"error(" + ErrorType.BASE_CONTEXT_CANNOT_BE_TRANSITIVE.code + "): T.g4:3:30: rule 'start': base context must reference a rule that does not specify a base context\n";
+
+		String[] pair = { grammar, expected };
+		super.testErrors(pair, true);
+	}
+
+	/**
+	 * This is a test for {@link ErrorType#BASE_CONTEXT_CANNOT_BE_TRANSITIVE}.
+	 *
+	 * <p>
+	 * This test verifies that
+	 * {@link ErrorType#BASE_CONTEXT_CANNOT_BE_TRANSITIVE} applies when the base
+	 * context option is explicitly set to the enclosing rule.</p>
+	 */
+	@Test public void testBaseContextCannotBeTransitive_Self() throws Exception {
+		String grammar =
+			"grammar T;\n" +
+			"tokens { Foo1 }\n" +
+			"start options { baseContext = start; }\n" +
+			"  : Foo1 EOF\n" +
+			"  ;\n";
+
+		String expected =
+			"error(" + ErrorType.BASE_CONTEXT_CANNOT_BE_TRANSITIVE.code + "): T.g4:3:30: rule 'start': base context must reference a rule that does not specify a base context\n";
+
+		String[] pair = { grammar, expected };
 		super.testErrors(pair, true);
 	}
 }

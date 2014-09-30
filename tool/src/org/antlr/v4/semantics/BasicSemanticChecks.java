@@ -54,6 +54,7 @@ import org.stringtemplate.v4.misc.MultiMap;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /** No side-effects except for setting options into the appropriate node.
  *  TODO:  make the side effects into a separate pass this
@@ -130,6 +131,9 @@ public class BasicSemanticChecks extends GrammarTreeVisitor {
 		this.ruleCollector = ruleCollector;
 		this.errMgr = g.tool.errMgr;
 	}
+
+	@Override
+	public ErrorManager getErrorManager() { return errMgr; }
 
 	public void process() {	visitGrammar(g.ast); }
 
@@ -255,6 +259,21 @@ public class BasicSemanticChecks extends GrammarTreeVisitor {
 	}
 
 	@Override
+	protected void enterChannelsSpec(GrammarAST tree) {
+		if (g.isParser()) {
+			g.tool.errMgr.grammarError(ErrorType.CHANNELS_BLOCK_IN_PARSER_GRAMMAR, g.fileName, tree.token);
+		}
+		else if (g.isCombined()) {
+			g.tool.errMgr.grammarError(ErrorType.CHANNELS_BLOCK_IN_COMBINED_GRAMMAR, g.fileName, tree.token);
+		}
+	}
+
+	@Override
+	public void defineChannel(GrammarAST ID) {
+		checkChannelDefinition(ID.token);
+	}
+
+	@Override
 	public void elementOption(GrammarASTWithOptions elem, GrammarAST ID, GrammarAST valueAST) {
 		String v = null;
 		@SuppressWarnings("unused")
@@ -267,6 +286,99 @@ public class BasicSemanticChecks extends GrammarTreeVisitor {
 //				t.setOption(TerminalAST.defaultTokenOption, v);
 //			}
 //		}
+	}
+
+	/**
+	 * This method detects the following errors, which require analysis across
+	 * the whole grammar for rules according to their base context.
+	 *
+	 * <ul>
+	 * <li>{@link ErrorType#RULE_WITH_TOO_FEW_ALT_LABELS_GROUP}</li>
+	 * <li>{@link ErrorType#BASE_CONTEXT_MUST_BE_RULE_NAME}</li>
+	 * <li>{@link ErrorType#BASE_CONTEXT_CANNOT_BE_TRANSITIVE}</li>
+	 * <li>{@link ErrorType#LEXER_RULE_CANNOT_HAVE_BASE_CONTEXT}</li>
+	 * </ul>
+	 */
+	@Override
+	public void finishGrammar(GrammarRootAST root, GrammarAST ID) {
+		MultiMap<String, Rule> baseContexts = new MultiMap<String, Rule>();
+		for (Rule r : ruleCollector.rules.values()) {
+			GrammarAST optionAST = r.ast.getOptionAST("baseContext");
+
+			if (r.ast.isLexerRule()) {
+				if (optionAST != null) {
+					Token errorToken = optionAST.getToken();
+					g.tool.errMgr.grammarError(ErrorType.LEXER_RULE_CANNOT_HAVE_BASE_CONTEXT,
+											   g.fileName, errorToken, r.name);
+				}
+
+				continue;
+			}
+
+			baseContexts.map(r.getBaseContext(), r);
+
+			if (optionAST != null) {
+				Rule targetRule = ruleCollector.rules.get(r.getBaseContext());
+				boolean targetSpecifiesBaseContext =
+					targetRule != null
+					&& targetRule.ast != null
+					&& (targetRule.ast.getOptionAST("baseContext") != null
+						|| !targetRule.name.equals(targetRule.getBaseContext()));
+
+				if (targetSpecifiesBaseContext) {
+					Token errorToken = optionAST.getToken();
+					g.tool.errMgr.grammarError(ErrorType.BASE_CONTEXT_CANNOT_BE_TRANSITIVE,
+											   g.fileName, errorToken, r.name);
+				}
+			}
+
+			// It's unlikely for this to occur when optionAST is null, but checking
+			// anyway means it can detect certain errors within the logic of the
+			// Tool itself.
+			if (!ruleCollector.rules.containsKey(r.getBaseContext())) {
+				Token errorToken;
+				if (optionAST != null) {
+					errorToken = optionAST.getToken();
+				}
+				else {
+					errorToken = ((CommonTree)r.ast.getChild(0)).getToken();
+				}
+
+				g.tool.errMgr.grammarError(ErrorType.BASE_CONTEXT_MUST_BE_RULE_NAME,
+										   g.fileName, errorToken, r.name);
+			}
+		}
+
+		for (Map.Entry<String, List<Rule>> entry : baseContexts.entrySet()) {
+			// suppress RULE_WITH_TOO_FEW_ALT_LABELS_GROUP if RULE_WITH_TOO_FEW_ALT_LABELS
+			// would already have been reported for at least one rule with this
+			// base context.
+			boolean suppressError = false;
+			int altLabelCount = 0;
+			int outerAltCount = 0;
+			for (Rule rule : entry.getValue()) {
+				outerAltCount += rule.numberOfAlts;
+				List<GrammarAST> altLabels = ruleCollector.ruleToAltLabels.get(rule.name);
+				if (altLabels != null && !altLabels.isEmpty()) {
+					if (altLabels.size() != rule.numberOfAlts) {
+						suppressError = true;
+						break;
+					}
+
+					altLabelCount += altLabels.size();
+				}
+			}
+
+			if (suppressError) {
+				continue;
+			}
+
+			if (altLabelCount != 0 && altLabelCount != outerAltCount) {
+				Rule errorRule = entry.getValue().get(0);
+				g.tool.errMgr.grammarError(ErrorType.RULE_WITH_TOO_FEW_ALT_LABELS_GROUP,
+										   g.fileName, ((CommonTree)errorRule.ast.getChild(0)).getToken(), errorRule.name);
+			}
+		}
 	}
 
 	@Override
@@ -379,8 +491,8 @@ public class BasicSemanticChecks extends GrammarTreeVisitor {
 	void checkInvalidRuleRef(Token ruleID) {
 		String fileName = ruleID.getInputStream().getSourceName();
 		if ( g.isLexer() && Character.isLowerCase(ruleID.getText().charAt(0)) ) {
-			g.tool.errMgr.grammarError(ErrorType.PARSER_RULES_NOT_ALLOWED,
-									   fileName, ruleID, ruleID.getText());
+			g.tool.errMgr.grammarError(ErrorType.PARSER_RULE_REF_IN_LEXER_RULE,
+									   fileName, ruleID, ruleID.getText(), currentRuleName);
 		}
 	}
 
@@ -392,6 +504,9 @@ public class BasicSemanticChecks extends GrammarTreeVisitor {
 									   tokenID,
 									   tokenID.getText());
 		}
+	}
+
+	void checkChannelDefinition(Token tokenID) {
 	}
 
 	@Override

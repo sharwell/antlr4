@@ -566,4 +566,86 @@ public class TestParserExec extends BaseTest {
 		assertEquals("", found);
 		assertNull(stderrDuringParse);
 	}
+
+	/**
+	 * This is a regression test for tunnelvisionlabs/antlr4cs#71 "Erroneous
+	 * extraneous input detected in C# (but not in Java)".
+	 * https://github.com/tunnelvisionlabs/antlr4cs/issues/71
+	 */
+	@Test
+	public void testCSharpIssue71() {
+		String grammar =
+			"grammar Expr;\n" +
+			"\n" +
+			"root\n" +
+			"	:	assignment EOF\n" +
+			"	;\n" +
+			"\n" +
+			"assignment\n" +
+			"	:	LOCAL_VARIABLE '=' expression\n" +
+			"	;\n" +
+			"\n" +
+			"expression\n" +
+			"	:	logical_and_expression\n" +
+			"	;\n" +
+			"\n" +
+			"logical_and_expression\n" +
+			"	:	relational_expression ('AND' relational_expression)*\n" +
+			"	;\n" +
+			"\n" +
+			"relational_expression\n" +
+			"	:	primary_expression (('<'|'>') primary_expression)*\n" +
+			"	;\n" +
+			"\n" +
+			"primary_expression\n" +
+			"	:	'(' + expression + ')'\n" +
+			"	|	UNSIGNED_INT\n" +
+			"	|	LOCAL_VARIABLE\n" +
+			"	;\n" +
+			"\n" +
+			"LOCAL_VARIABLE\n" +
+			"	:	[_a-z][_a-zA-Z0-9]*\n" +
+			"	;\n" +
+			"\n" +
+			"UNSIGNED_INT\n" +
+			"	:	('0'|'1'..'9''0'..'9'*)\n" +
+			"	;\n" +
+			"\n" +
+			"WS\n" +
+			"	:	[ \\t\\r\\n]+ -> channel(HIDDEN)\n" +
+			"	;\n";
+
+		String input = "b = (((a > 10)) AND ((a < 15)))";
+		String found = execParser("Expr.g4", grammar, "ExprParser", "ExprLexer", "root",
+								  input, false);
+		assertEquals("", found);
+		assertNull(stderrDuringParse);
+	}
+
+	/**
+	 * This is a regression test for antlr/antlr4#672 "Initialization failed in
+	 * locals".
+	 * https://github.com/antlr/antlr4/issues/672
+	 */
+	@Test public void testAttributeValueInitialization() throws Exception {
+		String grammar =
+			"grammar Data; \n" +
+			"\n" +
+			"file : group+ EOF; \n" +
+			"\n" +
+			"group: INT sequence {System.out.println($sequence.values.size());} ; \n" +
+			"\n" +
+			"sequence returns [List<Integer> values = new ArrayList<Integer>()] \n" +
+			"  locals[List<Integer> localValues = new ArrayList<Integer>()]\n" +
+			"         : (INT {$localValues.add($INT.int);})* {$values.addAll($localValues);}\n" +
+			"; \n" +
+			"\n" +
+			"INT : [0-9]+ ; // match integers \n" +
+			"WS : [ \\t\\n\\r]+ -> skip ; // toss out all whitespace\n";
+
+		String input = "2 9 10 3 1 2 3";
+		String found = execParser("Data.g4", grammar, "DataParser", "DataLexer", "file", input, false);
+		assertEquals("6\n", found);
+		assertNull(stderrDuringParse);
+	}
 }

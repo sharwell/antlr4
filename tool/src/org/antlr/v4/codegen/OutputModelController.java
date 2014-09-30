@@ -58,6 +58,7 @@ import org.antlr.v4.misc.Utils;
 import org.antlr.v4.parse.ANTLRParser;
 import org.antlr.v4.parse.GrammarASTAdaptor;
 import org.antlr.v4.tool.Alternative;
+import org.antlr.v4.tool.ErrorType;
 import org.antlr.v4.tool.Grammar;
 import org.antlr.v4.tool.LeftRecursiveRule;
 import org.antlr.v4.tool.Rule;
@@ -212,8 +213,8 @@ public class OutputModelController {
 		buildNormalRuleFunction(r, function);
 
 		// now inject code to start alts
-		CodeGenerator gen = delegate.getGenerator();
-		STGroup codegenTemplates = gen.getTemplates();
+		Target target = delegate.getTarget();
+		STGroup codegenTemplates = target.getTemplates();
 
 		// pick out alt(s) for primaries
 		CodeBlockForOuterMostAlt outerAlt = (CodeBlockForOuterMostAlt)function.code.get(0);
@@ -266,17 +267,26 @@ public class OutputModelController {
 		for (int i = 0; i < opAltsCode.size(); i++) {
 			ST altActionST;
 			LeftRecursiveRuleAltInfo altInfo = r.recOpAlts.getElement(i);
+			String templateName;
 			if ( altInfo.altLabel!=null ) {
-				altActionST = codegenTemplates.getInstanceOf("recRuleLabeledAltStartAction");
+				templateName = "recRuleLabeledAltStartAction";
+				altActionST = codegenTemplates.getInstanceOf(templateName);
 				altActionST.add("currentAltLabel", altInfo.altLabel);
 			}
 			else {
-				altActionST = codegenTemplates.getInstanceOf("recRuleAltStartAction");
+				templateName = "recRuleAltStartAction";
+				altActionST = codegenTemplates.getInstanceOf(templateName);
 				altActionST.add("ctxName", Utils.capitalize(r.name));
 			}
 			altActionST.add("ruleName", r.name);
 			// add label of any lr ref we deleted
 			altActionST.add("label", altInfo.leftRecursiveRuleRefLabel);
+			if (altActionST.impl.formalArguments.containsKey("isListLabel")) {
+				altActionST.add("isListLabel", altInfo.isListLabel);
+			}
+			else if (altInfo.isListLabel) {
+				delegate.getGenerator().tool.errMgr.toolError(ErrorType.CODE_TEMPLATE_ARG_ISSUE, templateName, "isListLabel");
+			}
 			Action altAction =
 				new Action(delegate, function.altLabelCtxs.get(altInfo.altLabel), altActionST);
 			CodeBlockForAlt alt = opAltsCode.get(i);
@@ -300,7 +310,7 @@ public class OutputModelController {
 			e.printStackTrace(System.err);
 		}
 
-		function.ctxType = gen.getTarget().getRuleFunctionContextStructName(function);
+		function.ctxType = delegate.getTarget().getRuleFunctionContextStructName(function);
 
 		function.postamble = rulePostamble(function, r);
 	}
@@ -312,7 +322,7 @@ public class OutputModelController {
 
 		CodeGenerator gen = delegate.getGenerator();
 		Grammar g = delegate.getGrammar();
-		String ctxType = gen.getTarget().getRuleFunctionContextStructName(r);
+		String ctxType = delegate.getTarget().getRuleFunctionContextStructName(r);
 		RuleActionFunction raf = lexer.actionFuncs.get(r);
 		if ( raf==null ) {
 			raf = new RuleActionFunction(delegate, r, ctxType);

@@ -647,13 +647,43 @@ public class TestLexerExec extends BaseTest {
 		grammar.append("lexer grammar L;\n");
 		grammar.append("WS : [ \\t\\r\\n]+ -> skip;\n");
 		for (int i = 0; i < 4000; i++) {
-			grammar.append("KW").append(i).append(" : '").append("KW").append(i).append("';\n");
+			grammar.append("KW").append(i).append(" : 'KW' '").append(i).append("';\n");
 		}
 
 		String input = "KW400";
 		String found = execLexer("L.g4", grammar.toString(), "L", input);
 		String expecting =
 			"[@0,0:4='KW400',<402>,1:0]\n" +
+			"[@1,5:4='<EOF>',<-1>,1:5]\n";
+		assertEquals(expecting, found);
+	}
+
+	/**
+	 * This is a regression test for antlr/antlr4#687 "Empty zero-length tokens
+	 * cannot have lexer commands" and antlr/antlr4#688 "Lexer cannot match
+	 * zero-length tokens"
+	 * https://github.com/antlr/antlr4/issues/687
+	 * https://github.com/antlr/antlr4/issues/688
+	 */
+	@Test public void testZeroLengthToken() throws Exception {
+		String grammar =
+			"lexer grammar L;\n"+
+			"\n" +
+			"BeginString\n" +
+			"	:	'\\'' -> more, pushMode(StringMode)\n" +
+			"	;\n" +
+			"\n" +
+			"mode StringMode;\n" +
+			"\n" +
+			"	StringMode_X : 'x' -> more;\n" +
+			"	StringMode_Done : -> more, mode(EndStringMode);\n" +
+			"\n" +
+			"mode EndStringMode;	\n" +
+			"\n" +
+			"	EndString : '\\'' -> popMode;\n";
+		String found = execLexer("L.g4", grammar, "L", "'xxx'");
+		String expecting =
+			"[@0,0:4=''xxx'',<1>,1:0]\n" +
 			"[@1,5:4='<EOF>',<-1>,1:5]\n";
 		assertEquals(expecting, found);
 	}

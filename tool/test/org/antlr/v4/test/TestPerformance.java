@@ -59,6 +59,7 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 import org.antlr.v4.runtime.atn.SimulatorState;
 import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.dfa.DFAState;
+import org.antlr.v4.runtime.dfa.EmptyEdgeMap;
 import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
@@ -76,8 +77,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -270,7 +269,6 @@ public class TestPerformance extends BaseTest {
     private static final boolean TRY_LOCAL_CONTEXT_FIRST = true;
 	private static final boolean OPTIMIZE_LL1 = true;
 	private static final boolean OPTIMIZE_UNIQUE_CLOSURE = true;
-	private static final boolean OPTIMIZE_HIDDEN_CONFLICTED_CONFIGS = false;
 	private static final boolean OPTIMIZE_TAIL_CALLS = true;
 	private static final boolean TAIL_CALL_PRESERVES_SLL = true;
 	private static final boolean TREAT_SLLK1_CONFLICT_AS_AMBIGUITY = false;
@@ -1084,7 +1082,7 @@ public class TestPerformance extends BaseTest {
                             contextsInDFAState = Arrays.copyOf(contextsInDFAState, state.configs.size() + 1);
                         }
 
-                        if (state.isAcceptState) {
+                        if (state.isAcceptState()) {
                             boolean hasGlobal = false;
                             for (ATNConfig config : state.configs) {
                                 if (config.getReachesIntoOuterContext()) {
@@ -1292,7 +1290,7 @@ public class TestPerformance extends BaseTest {
 
 							if (USE_PARSER_INTERPRETER) {
 								Parser referenceParser = parserCtor.newInstance(tokens);
-								parser = new ParserInterpreter(referenceParser.getGrammarFileName(), Arrays.asList(referenceParser.getTokenNames()), Arrays.asList(referenceParser.getRuleNames()), referenceParser.getATN(), tokens);
+								parser = new ParserInterpreter(referenceParser.getGrammarFileName(), referenceParser.getVocabulary(), Arrays.asList(referenceParser.getRuleNames()), referenceParser.getATN(), tokens);
 							}
 							else {
 								parser = parserCtor.newInstance(tokens);
@@ -1329,7 +1327,6 @@ public class TestPerformance extends BaseTest {
 						parser.getInterpreter().enable_global_context_dfa = ENABLE_PARSER_FULL_CONTEXT_DFA;
 						parser.getInterpreter().optimize_ll1 = OPTIMIZE_LL1;
 						parser.getInterpreter().optimize_unique_closure = OPTIMIZE_UNIQUE_CLOSURE;
-						parser.getInterpreter().optimize_hidden_conflicted_configs = OPTIMIZE_HIDDEN_CONFLICTED_CONFIGS;
 						parser.getInterpreter().optimize_tail_calls = OPTIMIZE_TAIL_CALLS;
 						parser.getInterpreter().tail_call_preserves_sll = TAIL_CALL_PRESERVES_SLL;
 						parser.getInterpreter().treat_sllk1_conflict_as_ambiguity = TREAT_SLLK1_CONFLICT_AS_AMBIGUITY;
@@ -1377,7 +1374,7 @@ public class TestPerformance extends BaseTest {
 							} else {
 								if (USE_PARSER_INTERPRETER) {
 									Parser referenceParser = parserCtor.newInstance(tokens);
-									parser = new ParserInterpreter(referenceParser.getGrammarFileName(), Arrays.asList(referenceParser.getTokenNames()), Arrays.asList(referenceParser.getRuleNames()), referenceParser.getATN(), tokens);
+									parser = new ParserInterpreter(referenceParser.getGrammarFileName(), referenceParser.getVocabulary(), Arrays.asList(referenceParser.getRuleNames()), referenceParser.getATN(), tokens);
 								}
 								else {
 									parser = parserCtor.newInstance(tokens);
@@ -1403,7 +1400,6 @@ public class TestPerformance extends BaseTest {
 							parser.getInterpreter().enable_global_context_dfa = ENABLE_PARSER_FULL_CONTEXT_DFA;
 							parser.getInterpreter().optimize_ll1 = OPTIMIZE_LL1;
 							parser.getInterpreter().optimize_unique_closure = OPTIMIZE_UNIQUE_CLOSURE;
-							parser.getInterpreter().optimize_hidden_conflicted_configs = OPTIMIZE_HIDDEN_CONFLICTED_CONFIGS;
 							parser.getInterpreter().optimize_tail_calls = OPTIMIZE_TAIL_CALLS;
 							parser.getInterpreter().tail_call_preserves_sll = TAIL_CALL_PRESERVES_SLL;
 							parser.getInterpreter().treat_sllk1_conflict_as_ambiguity = TREAT_SLLK1_CONFLICT_AS_AMBIGUITY;
@@ -1907,6 +1903,7 @@ public class TestPerformance extends BaseTest {
 	}
 
 	protected static class NonCachingParserATNSimulator extends StatisticsParserATNSimulator {
+		private static final EmptyEdgeMap<DFAState> emptyMap = new EmptyEdgeMap<DFAState>(-1, -1);
 
 		public NonCachingParserATNSimulator(Parser parser, ATN atn) {
 			super(parser, atn);
@@ -1914,8 +1911,8 @@ public class TestPerformance extends BaseTest {
 
 		@NotNull
 		@Override
-		protected DFAState createDFAState(@NotNull ATNConfigSet configs) {
-			return new DFAState(configs, -1, -1);
+		protected DFAState createDFAState(@NotNull DFA dfa, @NotNull ATNConfigSet configs) {
+			return new DFAState(emptyMap, dfa.getEmptyContextEdgeMap(), configs);
 		}
 
 	}
@@ -2111,5 +2108,37 @@ public class TestPerformance extends BaseTest {
 								  input, false);
 		Assert.assertEquals("", found);
 		Assert.assertEquals(null, stderrDuringParse);
+	}
+
+	@Test(timeout = 20000)
+	public void testExponentialInclude() {
+		String grammarFormat =
+			"parser grammar Level_%d_%d;\n" +
+			"\n" +
+			"%s import Level_%d_1, Level_%d_2;\n" +
+			"\n" +
+			"rule_%d_%d : EOF;\n";
+
+		System.out.println("dir "+tmpdir);
+		mkdir(tmpdir);
+
+		long startTime = System.nanoTime();
+
+		int levels = 20;
+		for (int level = 0; level < levels; level++) {
+			String leafPrefix = level == levels - 1 ? "//" : "";
+			String grammar1 = String.format(grammarFormat, level, 1, leafPrefix, level + 1, level + 1, level, 1);
+			writeFile(tmpdir, "Level_" + level + "_1.g4", grammar1);
+			if (level > 0) {
+				String grammar2 = String.format(grammarFormat, level, 2, leafPrefix, level + 1, level + 1, level, 1);
+				writeFile(tmpdir, "Level_" + level + "_2.g4", grammar2);
+			}
+		}
+
+		ErrorQueue equeue = antlr("Level_0_1.g4", false);
+		Assert.assertTrue(equeue.errors.isEmpty());
+
+		long endTime = System.nanoTime();
+		System.out.format("%s milliseconds.%n", (endTime - startTime) / 1000000.0);
 	}
 }

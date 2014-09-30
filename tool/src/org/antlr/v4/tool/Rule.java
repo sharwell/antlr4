@@ -30,6 +30,7 @@
 
 package org.antlr.v4.tool;
 
+import org.antlr.v4.runtime.atn.ATNSimulator;
 import org.antlr.v4.runtime.misc.MultiMap;
 import org.antlr.v4.runtime.misc.Tuple;
 import org.antlr.v4.runtime.misc.Tuple2;
@@ -42,6 +43,7 @@ import org.antlr.v4.tool.ast.RuleAST;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -76,6 +78,7 @@ public class Rule implements AttributeResolver {
 	}
 
 	public String name;
+	private String baseContext;
 	public List<GrammarAST> modifiers;
 
 	public RuleAST ast;
@@ -132,6 +135,28 @@ public class Rule implements AttributeResolver {
 		this.numberOfAlts = numberOfAlts;
 		alt = new Alternative[numberOfAlts+1]; // 1..n
 		for (int i=1; i<=numberOfAlts; i++) alt[i] = new Alternative(this, i);
+	}
+
+	public String getBaseContext() {
+		if (baseContext != null && !baseContext.isEmpty()) {
+			return baseContext;
+		}
+
+		String optionBaseContext = ast.getOptionString("baseContext");
+		if (optionBaseContext != null && !optionBaseContext.isEmpty()) {
+			return optionBaseContext;
+		}
+
+		int variantDelimiter = name.indexOf(ATNSimulator.RULE_VARIANT_DELIMITER);
+		if (variantDelimiter >= 0) {
+			return name.substring(0, variantDelimiter);
+		}
+
+		return name;
+	}
+
+	public void setBaseContext(String baseContext) {
+		this.baseContext = baseContext;
 	}
 
 	public void defineActionInAlt(int currentAlt, ActionAST actionAST) {
@@ -213,7 +238,7 @@ public class Rule implements AttributeResolver {
 	 * this label. Unlabeled alternatives are not included in the result.
 	 */
 	public Map<String, List<Tuple2<Integer, AltAST>>> getAltLabels() {
-		Map<String, List<Tuple2<Integer, AltAST>>> labels = new HashMap<String, List<Tuple2<Integer, AltAST>>>();
+		Map<String, List<Tuple2<Integer, AltAST>>> labels = new LinkedHashMap<String, List<Tuple2<Integer, AltAST>>>();
 		for (int i=1; i<=numberOfAlts; i++) {
 			GrammarAST altLabel = alt[i].ast.altLabel;
 			if ( altLabel!=null ) {

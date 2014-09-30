@@ -33,10 +33,12 @@ package org.antlr.v4.runtime.misc;
 import java.awt.Window;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.Writer;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -117,15 +119,61 @@ public class Utils {
 	/**
 	 * @sharpen.ignore
 	 */
-	public static void writeFile(String fileName, String content) throws IOException {
-		FileWriter fw = new FileWriter(fileName);
-		Writer w = new BufferedWriter(fw);
+	public static void writeFile(@NotNull String fileName, @NotNull String content) throws IOException {
+		writeFile(fileName, content, null);
+	}
+
+	/**
+	 * @sharpen.ignore
+	 */
+	public static void writeFile(@NotNull String fileName, @NotNull String content, @Nullable String encoding) throws IOException {
+		File f = new File(fileName);
+		FileOutputStream fos = new FileOutputStream(f);
+		OutputStreamWriter osw;
+		if (encoding != null) {
+			osw = new OutputStreamWriter(fos, encoding);
+		}
+		else {
+			osw = new OutputStreamWriter(fos);
+		}
+
 		try {
-			w.write(content);
+			osw.write(content);
 		}
 		finally {
-			w.close();
+			osw.close();
 		}
+	}
+
+	@NotNull
+	public static char[] readFile(@NotNull String fileName) throws IOException {
+		return readFile(fileName, null);
+	}
+
+	@NotNull
+	public static char[] readFile(@NotNull String fileName, @Nullable String encoding) throws IOException {
+		File f = new File(fileName);
+		int size = (int)f.length();
+		InputStreamReader isr;
+		FileInputStream fis = new FileInputStream(fileName);
+		if ( encoding!=null ) {
+			isr = new InputStreamReader(fis, encoding);
+		}
+		else {
+			isr = new InputStreamReader(fis);
+		}
+		char[] data = null;
+		try {
+			data = new char[size];
+			int n = isr.read(data);
+			if (n < data.length) {
+				data = Arrays.copyOf(data, n);
+			}
+		}
+		finally {
+			isr.close();
+		}
+		return data;
 	}
 
 	public static <T> void removeAll(@NotNull List<T> list, @NotNull Predicate<? super T> predicate) {

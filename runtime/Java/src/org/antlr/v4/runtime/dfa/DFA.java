@@ -29,11 +29,17 @@
  */
 package org.antlr.v4.runtime.dfa;
 
+import org.antlr.v4.runtime.Lexer;
+import org.antlr.v4.runtime.Parser;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.Vocabulary;
+import org.antlr.v4.runtime.VocabularyImpl;
 import org.antlr.v4.runtime.atn.ATNConfigSet;
 import org.antlr.v4.runtime.atn.ATNState;
+import org.antlr.v4.runtime.atn.ATNType;
+import org.antlr.v4.runtime.atn.LexerATNSimulator;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.misc.Nullable;
-import org.antlr.v4.runtime.Parser;
 
 import java.util.Map;
 import java.util.Set;
@@ -63,6 +69,20 @@ public class DFA {
 
 	private final AtomicInteger nextStateNumber = new AtomicInteger();
 
+	private final int minDfaEdge;
+
+	private final int maxDfaEdge;
+
+	@NotNull
+	private static final EmptyEdgeMap<DFAState> emptyPrecedenceEdges =
+		new EmptyEdgeMap<DFAState>(0, 200);
+
+	@NotNull
+	private final EmptyEdgeMap<DFAState> emptyEdgeMap;
+
+	@NotNull
+	private final EmptyEdgeMap<DFAState> emptyContextEdgeMap;
+
 	/**
 	 * {@code true} if this DFA is for a precedence decision; otherwise,
 	 * {@code false}. This is the backing field for {@link #isPrecedenceDfa},
@@ -77,6 +97,36 @@ public class DFA {
 	public DFA(@NotNull ATNState atnStartState, int decision) {
 		this.atnStartState = atnStartState;
 		this.decision = decision;
+
+		if (this.atnStartState.atn.grammarType == ATNType.LEXER) {
+			minDfaEdge = LexerATNSimulator.MIN_DFA_EDGE;
+			maxDfaEdge = LexerATNSimulator.MAX_DFA_EDGE;
+		}
+		else {
+			minDfaEdge = Token.EOF;
+			maxDfaEdge = atnStartState.atn.maxTokenType;
+		}
+
+		this.emptyEdgeMap = new EmptyEdgeMap<DFAState>(minDfaEdge, maxDfaEdge);
+		this.emptyContextEdgeMap = new EmptyEdgeMap<DFAState>(-1, atnStartState.atn.states.size() - 1);
+	}
+
+	public final int getMinDfaEdge() {
+		return minDfaEdge;
+	}
+
+	public final int getMaxDfaEdge() {
+		return maxDfaEdge;
+	}
+
+	@NotNull
+	public EmptyEdgeMap<DFAState> getEmptyEdgeMap() {
+		return emptyEdgeMap;
+	}
+
+	@NotNull
+	public EmptyEdgeMap<DFAState> getEmptyContextEdgeMap() {
+		return emptyContextEdgeMap;
 	}
 
 	/**
@@ -178,13 +228,8 @@ public class DFA {
 		if (this.precedenceDfa != precedenceDfa) {
 			this.states.clear();
 			if (precedenceDfa) {
-				DFAState precedenceState = new DFAState(new ATNConfigSet(), 0, 200);
-				precedenceState.isAcceptState = false;
-				this.s0.set(precedenceState);
-
-				DFAState fullContextPrecedenceState = new DFAState(new ATNConfigSet(), 0, 200);
-				fullContextPrecedenceState.isAcceptState = false;
-				this.s0full.set(fullContextPrecedenceState);
+				this.s0.set(new DFAState(emptyPrecedenceEdges, getEmptyContextEdgeMap(), new ATNConfigSet()));
+				this.s0full.set(new DFAState(emptyPrecedenceEdges, getEmptyContextEdgeMap(), new ATNConfigSet()));
 			}
 			else {
 				this.s0.set(null);
@@ -228,17 +273,43 @@ public class DFA {
 	}
 
 	@Override
-	public String toString() { return toString(null); }
+	public String toString() { return toString(VocabularyImpl.EMPTY_VOCABULARY); }
 
+	/**
+	 * @deprecated Use {@link #toString(Vocabulary)} instead.
+	 */
+	@Deprecated
 	public String toString(@Nullable String[] tokenNames) {
 		if ( s0.get()==null ) return "";
 		DFASerializer serializer = new DFASerializer(this,tokenNames);
 		return serializer.toString();
 	}
 
+	public String toString(@NotNull Vocabulary vocabulary) {
+		if (s0.get() == null) {
+			return "";
+		}
+
+		DFASerializer serializer = new DFASerializer(this, vocabulary);
+		return serializer.toString();
+	}
+
+	/**
+	 * @deprecated Use {@link #toString(Vocabulary, String[])} instead.
+	 */
+	@Deprecated
 	public String toString(@Nullable String[] tokenNames, @Nullable String[] ruleNames) {
 		if ( s0.get()==null ) return "";
 		DFASerializer serializer = new DFASerializer(this,tokenNames,ruleNames,atnStartState.atn);
+		return serializer.toString();
+	}
+
+	public String toString(@NotNull Vocabulary vocabulary, @Nullable String[] ruleNames) {
+		if (s0.get() == null) {
+			return "";
+		}
+
+		DFASerializer serializer = new DFASerializer(this, vocabulary, ruleNames, atnStartState.atn);
 		return serializer.toString();
 	}
 

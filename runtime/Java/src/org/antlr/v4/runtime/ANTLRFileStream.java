@@ -29,11 +29,11 @@
  */
 package org.antlr.v4.runtime;
 
-import java.io.File;
-import java.io.FileInputStream;
+import org.antlr.v4.runtime.misc.NotNull;
+import org.antlr.v4.runtime.misc.Nullable;
+import org.antlr.v4.runtime.misc.Utils;
+
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.Arrays;
 
 /**
  * This is an {@link ANTLRInputStream} that is loaded from a file all at once
@@ -42,41 +42,20 @@ import java.util.Arrays;
 public class ANTLRFileStream extends ANTLRInputStream {
 	protected String fileName;
 
-	public ANTLRFileStream(String fileName) throws IOException {
+	public ANTLRFileStream(@NotNull String fileName) throws IOException {
 		this(fileName, null);
 	}
 
-	public ANTLRFileStream(String fileName, String encoding) throws IOException {
+	public ANTLRFileStream(@NotNull String fileName, String encoding) throws IOException {
 		this.fileName = fileName;
 		load(fileName, encoding);
 	}
 
-	public void load(String fileName, String encoding)
+	public void load(@NotNull String fileName, @Nullable String encoding)
 		throws IOException
 	{
-		if ( fileName==null ) {
-			return;
-		}
-		File f = new File(fileName);
-		int size = (int)f.length();
-		InputStreamReader isr;
-		FileInputStream fis = new FileInputStream(fileName);
-		if ( encoding!=null ) {
-			isr = new InputStreamReader(fis, encoding);
-		}
-		else {
-			isr = new InputStreamReader(fis);
-		}
-		try {
-			data = new char[size];
-			n = isr.read(data);
-			if (n < data.length) {
-				data = Arrays.copyOf(data, n);
-			}
-		}
-		finally {
-			isr.close();
-		}
+		data = Utils.readFile(fileName, encoding);
+		this.n = data.length;
 	}
 
 	@Override

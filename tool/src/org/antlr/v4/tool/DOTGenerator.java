@@ -43,6 +43,7 @@ import org.antlr.v4.runtime.atn.NotSetTransition;
 import org.antlr.v4.runtime.atn.PlusBlockStartState;
 import org.antlr.v4.runtime.atn.PlusLoopbackState;
 import org.antlr.v4.runtime.atn.RangeTransition;
+import org.antlr.v4.runtime.atn.RuleStartState;
 import org.antlr.v4.runtime.atn.RuleStopState;
 import org.antlr.v4.runtime.atn.RuleTransition;
 import org.antlr.v4.runtime.atn.SetTransition;
@@ -92,7 +93,7 @@ public class DOTGenerator {
 
 		// define stop states first; seems to be a bug in DOT where doublecircle
 		for (DFAState d : dfa.states.keySet()) {
-			if ( !d.isAcceptState ) continue;
+			if ( !d.isAcceptState() ) continue;
 			ST st = stlib.getInstanceOf("stopstate");
 			st.add("name", "s"+d.stateNumber);
 			st.add("label", getStateLabel(d));
@@ -100,7 +101,7 @@ public class DOTGenerator {
 		}
 
 		for (DFAState d : dfa.states.keySet()) {
-			if ( d.isAcceptState ) continue;
+			if ( d.isAcceptState() ) continue;
 			if ( d.stateNumber == Integer.MAX_VALUE ) continue;
 			ST st = stlib.getInstanceOf("state");
 			st.add("name", "s"+d.stateNumber);
@@ -136,8 +137,8 @@ public class DOTGenerator {
 		StringBuilder buf = new StringBuilder(250);
 		buf.append('s');
 		buf.append(s.stateNumber);
-		if ( s.isAcceptState ) {
-			buf.append("=>").append(s.prediction);
+		if ( s.isAcceptState() ) {
+			buf.append("=>").append(s.getPrediction());
 		}
 		if ( grammar!=null ) {
 			BitSet alts = s.configs.getRepresentedAlternatives();
@@ -233,7 +234,14 @@ public class DOTGenerator {
 					RuleTransition rr = ((RuleTransition)edge);
 					// don't jump to other rules, but display edge to follow node
 					edgeST = stlib.getInstanceOf("edge");
-					edgeST.add("label", "<"+ruleNames[rr.ruleIndex]+">");
+
+					String label = "<" + ruleNames[rr.ruleIndex];
+					if (((RuleStartState)rr.target).isPrecedenceRule) {
+						label += "[" + rr.precedence + "]";
+					}
+					label += ">";
+
+					edgeST.add("label", label);
 					edgeST.add("src", "s"+s.stateNumber);
 					edgeST.add("target", "s"+rr.followState.stateNumber);
 					edgeST.add("arrowhead", arrowhead);
@@ -274,7 +282,7 @@ public class DOTGenerator {
 					SetTransition set = (SetTransition)edge;
 					String label = set.label().toString();
 					if ( isLexer ) label = set.label().toString(true);
-					else if ( grammar!=null ) label = set.label().toString(grammar.getTokenDisplayNames());
+					else if ( grammar!=null ) label = set.label().toString(grammar.getVocabulary());
 					if ( edge instanceof NotSetTransition ) label = "~"+label;
 					edgeST.add("label", getEdgeLabel(label));
 				}
@@ -283,7 +291,7 @@ public class DOTGenerator {
 					RangeTransition range = (RangeTransition)edge;
 					String label = range.label().toString();
 					if ( isLexer ) label = range.toString();
-					else if ( grammar!=null ) label = range.label().toString(grammar.getTokenDisplayNames());
+					else if ( grammar!=null ) label = range.label().toString(grammar.getVocabulary());
 					edgeST.add("label", getEdgeLabel(label));
 				}
 				else {

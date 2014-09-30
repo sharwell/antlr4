@@ -62,15 +62,15 @@ public enum ErrorType {
 	/**
 	 * Compiler Error 3.
 	 *
-	 * <p>cannot find tokens file '<em>filename</em>'</p>
+	 * <p>cannot find tokens file '<em>filename</em>' given for '<em>arg2</em>'</p>
 	 */
-	CANNOT_FIND_TOKENS_FILE(3, "cannot find tokens file '<arg>'", ErrorSeverity.ERROR),
+	CANNOT_FIND_TOKENS_FILE_GIVEN_ON_CMDLINE(3, "cannot find tokens file '<arg>' given for '<arg2>'", ErrorSeverity.ERROR),
 	/**
 	 * Compiler Error 4.
 	 *
-	 * <p>cannot find tokens file '<em>filename</em>': <em>reason</em></p>
+	 * <p>error reading tokens file '<em>filename</em>': <em>reason</em></p>
 	 */
-	ERROR_READING_TOKENS_FILE(4, "cannot find tokens file '<arg>': <arg2>", ErrorSeverity.ERROR),
+	ERROR_READING_TOKENS_FILE(4, "error reading tokens file '<arg>': <arg2>", ErrorSeverity.ERROR),
 	/**
 	 * Compiler Error 5.
 	 *
@@ -108,6 +108,12 @@ public enum ErrorType {
 	 * <p>warning treated as error</p>
 	 */
 	WARNING_TREATED_AS_ERROR(10, "warning treated as error", ErrorSeverity.ERROR_ONE_OFF),
+	/**
+	 * Compiler Error 11.
+	 *
+	 * <p>error reading imported grammar '<em>arg</em>' referenced in '<em>arg2</em>'</p>
+	 */
+	ERROR_READING_IMPORTED_GRAMMAR(11, "error reading imported grammar '<arg>' referenced in '<arg2>'", ErrorSeverity.ERROR),
 
 	/**
 	 * Compiler Error 20.
@@ -210,6 +216,8 @@ public enum ErrorType {
 	 * Compiler Error 56.
 	 *
 	 * <p>reference to undefined rule: <em>rule</em></p>
+	 *
+	 * @see #PARSER_RULE_REF_IN_LEXER_RULE
 	 */
 	UNDEFINED_RULE_REF(56, "reference to undefined rule: <arg>", ErrorSeverity.ERROR),
 	/**
@@ -382,10 +390,9 @@ public enum ErrorType {
 	 * Compiler Error 110.
 	 *
 	 * <p>
-	 * can't find or load grammar '<em>grammar</em>' from
-	 * '<em>filename</em>'</p>
+	 * can't find or load grammar <em>grammar</em></p>
 	 */
-	CANNOT_FIND_IMPORTED_GRAMMAR(110, "can't find or load grammar '<arg>' from '<arg2>'", ErrorSeverity.ERROR),
+	CANNOT_FIND_IMPORTED_GRAMMAR(110, "can't find or load grammar '<arg>'", ErrorSeverity.ERROR),
 	/**
 	 * Compiler Error 111.
 	 *
@@ -404,12 +411,21 @@ public enum ErrorType {
 	 */
 	IMPORT_NAME_CLASH(113, "<arg.typeString> grammar '<arg.name>' and imported <arg2.typeString> grammar '<arg2.name>' both generate '<arg2.recognizerName>'", ErrorSeverity.ERROR),
 	/**
+	 * Compiler Error 160.
+	 *
+	 * <p>cannot find tokens file '<em>filename</em>'</p>
+	 */
+	CANNOT_FIND_TOKENS_FILE_REFD_IN_GRAMMAR(160, "cannot find tokens file '<arg>'", ErrorSeverity.ERROR),
+	/**
 	 * Compiler Warning 118.
 	 *
 	 * <p>
 	 * all operators of alt '<em>alt</em>' of left-recursive rule must have same
 	 * associativity</p>
+	 *
+	 * @deprecated This warning is no longer applicable with the current syntax for specifying associativity.
 	 */
+	@Deprecated
 	ALL_OPS_NEED_SAME_ASSOC(118, "all operators of alt '<arg>' of left-recursive rule must have same associativity", ErrorSeverity.WARNING),
 	/**
 	 * Compiler Error 119.
@@ -900,6 +916,62 @@ public enum ErrorType {
 	 * @since 4.2.1
 	 */
 	RESERVED_RULE_NAME(159, "cannot declare a rule with reserved name '<arg>'", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 160.
+	 *
+	 * <p>reference to parser rule '<em>rule</em>' in lexer rule '<em>name</em>'</p>
+	 *
+	 * @see #UNDEFINED_RULE_REF
+	 */
+	PARSER_RULE_REF_IN_LEXER_RULE(160, "reference to parser rule '<arg>' in lexer rule '<arg2>'", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 161.
+	 *
+	 * <p>channel '<em>name</em>' conflicts with token with same name</p>
+	 */
+	CHANNEL_CONFLICTS_WITH_TOKEN(161, "channel '<arg>' conflicts with token with same name", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 162.
+	 *
+	 * <p>channel '<em>name</em>' conflicts with mode with same name</p>
+	 */
+	CHANNEL_CONFLICTS_WITH_MODE(162, "channel '<arg>' conflicts with mode with same name", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 163.
+	 *
+	 * <p>custom channels are not supported in parser grammars</p>
+	 */
+	CHANNELS_BLOCK_IN_PARSER_GRAMMAR(163, "custom channels are not supported in parser grammars", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 164.
+	 *
+	 * <p>custom channels are not supported in combined grammars</p>
+	 */
+	CHANNELS_BLOCK_IN_COMBINED_GRAMMAR(164, "custom channels are not supported in combined grammars", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 165.
+	 *
+	 * <p>rule '<em>rule</em>': must label all alternatives in rules with the same base context, or none</p>
+	 */
+	RULE_WITH_TOO_FEW_ALT_LABELS_GROUP(165, "rule '<arg>': must label all alternatives in rules with the same base context, or none", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 166.
+	 *
+	 * <p>rule '<em>rule</em>': baseContext option value must reference a rule</p>
+	 */
+	BASE_CONTEXT_MUST_BE_RULE_NAME(166, "rule '<arg>': baseContext option value must reference a rule", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 167.
+	 *
+	 * <p>rule '<em>rule</em>': base context must reference a rule that does not specify a base context</p>
+	 */
+	BASE_CONTEXT_CANNOT_BE_TRANSITIVE(167, "rule '<arg>': base context must reference a rule that does not specify a base context", ErrorSeverity.ERROR),
+	/**
+	 * Compiler Error 168.
+	 *
+	 * <p>rule '<em>rule</em>': lexer rules cannot specify a base context</p>
+	 */
+	LEXER_RULE_CANNOT_HAVE_BASE_CONTEXT(168, "rule '<arg>': lexer rules cannot specify a base context", ErrorSeverity.ERROR),
 
 	/*
 	 * Backward incompatibility errors

@@ -66,7 +66,7 @@ import org.antlr.v4.codegen.model.decl.TokenListDecl;
 import org.antlr.v4.parse.ANTLRParser;
 import org.antlr.v4.runtime.atn.ATNSimulator;
 import org.antlr.v4.runtime.atn.DecisionState;
-import org.antlr.v4.runtime.atn.PlusBlockStartState;
+import org.antlr.v4.runtime.atn.PlusLoopbackState;
 import org.antlr.v4.runtime.atn.StarLoopEntryState;
 import org.antlr.v4.runtime.misc.IntervalSet;
 import org.antlr.v4.tool.Alternative;
@@ -178,7 +178,7 @@ public class ParserFactory extends DefaultOutputModelFactory {
 	}
 
 	public TokenListDecl getTokenListLabelDecl(String label) {
-		return new TokenListDecl(this, gen.getTarget().getListLabel(label));
+		return new TokenListDecl(this, getTarget().getListLabel(label));
 	}
 
 	@Override
@@ -241,7 +241,7 @@ public class ParserFactory extends DefaultOutputModelFactory {
 			c.label = d;
 			getCurrentRuleFunction().addContextDecl(labelAST.getAltLabel(), d);
 			if ( labelAST.parent.getType() == ANTLRParser.PLUS_ASSIGN  ) {
-				String listLabel = gen.getTarget().getListLabel(label);
+				String listLabel = getTarget().getListLabel(label);
 				TokenListDecl l = new TokenListDecl(this, listLabel);
 				getCurrentRuleFunction().addContextDecl(labelAST.getAltLabel(), l);
 			}
@@ -255,7 +255,7 @@ public class ParserFactory extends DefaultOutputModelFactory {
 		if (!g.tool.force_atn) {
 			int decision;
 			if ( ebnfRoot.getType()==ANTLRParser.POSITIVE_CLOSURE ) {
-				decision = ((PlusBlockStartState)ebnfRoot.atnState).loopBackState.decision;
+				decision = ((PlusLoopbackState)ebnfRoot.atnState).decision;
 			}
 			else if ( ebnfRoot.getType()==ANTLRParser.CLOSURE ) {
 				decision = ((StarLoopEntryState)ebnfRoot.atnState).decision;
@@ -342,20 +342,20 @@ public class ParserFactory extends DefaultOutputModelFactory {
 		Decl d;
 		if ( ast.getType()==ANTLRParser.SET || ast.getType()==ANTLRParser.WILDCARD ) {
 			String implLabel =
-				gen.getTarget().getImplicitSetLabel(String.valueOf(ast.token.getTokenIndex()));
+				getTarget().getImplicitSetLabel(String.valueOf(ast.token.getTokenIndex()));
 			d = getTokenLabelDecl(implLabel);
 			((TokenDecl)d).isImplicit = true;
 		}
 		else if ( ast.getType()==ANTLRParser.RULE_REF ) { // a rule reference?
 			Rule r = g.getRule(ast.getText());
-			String implLabel = gen.getTarget().getImplicitRuleLabel(ast.getText());
+			String implLabel = getTarget().getImplicitRuleLabel(ast.getText());
 			String ctxName =
-				gen.getTarget().getRuleFunctionContextStructName(r);
+				getTarget().getRuleFunctionContextStructName(r);
 			d = new RuleContextDecl(this, implLabel, ctxName);
 			((RuleContextDecl)d).isImplicit = true;
 		}
 		else {
-			String implLabel = gen.getTarget().getImplicitTokenLabel(ast.getText());
+			String implLabel = getTarget().getImplicitTokenLabel(ast.getText());
 			d = getTokenLabelDecl(implLabel);
 			((TokenDecl)d).isImplicit = true;
 		}
@@ -367,7 +367,7 @@ public class ParserFactory extends DefaultOutputModelFactory {
 	public AddToLabelList getAddToListOpIfListLabelPresent(LabeledOp op, GrammarAST label) {
 		AddToLabelList labelOp = null;
 		if ( label!=null && label.parent.getType()==ANTLRParser.PLUS_ASSIGN ) {
-			String listLabel = gen.getTarget().getListLabel(label.getText());
+			String listLabel = getTarget().getListLabel(label.getText());
 			labelOp = new AddToLabelList(this, listLabel, op.getLabels().get(0));
 		}
 		return labelOp;

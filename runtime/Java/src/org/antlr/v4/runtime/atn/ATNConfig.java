@@ -49,10 +49,26 @@ import java.util.Map;
  *  an ATN state.
  */
 public class ATNConfig {
+	/**
+	 * This field stores the bit mask for implementing the
+	 * {@link #isPrecedenceFilterSuppressed} property as a bit within the
+	 * existing {@link #altAndOuterContextDepth} field.
+	 */
+	private static final int SUPPRESS_PRECEDENCE_FILTER = 0x80000000;
+
 	/** The ATN state associated with this configuration */
 	@NotNull
 	private final ATNState state;
 
+	/**
+	 * This is a bit-field currently containing the following values.
+	 *
+	 * <ul>
+	 * <li>0x00FFFFFF: Alternative</li>
+	 * <li>0x7F000000: Outer context depth</li>
+	 * <li>0x80000000: Suppress precedence filter</li>
+	 * </ul>
+	 */
 	private int altAndOuterContextDepth;
 
 	/** The stack of invoking states leading to the rule/states associated
@@ -68,14 +84,14 @@ public class ATNConfig {
 	{
 		assert (alt & 0xFFFFFF) == alt;
 		this.state = state;
-		this.altAndOuterContextDepth = alt & 0x7FFFFFFF;
+		this.altAndOuterContextDepth = alt;
 		this.context = context;
 	}
 
 	protected ATNConfig(@NotNull ATNConfig c, @NotNull ATNState state, @NotNull PredictionContext context)
     {
 		this.state = state;
-		this.altAndOuterContextDepth = c.altAndOuterContextDepth & 0x7FFFFFFF;
+		this.altAndOuterContextDepth = c.altAndOuterContextDepth;
 		this.context = context;
 	}
 
@@ -121,23 +137,6 @@ public class ATNConfig {
 		return altAndOuterContextDepth & 0x00FFFFFF;
 	}
 
-	/**
-	 * @sharpen.property
-	 */
-	public final boolean isHidden() {
-		return altAndOuterContextDepth < 0;
-	}
-
-	/**
-	 * @sharpen.property IsHidden
-	 */
-	public void setHidden(boolean value) {
-		if (value) {
-			altAndOuterContextDepth |= 0x80000000;
-		} else {
-			altAndOuterContextDepth &= ~0x80000000;
-		}
-	}
 	
 	/**
 	 * @sharpen.property Context
@@ -168,9 +167,10 @@ public class ATNConfig {
 	 * dependent predicates unless we are in the rule that initially
 	 * invokes the ATN simulator.
 	 *
-	 * closure() tracks the depth of how far we dip into the
-	 * outer context: depth &gt; 0.  Note that it may not be totally
-	 * accurate depth since I don't ever decrement. TODO: make it a boolean then
+	 * <p>
+	 * closure() tracks the depth of how far we dip into the outer context:
+	 * depth &gt; 0.  Note that it may not be totally accurate depth since I
+	 * don't ever decrement. TODO: make it a boolean then</p>
 	 * 
 	 * @sharpen.property OuterContextDepth
 	 */
@@ -309,6 +309,19 @@ public class ATNConfig {
 		return false;
 	}
 
+	public final boolean isPrecedenceFilterSuppressed() {
+		return (altAndOuterContextDepth & SUPPRESS_PRECEDENCE_FILTER) != 0;
+	}
+
+	public final void setPrecedenceFilterSuppressed(boolean value) {
+		if (value) {
+			this.altAndOuterContextDepth |= SUPPRESS_PRECEDENCE_FILTER;
+		}
+		else {
+			this.altAndOuterContextDepth &= ~SUPPRESS_PRECEDENCE_FILTER;
+		}
+	}
+
 	/** An ATN configuration is equal to another if both have
      *  the same state, they predict the same alternative, and
      *  syntactic/semantic contexts are the same.
@@ -334,6 +347,7 @@ public class ATNConfig {
 			&& this.getReachesIntoOuterContext() == other.getReachesIntoOuterContext()
 			&& this.getContext().equals(other.getContext())
 			&& this.getSemanticContext().equals(other.getSemanticContext())
+			&& this.isPrecedenceFilterSuppressed() == other.isPrecedenceFilterSuppressed()
 			&& this.hasPassedThroughNonGreedyDecision() == other.hasPassedThroughNonGreedyDecision()
 			&& ObjectEqualityComparator.INSTANCE.equals(this.getLexerActionExecutor(), other.getLexerActionExecutor());
 	}

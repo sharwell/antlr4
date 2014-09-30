@@ -76,6 +76,7 @@ options {
  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package org.antlr.v4.parse;
+import org.antlr.v4.Tool;
 import org.antlr.v4.tool.*;
 import org.antlr.v4.tool.ast.*;
 import java.lang.reflect.Method;
@@ -86,13 +87,14 @@ public String grammarName;
 public GrammarAST currentRuleAST;
 public String currentModeName = LexerGrammar.DEFAULT_MODE_NAME;
 public String currentRuleName;
-//public GrammarAST currentRuleBlock;
 public GrammarAST currentOuterAltRoot;
 public int currentOuterAltNumber = 1; // 1..n
 public int rewriteEBNFLevel = 0;
 
 public GrammarTreeVisitor() { this(null); }
 
+// Should be abstract but can't make gen'd parser abstract;
+// subclasses should implement else everything goes to stderr!
 public ErrorManager getErrorManager() { return null; }
 
 public void visitGrammar(GrammarAST t) { visit(t, "grammarSpec"); }
@@ -123,6 +125,7 @@ public void grammarOption(GrammarAST ID, GrammarAST valueAST) { }
 public void ruleOption(GrammarAST ID, GrammarAST valueAST) { }
 public void blockOption(GrammarAST ID, GrammarAST valueAST) { }
 public void defineToken(GrammarAST ID) { }
+public void defineChannel(GrammarAST ID) { }
 public void globalNamedAction(GrammarAST scope, GrammarAST ID, ActionAST action) { }
 public void importGrammar(GrammarAST label, GrammarAST ID) { }
 
@@ -186,6 +189,12 @@ protected void exitTokensSpec(GrammarAST tree) { }
 
 protected void enterTokenSpec(GrammarAST tree) { }
 protected void exitTokenSpec(GrammarAST tree) { }
+
+protected void enterChannelsSpec(GrammarAST tree) { }
+protected void exitChannelsSpec(GrammarAST tree) { }
+
+protected void enterChannelSpec(GrammarAST tree) { }
+protected void exitChannelSpec(GrammarAST tree) { }
 
 protected void enterAction(GrammarAST tree) { }
 protected void exitAction(GrammarAST tree) { }
@@ -334,7 +343,7 @@ grammarSpec
 @after {
 	exitGrammarSpec($start);
 }
-    :   ^(	GRAMMAR ID {grammarName=$ID.text;} DOC_COMMENT?
+    :   ^(	GRAMMAR ID {grammarName=$ID.text;}
     		{discoverGrammar((GrammarRootAST)$GRAMMAR, $ID);}
  		   	prequelConstructs
     		{finishPrequels($prequelConstructs.firstOne);}
@@ -364,6 +373,7 @@ prequelConstruct
 	:   optionsSpec
     |   delegateGrammars
     |   tokensSpec
+    |   channelsSpec
     |   action
     ;
 
@@ -448,6 +458,26 @@ tokenSpec
 	:	ID					{defineToken($ID);}
 	;
 
+channelsSpec
+@init {
+	enterChannelsSpec($start);
+}
+@after {
+	exitChannelsSpec($start);
+}
+	:   ^(CHANNELS channelSpec*)
+	;
+
+channelSpec
+@init {
+	enterChannelSpec($start);
+}
+@after {
+	exitChannelSpec($start);
+}
+	:	ID					{defineChannel($ID);}
+	;
+
 action
 @init {
 	enterAction($start);
@@ -489,7 +519,7 @@ lexerRule
 }
 	:	^(	RULE TOKEN_REF
 			{currentRuleName=$TOKEN_REF.text; currentRuleAST=$RULE;}
-			DOC_COMMENT? (^(RULEMODIFIERS m=FRAGMENT {mods.add($m);}))?
+			(^(RULEMODIFIERS m=FRAGMENT {mods.add($m);}))?
       		{discoverLexerRule((RuleAST)$RULE, $TOKEN_REF, mods, (GrammarAST)input.LT(1));}
       		lexerRuleBlock
       		{
@@ -510,7 +540,7 @@ rule
 	exitRule($start);
 }
 	:   ^(	RULE RULE_REF {currentRuleName=$RULE_REF.text; currentRuleAST=$RULE;}
-			DOC_COMMENT? (^(RULEMODIFIERS (m=ruleModifier{mods.add($m.start);})+))?
+			(^(RULEMODIFIERS (m=ruleModifier{mods.add($m.start);})+))?
 			ARG_ACTION?
       		ret=ruleReturns?
       		thr=throwsSpec?
@@ -742,6 +772,7 @@ lexerAtom
     |   WILDCARD
     |	LEXER_CHAR_SET
     |   range
+    |   ruleref
     ;
 
 actionElement

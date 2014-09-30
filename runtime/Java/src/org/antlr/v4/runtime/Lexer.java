@@ -394,6 +394,7 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	 *  that overrides this to point to their String[] tokenNames.
 	 */
 	@Override
+	@Deprecated
 	public String[] getTokenNames() {
 		return null;
 	}
