@@ -275,12 +275,6 @@ public abstract class Lexer extends Recognizer<Integer, LexerATNSimulator>
 	public Token emitEOF() {
 		int cpos = getCharPositionInLine();
 		int line = getLine();
-		// The character position for EOF is one beyond the position of
-		// the previous token's last character if they share a line
-		if ( _token !=null && _token.getLine() == line ) {
-			int n = _token.getStopIndex() - _token.getStartIndex() + 1;
-			cpos = _token.getCharPositionInLine()+n;
-		}
 		Token eof = _factory.create(_tokenFactorySourcePair, Token.EOF, null, Token.DEFAULT_CHANNEL, _input.index(), _input.index()-1,
 									line, cpos);
 		emit(eof);
