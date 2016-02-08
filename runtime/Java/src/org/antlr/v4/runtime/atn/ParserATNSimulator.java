@@ -1860,7 +1860,7 @@ public class ParserATNSimulator extends ATNSimulator {
 			return ruleTransition(config, (RuleTransition)t, contextCache);
 
 		case Transition.PRECEDENCE:
-			return precedenceTransition(config, (PrecedencePredicateTransition)t, collectPredicates, inContext);
+			return precedenceTransition(config, (PrecedencePredicateTransition)t, collectPredicates, inContext, contextCache);
 
 		case Transition.PREDICATE:
 			return predTransition(config, (PredicateTransition)t, collectPredicates, inContext);
@@ -1899,7 +1899,8 @@ public class ParserATNSimulator extends ATNSimulator {
 	protected ATNConfig precedenceTransition(@NotNull ATNConfig config,
 									@NotNull PrecedencePredicateTransition pt,
 									boolean collectPredicates,
-									boolean inContext)
+									boolean inContext,
+									@Nullable PredictionContextCache contextCache)
 	{
 		if ( debug ) {
 			System.out.println("PRED (collectPredicates="+collectPredicates+") "+
@@ -1917,7 +1918,55 @@ public class ParserATNSimulator extends ATNSimulator {
             c = config.transform(pt.target, newSemCtx, false);
         }
 		else {
-			c = config.transform(pt.target, false);
+			if (config.getContext().isEmpty()) {
+				c = config.transform(pt.target, false);
+			} else {
+				PredictionContext filteredContext = null;
+				for (int i = 0; i < config.getContext().size(); i++) {
+					PredictionContext nextContext = config.getContext().getParent(i);
+					int returnState = config.getContext().getReturnState(i);
+					List<RuleTransition> ruleTransitions = new ArrayList<RuleTransition>();
+					for (ATNState state : atn.states) {
+						for (int j = 0; j < state.optimizedTransitions.size(); j++) {
+							Transition transition = state.getOptimizedTransition(j);
+							if (transition.getSerializationType() != Transition.RULE) {
+								continue;
+							}
+
+							RuleTransition ruleTransition = (RuleTransition)transition;
+							if (ruleTransition.followState.stateNumber != returnState) {
+								continue;
+							}
+
+							ruleTransitions.add(ruleTransition);
+						}
+					}
+
+					boolean allow = false;
+					for (RuleTransition ruleTransition : ruleTransitions) {
+						allow = pt.precedence >= ruleTransition.precedence;
+						if (allow) {
+							break;
+						}
+					}
+
+					if (!allow) {
+						continue;
+					}
+
+					if (filteredContext == null) {
+						filteredContext = contextCache.getChild(nextContext, config.getContext().getReturnState(i));
+					} else {
+						filteredContext = contextCache.join(filteredContext, contextCache.getChild(nextContext, config.getContext().getReturnState(i)));
+					}
+				}
+
+				if (filteredContext == null) {
+					c = null;
+				} else {
+					c = config.transform(pt.target, filteredContext, false);
+				}
+			}
 		}
 
 		if ( debug ) System.out.println("config from pred transition="+c);
