@@ -45,6 +45,10 @@ public class SingletonPredictionContext extends PredictionContext {
 		this.returnState = returnState;
 	}
 
+	/*package*/ SingletonPredictionContext(@NotNull PredictionContext parent, int returnState, int precedence) {
+		this(parent, precedence < 0 ? returnState : -((returnState << 10) + precedence));
+	}
+
 	@Override
 	public PredictionContext getParent(int index) {
 		assert index == 0;
@@ -54,12 +58,32 @@ public class SingletonPredictionContext extends PredictionContext {
 	@Override
 	public int getReturnState(int index) {
 		assert index == 0;
+		if (returnState < 0) {
+			return -returnState >> 10;
+		}
+
 		return returnState;
 	}
 
 	@Override
+	public int getPrecedence(int index) {
+		assert index == 0;
+		if (returnState >= 0 || returnState == EMPTY_LOCAL_STATE_KEY) {
+			return -1;
+		}
+
+		return -returnState & ((1 << 10) - 1);
+	}
+
+	public SingletonPredictionContext() {
+		super(0);
+		this.parent = null;
+		this.returnState = 0;
+	}
+
+	@Override
 	public int findReturnState(int returnState) {
-		return this.returnState == returnState ? 0 : -1;
+		return getReturnState(0) == returnState ? 0 : -1;
 	}
 
 	@Override

@@ -270,6 +270,10 @@ public class ATNConfig {
 						return false;
 					}
 
+					if (left.getPrecedence(index) > right.getPrecedence(i)) {
+						return false;
+					}
+
 					leftWorkList.push(left.getParent(index));
 					rightWorkList.push(right.getParent(i));
 				}

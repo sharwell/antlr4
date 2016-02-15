@@ -68,6 +68,11 @@ public final class EmptyPredictionContext extends PredictionContext {
 	}
 
 	@Override
+	public int getPrecedence(int index) {
+		throw new IndexOutOfBoundsException();
+	}
+
+	@Override
 	public int findReturnState(int returnState) {
 		return -1;
 	}

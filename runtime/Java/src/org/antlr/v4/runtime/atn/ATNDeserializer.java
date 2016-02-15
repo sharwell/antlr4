@@ -996,6 +996,9 @@ public class ATNDeserializer {
 		if (optimizedPath && transition.optimizedTailCall) {
 			return true;
 		}
+		if (atn.ruleToStartState[transition.target.ruleIndex].isPrecedenceRule) {
+			return false;
+		}
 
 		BitSet reachable = new BitSet(atn.states.size());
 		Deque<ATNState> worklist = new ArrayDeque<ATNState>();

@@ -89,7 +89,16 @@ public class PredictionContextCache {
         return result;
     }
 
-    public PredictionContext join(PredictionContext x, PredictionContext y) {
+	public PredictionContext getChild(PredictionContext context, int invokingState, int precedence) {
+		if (precedence >= 0) {
+			return getChild(context, -((invokingState << 10) + precedence));
+		}
+
+		assert precedence == -1;
+		return getChild(context, invokingState);
+	}
+
+	public PredictionContext join(PredictionContext x, PredictionContext y) {
         if (!enableCache) {
             return PredictionContext.join(x, y, this);
         }

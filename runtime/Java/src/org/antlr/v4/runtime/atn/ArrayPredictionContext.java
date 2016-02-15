@@ -71,11 +71,38 @@ public class ArrayPredictionContext extends PredictionContext {
 
 	@Override
 	public int getReturnState(int index) {
-		return returnStates[index];
+		int returnState = returnStates[index];
+		if (returnState < 0) {
+			// This expression preserves MIN_VALUE -> MIN_VALUE for EMPTY_LOCAL_STATE_KEY
+			return -returnState >> 10;
+		}
+
+		return returnState;
+	}
+
+	@Override
+	public int getPrecedence(int index) {
+		int returnState = returnStates[index];
+		if (returnState >= 0 || returnState == EMPTY_LOCAL_STATE_KEY) {
+			return -1;
+		}
+
+		return -returnState & ((1 << 10) - 1);
 	}
 
 	@Override
 	public int findReturnState(int returnState) {
+		for (int i = 0; i < size(); i++) {
+			if (returnStates[i] >= 0) {
+				break;
+			}
+
+			int decodedReturnState = getReturnState(i);
+			if (decodedReturnState == returnState) {
+				return i;
+			}
+		}
+
 		return Arrays.binarySearch(returnStates, returnState);
 	}
 
@@ -159,7 +186,14 @@ public class ArrayPredictionContext extends PredictionContext {
 				PredictionContext[] updatedParents = new PredictionContext[parentCount];
 				int[] updatedReturnStates = new int[parentCount];
 				for (int i = 0; i < parentCount; i++) {
-					updatedReturnStates[i] = context.getReturnState(i);
+					int returnState = context.getReturnState(i);
+					int precedence = context.getPrecedence(i);
+					if (precedence < 0) {
+						updatedReturnStates[i] = returnState;
+					}
+					else {
+						updatedReturnStates[i] = -((returnState << 10) + precedence);
+					}
 				}
 
 				for (int i = 0; i < parentCount; i++) {
@@ -229,6 +263,10 @@ public class ArrayPredictionContext extends PredictionContext {
 
 			for (int i = 0; i < selfSize; i++) {
 				if (operands.getX().getReturnState(i) != operands.getY().getReturnState(i)) {
+					return false;
+				}
+
+				if (operands.getX().getPrecedence(i) != operands.getY().getPrecedence(i)) {
 					return false;
 				}
 

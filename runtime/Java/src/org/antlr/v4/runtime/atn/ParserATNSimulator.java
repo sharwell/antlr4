@@ -1920,51 +1920,39 @@ public class ParserATNSimulator extends ATNSimulator {
 		else {
 			if (config.getContext().isEmpty()) {
 				c = config.transform(pt.target, false);
-			} else {
-				PredictionContext filteredContext = null;
+			}
+			else {
+				PredictionContext filterContext = null;
 				for (int i = 0; i < config.getContext().size(); i++) {
-					PredictionContext nextContext = config.getContext().getParent(i);
-					int returnState = config.getContext().getReturnState(i);
-					List<RuleTransition> ruleTransitions = new ArrayList<RuleTransition>();
-					for (ATNState state : atn.states) {
-						for (int j = 0; j < state.optimizedTransitions.size(); j++) {
-							Transition transition = state.getOptimizedTransition(j);
-							if (transition.getSerializationType() != Transition.RULE) {
-								continue;
-							}
-
-							RuleTransition ruleTransition = (RuleTransition)transition;
-							if (ruleTransition.followState.stateNumber != returnState) {
-								continue;
-							}
-
-							ruleTransitions.add(ruleTransition);
-						}
-					}
-
-					boolean allow = false;
-					for (RuleTransition ruleTransition : ruleTransitions) {
-						allow = pt.precedence >= ruleTransition.precedence;
-						if (allow) {
-							break;
-						}
-					}
-
-					if (!allow) {
+					int precedence = config.getContext().getPrecedence(i);
+					if (pt.precedence < precedence) {
 						continue;
 					}
 
-					if (filteredContext == null) {
-						filteredContext = contextCache.getChild(nextContext, config.getContext().getReturnState(i));
-					} else {
-						filteredContext = contextCache.join(filteredContext, contextCache.getChild(nextContext, config.getContext().getReturnState(i)));
+					PredictionContext nextContext;
+					if (contextCache != null) {
+						nextContext = contextCache.getChild(config.getContext().getParent(i), config.getContext().getReturnState(i), config.getContext().getPrecedence(i));
+					}
+					else {
+						nextContext = config.getContext().getParent(i).getChild(config.getContext().getReturnState(i), config.getContext().getPrecedence(i));
+					}
+
+					if (filterContext == null) {
+						filterContext = nextContext;
+					}
+					else if (contextCache != null) {
+						filterContext = contextCache.join(filterContext, nextContext);
+					}
+					else {
+						filterContext = PredictionContext.join(filterContext, nextContext);
 					}
 				}
 
-				if (filteredContext == null) {
+				if (filterContext == null) {
 					c = null;
-				} else {
-					c = config.transform(pt.target, filteredContext, false);
+				}
+				else {
+					c = config.transform(pt.target, filterContext, false);
 				}
 			}
 		}
@@ -2015,13 +2003,23 @@ public class ParserATNSimulator extends ATNSimulator {
 		PredictionContext newContext;
 
 		if (optimize_tail_calls && t.optimizedTailCall && (!tail_call_preserves_sll || !PredictionContext.isEmptyLocal(config.getContext()))) {
+			assert !atn.ruleToStartState[t.target.ruleIndex].isPrecedenceRule;
 			newContext = config.getContext();
 		}
-		else if (contextCache != null) {
-			newContext = contextCache.getChild(config.getContext(), returnState.stateNumber);
-		}
 		else {
-			newContext = config.getContext().getChild(returnState.stateNumber);
+			int returnStateNumber = returnState.stateNumber;
+			int precedence = -1;
+			if (atn.ruleToStartState[t.target.ruleIndex].isPrecedenceRule) {
+				assert t.precedence >= 0;
+				precedence = t.precedence;
+			}
+
+			if (contextCache != null) {
+				newContext = contextCache.getChild(config.getContext(), returnStateNumber, precedence);
+			}
+			else {
+				newContext = config.getContext().getChild(returnStateNumber, precedence);
+			}
 		}
 
 		return config.transform(t.target, newContext, false);
