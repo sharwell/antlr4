@@ -20,15 +20,18 @@ public class ATNDeserializationOptions {
 	private boolean readOnly;
 	private boolean verifyATN;
 	private boolean generateRuleBypassTransitions;
+	private boolean decodeCodePoints;
 
 	public ATNDeserializationOptions() {
 		this.verifyATN = true;
 		this.generateRuleBypassTransitions = false;
+		this.decodeCodePoints = false;
 	}
 
 	public ATNDeserializationOptions(ATNDeserializationOptions options) {
 		this.verifyATN = options.verifyATN;
 		this.generateRuleBypassTransitions = options.generateRuleBypassTransitions;
+		this.decodeCodePoints = options.decodeCodePoints;
 	}
 
 
@@ -60,6 +63,15 @@ public class ATNDeserializationOptions {
 	public final void setGenerateRuleBypassTransitions(boolean generateRuleBypassTransitions) {
 		throwIfReadOnly();
 		this.generateRuleBypassTransitions = generateRuleBypassTransitions;
+	}
+
+	public final boolean isDecodeCodePoints() {
+		return decodeCodePoints;
+	}
+
+	public final void setDecodeCodePoints(boolean decodeCodePoints) {
+		throwIfReadOnly();
+		this.decodeCodePoints = decodeCodePoints;
 	}
 
 	protected void throwIfReadOnly() {

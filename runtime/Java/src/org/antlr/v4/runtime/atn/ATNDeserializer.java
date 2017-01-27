@@ -411,6 +411,10 @@ public class ATNDeserializer {
 			}
 		}
 
+		if (deserializationOptions.isDecodeCodePoints()) {
+			decodeCodePoints(atn);
+		}
+
 		markPrecedenceDecisions(atn);
 
 		if (deserializationOptions.isVerifyATN()) {
@@ -508,6 +512,15 @@ public class ATNDeserializer {
 		}
 
 		return atn;
+	}
+
+	/**
+	 * Converts all transition sequences which represent a UTF-16 high surrogate
+	 * followed by a UTF-16 low surrogate into a single transition which matches
+	 * the corresponding Unicode code point.
+	 */
+	protected void decodeCodePoints(ATN atn) {
+		throw new UnsupportedOperationException("Not yet implemented");
 	}
 
 	/**
